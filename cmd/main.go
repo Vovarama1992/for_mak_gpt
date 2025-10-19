@@ -10,12 +10,14 @@ import (
 
 	"github.com/Vovarama1992/go-utils/httputil"
 	"github.com/Vovarama1992/go-utils/logger"
+	"github.com/Vovarama1992/make_ziper/internal/delivery"
+	"github.com/Vovarama1992/make_ziper/internal/domain"
+	"github.com/Vovarama1992/make_ziper/internal/infra"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-
-	"github.com/Vovarama1992/make_ziper/internal/delivery"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -42,8 +44,22 @@ func main() {
 	}
 	defer db.Close()
 
-	zl := logger.NewZapDevelopment("make_ziper")
+	baseLogger, _ := zap.NewProduction()
+	defer baseLogger.Sync()
+	zl := logger.NewZapLogger(baseLogger.Sugar())
 
+	// инфраструктура
+	recordRepo := infra.NewRecordRepo(db)
+
+	s3Client, err := infra.NewS3Client()
+	if err != nil {
+		log.Fatalf("failed to init s3 client: %v", err)
+	}
+
+	s3Service := domain.NewS3Service(s3Client)
+	recordService := domain.NewRecordService(recordRepo, s3Service)
+
+	// роуты
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -51,18 +67,20 @@ func main() {
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
 
-	// Handlers
-	recordHandler := delivery.NewHandler(db, zl)
-	delivery.RegisterRoutes(r, recordHandler)
+	h := delivery.NewHandler(recordService, zl)
+	delivery.RegisterRoutes(r, h)
 
-	// Ping
 	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("pong"))
 	})
 
 	addr := ":" + port
-	zl.Info("listening at " + addr)
+	zl.Log(logger.LogEntry{
+		Level:   "info",
+		Message: "listening at " + addr,
+		Service: "make_ziper",
+	})
 
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("server error: %v", err)
