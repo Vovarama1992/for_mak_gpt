@@ -23,21 +23,27 @@ func NewHandler(recordService ports.RecordService, log *logger.ZapLogger) *Handl
 }
 
 func (h *Handler) AddTextRecord(w http.ResponseWriter, r *http.Request) {
-	var payload struct {
+	var req struct {
 		TelegramID int64  `json:"telegram_id"`
 		Role       string `json:"role"`
 		Text       string `json:"text"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		h.log.Log(logger.LogEntry{Level: "warn", Message: "invalid json", Error: err})
-		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
-		return
+
+	// пробуем обычный JSON
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		// если не получилось — пробуем как form-data или x-www-form-urlencoded
+		if err := r.ParseForm(); err == nil {
+			req.TelegramID, _ = strconv.ParseInt(r.FormValue("telegram_id"), 10, 64)
+			req.Role = r.FormValue("role")
+			req.Text = r.FormValue("text")
+		}
 	}
 
-	id, err := h.recordService.AddText(r.Context(), payload.TelegramID, payload.Role, payload.Text)
+	// дальше твоя логика — сохраняем в БД
+	id, err := h.recordService.AddText(r.Context(), req.TelegramID, req.Role, req.Text)
 	if err != nil {
-		h.log.Log(logger.LogEntry{Level: "error", Message: "failed to create record", Error: err})
-		http.Error(w, "failed to create record: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to save text: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
