@@ -1,7 +1,9 @@
 package delivery
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -23,31 +25,36 @@ func NewHandler(recordService ports.RecordService, log *logger.ZapLogger) *Handl
 }
 
 func (h *Handler) AddTextRecord(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// чистим всё, что может поломать JSON
+	clean := bytes.ReplaceAll(body, []byte("\r"), []byte(" "))
+	clean = bytes.ReplaceAll(clean, []byte("\n"), []byte(" "))
+	clean = bytes.TrimSpace(clean)
+
 	var req struct {
 		TelegramID int64  `json:"telegram_id"`
 		Role       string `json:"role"`
 		Text       string `json:"text"`
 	}
 
-	// пробуем обычный JSON
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		// если не получилось — пробуем как form-data или x-www-form-urlencoded
-		if err := r.ParseForm(); err == nil {
-			req.TelegramID, _ = strconv.ParseInt(r.FormValue("telegram_id"), 10, 64)
-			req.Role = r.FormValue("role")
-			req.Text = r.FormValue("text")
-		}
+	// безопасный decode
+	if err := json.Unmarshal(clean, &req); err != nil {
+		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		return
 	}
 
-	// дальше твоя логика — сохраняем в БД
 	id, err := h.recordService.AddText(r.Context(), req.TelegramID, req.Role, req.Text)
 	if err != nil {
 		http.Error(w, "failed to save text: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]any{"id": id})
+	_ = json.NewEncoder(w).Encode(map[string]any{"id": id})
 }
 
 func (h *Handler) AddImageRecord(w http.ResponseWriter, r *http.Request) {
