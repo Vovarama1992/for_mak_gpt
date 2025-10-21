@@ -1,9 +1,9 @@
 package delivery
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -27,14 +27,14 @@ func NewHandler(recordService ports.RecordService, log *logger.ZapLogger) *Handl
 func (h *Handler) AddTextRecord(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		log.Printf("[AddTextRecord] failed to read body: %v", err)
 		http.Error(w, "failed to read body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	defer r.Body.Close()
 
-	// чистим всё, что может поломать JSON
-	clean := bytes.ReplaceAll(body, []byte("\r"), []byte(" "))
-	clean = bytes.ReplaceAll(clean, []byte("\n"), []byte(" "))
-	clean = bytes.TrimSpace(clean)
+	log.Printf("[AddTextRecord] raw body: %q", string(body))
+	log.Printf("[AddTextRecord] content-type: %s", r.Header.Get("Content-Type"))
 
 	var req struct {
 		TelegramID int64  `json:"telegram_id"`
@@ -42,18 +42,37 @@ func (h *Handler) AddTextRecord(w http.ResponseWriter, r *http.Request) {
 		Text       string `json:"text"`
 	}
 
-	// безопасный decode
-	if err := json.Unmarshal(clean, &req); err != nil {
-		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+	// пробуем JSON
+	if err := json.Unmarshal(body, &req); err != nil {
+		log.Printf("[AddTextRecord] not JSON: %v", err)
+		if err := r.ParseForm(); err == nil {
+			req.TelegramID, _ = strconv.ParseInt(r.FormValue("telegram_id"), 10, 64)
+			req.Role = r.FormValue("role")
+			req.Text = r.FormValue("text")
+			log.Printf("[AddTextRecord] parsed as form: telegram_id=%d, role=%q, text=%q",
+				req.TelegramID, req.Role, req.Text)
+		} else {
+			log.Printf("[AddTextRecord] form parse error: %v", err)
+		}
+	} else {
+		log.Printf("[AddTextRecord] parsed as JSON: telegram_id=%d, role=%q, text=%q",
+			req.TelegramID, req.Role, req.Text)
+	}
+
+	if req.TelegramID == 0 || req.Text == "" {
+		log.Printf("[AddTextRecord] invalid input: telegram_id=%d text=%q", req.TelegramID, req.Text)
+		http.Error(w, "invalid input: missing telegram_id or text", http.StatusBadRequest)
 		return
 	}
 
 	id, err := h.recordService.AddText(r.Context(), req.TelegramID, req.Role, req.Text)
 	if err != nil {
+		log.Printf("[AddTextRecord] failed to save text: %v", err)
 		http.Error(w, "failed to save text: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	log.Printf("[AddTextRecord] success: id=%v", id)
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": id})
 }
 
