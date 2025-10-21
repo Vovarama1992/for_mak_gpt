@@ -1,7 +1,7 @@
 include .env
 export
 
-.PHONY: refresh
+.PHONY: refresh build up down logs
 
 refresh:
 	git pull origin master
@@ -10,3 +10,16 @@ refresh:
 	until docker compose exec db pg_isready -U $${POSTGRES_USER}; do sleep 1; done
 	sleep 2
 	docker compose up -d app
+	docker compose logs -f app
+
+build:
+	docker compose build
+
+up:
+	docker compose up -d
+
+down:
+	docker compose down
+
+logs:
+	docker compose logs -f
