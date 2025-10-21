@@ -65,5 +65,36 @@ func (r *recordRepo) GetHistory(ctx context.Context, telegramID int64) ([]ports.
 		}
 		records = append(records, rec)
 	}
-	return records, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// если история меньше 60k символов — возвращаем всё
+	const maxChars = 60000
+	total := 0
+	for _, rec := range records {
+		if rec.Text != nil {
+			total += len(*rec.Text)
+		}
+	}
+	if total <= maxChars {
+		return records, nil
+	}
+
+	// если больше — оставляем последние в пределах лимита
+	total = 0
+	start := len(records)
+	for i := len(records) - 1; i >= 0; i-- {
+		if records[i].Text != nil {
+			total += len(*records[i].Text)
+		}
+		if total > maxChars {
+			start = i + 1
+			break
+		}
+	}
+	if start > len(records) {
+		start = len(records)
+	}
+	return records[start:], nil
 }
