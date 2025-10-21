@@ -2,7 +2,6 @@ package delivery
 
 import (
 	"encoding/json"
-	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -24,55 +23,65 @@ func NewHandler(recordService ports.RecordService, log *logger.ZapLogger) *Handl
 	}
 }
 
-func (h *Handler) AddTextRecord(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("[AddTextRecord] failed to read body: %v", err)
-		http.Error(w, "failed to read body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	defer r.Body.Close()
-
-	log.Printf("[AddTextRecord] raw body: %q", string(body))
-	log.Printf("[AddTextRecord] content-type: %s", r.Header.Get("Content-Type"))
-
+func (h *Handler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TelegramID int64  `json:"telegram_id"`
 		Role       string `json:"role"`
 		Text       string `json:"text"`
 	}
 
-	// пробуем JSON
-	if err := json.Unmarshal(body, &req); err != nil {
-		log.Printf("[AddTextRecord] not JSON: %v", err)
-		if err := r.ParseForm(); err == nil {
-			req.TelegramID, _ = strconv.ParseInt(r.FormValue("telegram_id"), 10, 64)
-			req.Role = r.FormValue("role")
-			req.Text = r.FormValue("text")
-			log.Printf("[AddTextRecord] parsed as form: telegram_id=%d, role=%q, text=%q",
-				req.TelegramID, req.Role, req.Text)
-		} else {
-			log.Printf("[AddTextRecord] form parse error: %v", err)
-		}
-	} else {
-		log.Printf("[AddTextRecord] parsed as JSON: telegram_id=%d, role=%q, text=%q",
-			req.TelegramID, req.Role, req.Text)
-	}
+	log.Printf("[AddTextRecordJSON] request from %s", r.RemoteAddr)
 
-	if req.TelegramID == 0 || req.Text == "" {
-		log.Printf("[AddTextRecord] invalid input: telegram_id=%d text=%q", req.TelegramID, req.Text)
-		http.Error(w, "invalid input: missing telegram_id or text", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[AddTextRecordJSON] invalid json: %v", err)
+		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	log.Printf("[AddTextRecordJSON] parsed: telegram_id=%d role=%q text_len=%d",
+		req.TelegramID, req.Role, len(req.Text))
 
 	id, err := h.recordService.AddText(r.Context(), req.TelegramID, req.Role, req.Text)
 	if err != nil {
-		log.Printf("[AddTextRecord] failed to save text: %v", err)
+		log.Printf("[AddTextRecordJSON] failed to save text: %v", err)
 		http.Error(w, "failed to save text: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[AddTextRecord] success: id=%v", id)
+	log.Printf("[AddTextRecordJSON] success: id=%v", id)
+	_ = json.NewEncoder(w).Encode(map[string]any{"id": id})
+}
+
+// form-urlencoded — от GPT/тютора
+func (h *Handler) AddTextRecordForm(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[AddTextRecordForm] request from %s", r.RemoteAddr)
+
+	if err := r.ParseForm(); err != nil {
+		log.Printf("[AddTextRecordForm] invalid form: %v", err)
+		http.Error(w, "invalid form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	telegramID, _ := strconv.ParseInt(r.FormValue("telegram_id"), 10, 64)
+	role := r.FormValue("role")
+	text := r.FormValue("text")
+
+	log.Printf("[AddTextRecordForm] parsed form: telegram_id=%d role=%q text_len=%d",
+		telegramID, role, len(text))
+
+	if telegramID == 0 || text == "" {
+		log.Printf("[AddTextRecordForm] invalid input: telegram_id=%d text_len=%d", telegramID, len(text))
+		http.Error(w, "missing telegram_id or text", http.StatusBadRequest)
+		return
+	}
+
+	id, err := h.recordService.AddText(r.Context(), telegramID, role, text)
+	if err != nil {
+		log.Printf("[AddTextRecordForm] failed to save text: %v", err)
+		http.Error(w, "failed to save text: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[AddTextRecordForm] success: id=%v", id)
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": id})
 }
 
