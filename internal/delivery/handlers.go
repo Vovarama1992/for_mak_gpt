@@ -28,6 +28,7 @@ func (h *Handler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request) {
 		TelegramID int64  `json:"telegram_id"`
 		Role       string `json:"role"`
 		Text       string `json:"text"`
+		BotID      string `json:"bot_id"`
 	}
 
 	log.Printf("[AddTextRecordJSON] request from %s", r.RemoteAddr)
@@ -37,10 +38,16 @@ func (h *Handler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	log.Printf("[AddTextRecordJSON] parsed: telegram_id=%d role=%q text_len=%d",
-		req.TelegramID, req.Role, len(req.Text))
 
-	id, err := h.recordService.AddText(r.Context(), req.TelegramID, req.Role, req.Text)
+	var botIDPtr *string
+	if req.BotID != "" {
+		botIDPtr = &req.BotID
+	}
+
+	log.Printf("[AddTextRecordJSON] parsed: telegram_id=%d role=%q bot_id=%q text_len=%d",
+		req.TelegramID, req.Role, req.BotID, len(req.Text))
+
+	id, err := h.recordService.AddText(r.Context(), botIDPtr, req.TelegramID, req.Role, req.Text)
 	if err != nil {
 		log.Printf("[AddTextRecordJSON] failed to save text: %v", err)
 		http.Error(w, "failed to save text: "+err.Error(), http.StatusInternalServerError)
@@ -51,7 +58,6 @@ func (h *Handler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": id})
 }
 
-// form-urlencoded — от GPT/тютора
 func (h *Handler) AddTextRecordForm(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[AddTextRecordForm] request from %s", r.RemoteAddr)
 
@@ -64,9 +70,15 @@ func (h *Handler) AddTextRecordForm(w http.ResponseWriter, r *http.Request) {
 	telegramID, _ := strconv.ParseInt(r.FormValue("telegram_id"), 10, 64)
 	role := r.FormValue("role")
 	text := r.FormValue("text")
+	botID := r.FormValue("bot_id")
 
-	log.Printf("[AddTextRecordForm] parsed form: telegram_id=%d role=%q text_len=%d",
-		telegramID, role, len(text))
+	var botIDPtr *string
+	if botID != "" {
+		botIDPtr = &botID
+	}
+
+	log.Printf("[AddTextRecordForm] parsed form: telegram_id=%d role=%q bot_id=%q text_len=%d",
+		telegramID, role, botID, len(text))
 
 	if telegramID == 0 || text == "" {
 		log.Printf("[AddTextRecordForm] invalid input: telegram_id=%d text_len=%d", telegramID, len(text))
@@ -74,7 +86,7 @@ func (h *Handler) AddTextRecordForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := h.recordService.AddText(r.Context(), telegramID, role, text)
+	id, err := h.recordService.AddText(r.Context(), botIDPtr, telegramID, role, text)
 	if err != nil {
 		log.Printf("[AddTextRecordForm] failed to save text: %v", err)
 		http.Error(w, "failed to save text: "+err.Error(), http.StatusInternalServerError)
@@ -95,6 +107,13 @@ func (h *Handler) AddImageRecord(w http.ResponseWriter, r *http.Request) {
 
 	telegramStr := r.FormValue("telegram_id")
 	role := r.FormValue("role")
+	botID := r.FormValue("bot_id")
+
+	var botIDPtr *string
+	if botID != "" {
+		botIDPtr = &botID
+	}
+
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		h.log.Log(logger.LogEntry{Level: "warn", Message: "missing file", Error: err})
@@ -109,7 +128,7 @@ func (h *Handler) AddImageRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := h.recordService.AddImage(r.Context(), tid, role, file, header.Filename, header.Header.Get("Content-Type"))
+	id, err := h.recordService.AddImage(r.Context(), botIDPtr, tid, role, file, header.Filename, header.Header.Get("Content-Type"))
 	if err != nil {
 		h.log.Log(logger.LogEntry{Level: "error", Message: "failed to upload image", Error: err})
 		http.Error(w, "failed to upload image: "+err.Error(), http.StatusInternalServerError)
@@ -127,7 +146,13 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	history, err := h.recordService.GetHistory(r.Context(), tid)
+	botID := r.URL.Query().Get("bot_id")
+	var botIDPtr *string
+	if botID != "" {
+		botIDPtr = &botID
+	}
+
+	history, err := h.recordService.GetHistory(r.Context(), botIDPtr, tid)
 	if err != nil {
 		h.log.Log(logger.LogEntry{Level: "error", Message: "db error", Error: err})
 		http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)

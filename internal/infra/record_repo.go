@@ -16,33 +16,33 @@ func NewRecordRepo(db *sql.DB) ports.RecordRepo {
 	return &recordRepo{db: db}
 }
 
-func (r *recordRepo) CreateText(ctx context.Context, telegramID int64, role, text string) (int64, error) {
+func (r *recordRepo) CreateText(ctx context.Context, botID *string, telegramID int64, role, text string) (int64, error) {
 	var id int64
 	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO records (telegram_id, role, record_type, text_content, created_at)
-		VALUES ($1, $2, 'text', $3, $4)
+		INSERT INTO records (bot_id, telegram_id, role, record_type, text_content, created_at)
+		VALUES ($1, $2, $3, 'text', $4, $5)
 		RETURNING id
-	`, telegramID, role, text, time.Now()).Scan(&id)
+	`, botID, telegramID, role, text, time.Now()).Scan(&id)
 	return id, err
 }
 
-func (r *recordRepo) CreateImage(ctx context.Context, telegramID int64, role, imageURL string) (int64, error) {
+func (r *recordRepo) CreateImage(ctx context.Context, botID *string, telegramID int64, role, imageURL string) (int64, error) {
 	var id int64
 	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO records (telegram_id, role, record_type, image_url, created_at)
-		VALUES ($1, $2, 'image', $3, $4)
+		INSERT INTO records (bot_id, telegram_id, role, record_type, image_url, created_at)
+		VALUES ($1, $2, $3, 'image', $4, $5)
 		RETURNING id
-	`, telegramID, role, imageURL, time.Now()).Scan(&id)
+	`, botID, telegramID, role, imageURL, time.Now()).Scan(&id)
 	return id, err
 }
 
-func (r *recordRepo) GetHistory(ctx context.Context, telegramID int64) ([]ports.Record, error) {
+func (r *recordRepo) GetHistory(ctx context.Context, botID *string, telegramID int64) ([]ports.Record, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, telegram_id, user_ref, role, record_type, text_content, image_url, created_at
+		SELECT id, telegram_id, bot_id, user_ref, role, record_type, text_content, image_url, created_at
 		FROM records
-		WHERE telegram_id = $1
+		WHERE telegram_id = $1 AND (bot_id = $2 OR $2 IS NULL)
 		ORDER BY created_at ASC
-	`, telegramID)
+	`, telegramID, botID)
 	if err != nil {
 		return nil, err
 	}
@@ -54,6 +54,7 @@ func (r *recordRepo) GetHistory(ctx context.Context, telegramID int64) ([]ports.
 		if err := rows.Scan(
 			&rec.ID,
 			&rec.TelegramID,
+			&rec.BotID,
 			&rec.UserRef,
 			&rec.Role,
 			&rec.Type,
@@ -69,7 +70,7 @@ func (r *recordRepo) GetHistory(ctx context.Context, telegramID int64) ([]ports.
 		return nil, err
 	}
 
-	// если история меньше 60k символов — возвращаем всё
+	// обрезаем историю по лимиту символов
 	const maxChars = 60000
 	total := 0
 	for _, rec := range records {
@@ -81,7 +82,6 @@ func (r *recordRepo) GetHistory(ctx context.Context, telegramID int64) ([]ports.
 		return records, nil
 	}
 
-	// если больше — оставляем последние в пределах лимита
 	total = 0
 	start := len(records)
 	for i := len(records) - 1; i >= 0; i-- {
