@@ -37,7 +37,6 @@ func NewS3Client() (ports.S3Client, error) {
 		return nil, fmt.Errorf("failed to init S3 client: %w", err)
 	}
 
-	// проверим, что бакет существует
 	exists, err := client.BucketExists(context.Background(), bucket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check bucket: %w", err)
@@ -53,14 +52,20 @@ func NewS3Client() (ports.S3Client, error) {
 	}, nil
 }
 
-// PutObject загружает файл и возвращает публичный URL
-func (s *s3Client) PutObject(ctx context.Context, key string, r io.Reader, size int64, contentType string) (string, error) {
+// PutObject теперь требует botID и складывает файлы по ботовым подпапкам
+func (s *s3Client) PutObject(ctx context.Context, botID, key string, r io.Reader, size int64, contentType string) (string, error) {
+	if botID == "" {
+		return "", fmt.Errorf("botID required")
+	}
+
 	buf := new(bytes.Buffer)
 	if _, err := io.Copy(buf, r); err != nil {
 		return "", fmt.Errorf("read file: %w", err)
 	}
 
-	_, err := s.client.PutObject(ctx, s.bucket, key, bytes.NewReader(buf.Bytes()), int64(buf.Len()), minio.PutObjectOptions{
+	fullKey := filepath.Join(botID, key)
+
+	_, err := s.client.PutObject(ctx, s.bucket, fullKey, bytes.NewReader(buf.Bytes()), int64(buf.Len()), minio.PutObjectOptions{
 		ContentType:  contentType,
 		UserMetadata: map[string]string{"uploaded-at": time.Now().Format(time.RFC3339)},
 	})
@@ -68,7 +73,7 @@ func (s *s3Client) PutObject(ctx context.Context, key string, r io.Reader, size 
 		return "", fmt.Errorf("upload failed: %w", err)
 	}
 
-	publicURL := s.buildPublicURL(key)
+	publicURL := s.buildPublicURL(fullKey)
 	return publicURL, nil
 }
 

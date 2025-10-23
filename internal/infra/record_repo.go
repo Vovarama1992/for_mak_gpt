@@ -16,7 +16,7 @@ func NewRecordRepo(db *sql.DB) ports.RecordRepo {
 	return &recordRepo{db: db}
 }
 
-func (r *recordRepo) CreateText(ctx context.Context, botID *string, telegramID int64, role, text string) (int64, error) {
+func (r *recordRepo) CreateText(ctx context.Context, botID string, telegramID int64, role, text string) (int64, error) {
 	var id int64
 	err := r.db.QueryRowContext(ctx, `
 		INSERT INTO records (bot_id, telegram_id, role, record_type, text_content, created_at)
@@ -26,7 +26,7 @@ func (r *recordRepo) CreateText(ctx context.Context, botID *string, telegramID i
 	return id, err
 }
 
-func (r *recordRepo) CreateImage(ctx context.Context, botID *string, telegramID int64, role, imageURL string) (int64, error) {
+func (r *recordRepo) CreateImage(ctx context.Context, botID string, telegramID int64, role, imageURL string) (int64, error) {
 	var id int64
 	err := r.db.QueryRowContext(ctx, `
 		INSERT INTO records (bot_id, telegram_id, role, record_type, image_url, created_at)
@@ -36,11 +36,11 @@ func (r *recordRepo) CreateImage(ctx context.Context, botID *string, telegramID 
 	return id, err
 }
 
-func (r *recordRepo) GetHistory(ctx context.Context, botID *string, telegramID int64) ([]ports.Record, error) {
+func (r *recordRepo) GetHistory(ctx context.Context, botID string, telegramID int64) ([]ports.Record, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, telegram_id, bot_id, user_ref, role, record_type, text_content, image_url, created_at
 		FROM records
-		WHERE telegram_id = $1 AND (bot_id = $2 OR $2 IS NULL)
+		WHERE telegram_id = $1 AND bot_id = $2
 		ORDER BY created_at ASC
 	`, telegramID, botID)
 	if err != nil {

@@ -7,5 +7,5 @@ import (
 
 // Низкоуровневый клиент к S3
 type S3Client interface {
-	PutObject(ctx context.Context, key string, r io.Reader, size int64, contentType string) (publicURL string, err error)
+	PutObject(context.Context, string, string, io.Reader, int64, string) (string, error)
 }

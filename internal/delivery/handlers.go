@@ -34,35 +34,25 @@ func (h *Handler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[AddTextRecordJSON] request from %s", r.RemoteAddr)
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[AddTextRecordJSON] invalid json: %v", err)
 		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	var botIDPtr *string
-	if req.BotID != "" {
-		botIDPtr = &req.BotID
+	if req.BotID == "" {
+		http.Error(w, "missing bot_id", http.StatusBadRequest)
+		return
 	}
 
-	log.Printf("[AddTextRecordJSON] parsed: telegram_id=%d role=%q bot_id=%q text_len=%d",
-		req.TelegramID, req.Role, req.BotID, len(req.Text))
-
-	id, err := h.recordService.AddText(r.Context(), botIDPtr, req.TelegramID, req.Role, req.Text)
+	id, err := h.recordService.AddText(r.Context(), req.BotID, req.TelegramID, req.Role, req.Text)
 	if err != nil {
-		log.Printf("[AddTextRecordJSON] failed to save text: %v", err)
 		http.Error(w, "failed to save text: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[AddTextRecordJSON] success: id=%v", id)
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": id})
 }
 
 func (h *Handler) AddTextRecordForm(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[AddTextRecordForm] request from %s", r.RemoteAddr)
-
 	if err := r.ParseForm(); err != nil {
-		log.Printf("[AddTextRecordForm] invalid form: %v", err)
 		http.Error(w, "invalid form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -72,35 +62,22 @@ func (h *Handler) AddTextRecordForm(w http.ResponseWriter, r *http.Request) {
 	text := r.FormValue("text")
 	botID := r.FormValue("bot_id")
 
-	var botIDPtr *string
-	if botID != "" {
-		botIDPtr = &botID
-	}
-
-	log.Printf("[AddTextRecordForm] parsed form: telegram_id=%d role=%q bot_id=%q text_len=%d",
-		telegramID, role, botID, len(text))
-
-	if telegramID == 0 || text == "" {
-		log.Printf("[AddTextRecordForm] invalid input: telegram_id=%d text_len=%d", telegramID, len(text))
-		http.Error(w, "missing telegram_id or text", http.StatusBadRequest)
+	if telegramID == 0 || text == "" || botID == "" {
+		http.Error(w, "missing telegram_id, bot_id or text", http.StatusBadRequest)
 		return
 	}
 
-	id, err := h.recordService.AddText(r.Context(), botIDPtr, telegramID, role, text)
+	id, err := h.recordService.AddText(r.Context(), botID, telegramID, role, text)
 	if err != nil {
-		log.Printf("[AddTextRecordForm] failed to save text: %v", err)
 		http.Error(w, "failed to save text: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[AddTextRecordForm] success: id=%v", id)
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": id})
 }
 
 func (h *Handler) AddImageRecord(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseMultipartForm(20 << 20)
-	if err != nil {
-		h.log.Log(logger.LogEntry{Level: "warn", Message: "invalid multipart", Error: err})
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
 		http.Error(w, "invalid multipart: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -108,15 +85,13 @@ func (h *Handler) AddImageRecord(w http.ResponseWriter, r *http.Request) {
 	telegramStr := r.FormValue("telegram_id")
 	role := r.FormValue("role")
 	botID := r.FormValue("bot_id")
-
-	var botIDPtr *string
-	if botID != "" {
-		botIDPtr = &botID
+	if botID == "" {
+		http.Error(w, "missing bot_id", http.StatusBadRequest)
+		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		h.log.Log(logger.LogEntry{Level: "warn", Message: "missing file", Error: err})
 		http.Error(w, "missing file: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -128,9 +103,8 @@ func (h *Handler) AddImageRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := h.recordService.AddImage(r.Context(), botIDPtr, tid, role, file, header.Filename, header.Header.Get("Content-Type"))
+	id, err := h.recordService.AddImage(r.Context(), botID, tid, role, file, header.Filename, header.Header.Get("Content-Type"))
 	if err != nil {
-		h.log.Log(logger.LogEntry{Level: "error", Message: "failed to upload image", Error: err})
 		http.Error(w, "failed to upload image: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -147,12 +121,12 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	botID := r.URL.Query().Get("bot_id")
-	var botIDPtr *string
-	if botID != "" {
-		botIDPtr = &botID
+	if botID == "" {
+		http.Error(w, "missing bot_id", http.StatusBadRequest)
+		return
 	}
 
-	history, err := h.recordService.GetHistory(r.Context(), botIDPtr, tid)
+	history, err := h.recordService.GetHistory(r.Context(), botID, tid)
 	if err != nil {
 		h.log.Log(logger.LogEntry{Level: "error", Message: "db error", Error: err})
 		http.Error(w, "db error: "+err.Error(), http.StatusInternalServerError)
