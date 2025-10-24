@@ -31,3 +31,7 @@ func (s *recordService) AddImage(ctx context.Context, botID string, telegramID i
 func (s *recordService) GetHistory(ctx context.Context, botID string, telegramID int64) ([]ports.Record, error) {
 	return s.repo.GetHistory(ctx, botID, telegramID)
 }
+
+func (s *recordService) ListUsers(ctx context.Context) ([]ports.UserBots, error) {
+	return s.repo.ListUsers(ctx)
+}

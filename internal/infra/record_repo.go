@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/lib/pq"
+
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 )
 
@@ -97,4 +99,30 @@ func (r *recordRepo) GetHistory(ctx context.Context, botID string, telegramID in
 		start = len(records)
 	}
 	return records[start:], nil
+}
+
+func (r *recordRepo) ListUsers(ctx context.Context) ([]ports.UserBots, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT telegram_id, array_agg(DISTINCT bot_id) AS bots
+		FROM records
+		GROUP BY telegram_id
+		ORDER BY telegram_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []ports.UserBots
+	for rows.Next() {
+		var u ports.UserBots
+		if err := rows.Scan(&u.TelegramID, pq.Array(&u.Bots)); err != nil {
+			return nil, err
+		}
+		result = append(result, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

@@ -11,19 +11,19 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-type Handler struct {
+type RecordHandler struct {
 	recordService ports.RecordService
 	log           *logger.ZapLogger
 }
 
-func NewHandler(recordService ports.RecordService, log *logger.ZapLogger) *Handler {
-	return &Handler{
+func NewRecordHandler(recordService ports.RecordService, log *logger.ZapLogger) *RecordHandler {
+	return &RecordHandler{
 		recordService: recordService,
 		log:           log,
 	}
 }
 
-func (h *Handler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request) {
+func (h *RecordHandler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TelegramID int64  `json:"telegram_id"`
 		Role       string `json:"role"`
@@ -51,7 +51,7 @@ func (h *Handler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": id})
 }
 
-func (h *Handler) AddTextRecordForm(w http.ResponseWriter, r *http.Request) {
+func (h *RecordHandler) AddTextRecordForm(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form: "+err.Error(), http.StatusBadRequest)
 		return
@@ -76,7 +76,7 @@ func (h *Handler) AddTextRecordForm(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": id})
 }
 
-func (h *Handler) AddImageRecord(w http.ResponseWriter, r *http.Request) {
+func (h *RecordHandler) AddImageRecord(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(20 << 20); err != nil {
 		http.Error(w, "invalid multipart: "+err.Error(), http.StatusBadRequest)
 		return
@@ -112,7 +112,7 @@ func (h *Handler) AddImageRecord(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"id": id})
 }
 
-func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
+func (h *RecordHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
 	tidStr := chi.URLParam(r, "telegram_id")
 	tid, err := strconv.ParseInt(tidStr, 10, 64)
 	if err != nil {
@@ -135,4 +135,17 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(history)
+}
+
+func (h *RecordHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := h.recordService.ListUsers(r.Context())
+	if err != nil {
+		http.Error(w, "failed to list users: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(users); err != nil {
+		http.Error(w, "failed to encode response: "+err.Error(), http.StatusInternalServerError)
+	}
 }

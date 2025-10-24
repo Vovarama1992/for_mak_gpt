@@ -50,6 +50,7 @@ func main() {
 
 	// инфраструктура
 	recordRepo := infra.NewRecordRepo(db)
+	subscriptionRepo := infra.NewSubscriptionRepo(db)
 
 	s3Client, err := infra.NewS3Client()
 	if err != nil {
@@ -58,8 +59,13 @@ func main() {
 
 	s3Service := domain.NewS3Service(s3Client)
 	recordService := domain.NewRecordService(recordRepo, s3Service)
+	subscriptionService := domain.NewSubscriptionService(subscriptionRepo)
 
-	// роуты
+	// хендлеры
+	recordHandler := delivery.NewRecordHandler(recordService, zl)
+	subscriptionHandler := delivery.NewSubscriptionHandler(subscriptionService)
+
+	// роутер
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -67,10 +73,9 @@ func main() {
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
 
-	h := delivery.NewHandler(recordService, zl)
-	delivery.RegisterRoutes(r, h)
+	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler)
 
-	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("pong"))
 	})
