@@ -1,7 +1,7 @@
 include .env
 export
 
-.PHONY: refresh build up down logs
+.PHONY: refresh build up down logs build-front
 
 refresh:
 	git pull origin master
@@ -11,6 +11,14 @@ refresh:
 	sleep 2
 	docker compose up -d app
 	docker compose logs -f app
+
+build-front:
+	cd .. && \
+	cd make_front && \
+	npm install && \
+	npm run build && \
+	rm -rf ../makeziper/front-dist/* && \
+	cp -r dist/* ../make_ziper/front-dist/
 
 build:
 	docker compose build
