@@ -42,7 +42,7 @@ func (r *recordRepo) GetHistory(ctx context.Context, botID string, telegramID in
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, telegram_id, bot_id, user_ref, role, record_type, text_content, image_url, created_at
 		FROM records
-		WHERE bot_id = $1 AND telegram_id = $2
+		WHERE telegram_id = $1 AND bot_id = $2
 		ORDER BY created_at ASC
 	`, telegramID, botID)
 	if err != nil {
