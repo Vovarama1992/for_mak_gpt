@@ -31,8 +31,9 @@ func (h *RecordHandler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Патчим «битые» переводы строк в тексте JSON
-	clean := bytes.ReplaceAll(body, []byte("\n"), []byte("\\n"))
+	// заменяем сырые переводы строк, если они мешают JSON
+	clean := bytes.ReplaceAll(body, []byte("\r"), []byte(""))
+	clean = bytes.ReplaceAll(clean, []byte("\n"), []byte("\\n"))
 
 	var req struct {
 		TelegramID int64  `json:"telegram_id"`
