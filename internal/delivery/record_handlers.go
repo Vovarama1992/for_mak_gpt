@@ -31,10 +31,6 @@ func (h *RecordHandler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// заменяем сырые переводы строк, если они мешают JSON
-	clean := bytes.ReplaceAll(body, []byte("\r"), []byte(""))
-	clean = bytes.ReplaceAll(clean, []byte("\n"), []byte("\\n"))
-
 	var req struct {
 		TelegramID int64  `json:"telegram_id"`
 		Role       string `json:"role"`
@@ -42,9 +38,15 @@ func (h *RecordHandler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request
 		BotID      string `json:"bot_id"`
 	}
 
-	if err := json.Unmarshal(clean, &req); err != nil {
-		http.Error(w, "invalid json after patch: "+err.Error(), http.StatusBadRequest)
-		return
+	// первая попытка — обычный JSON
+	if err := json.Unmarshal(body, &req); err != nil {
+		// fallback: патчим переносы строк, если Make вставил их "вживую"
+		clean := bytes.ReplaceAll(body, []byte("\r"), []byte(""))
+		clean = bytes.ReplaceAll(clean, []byte("\n"), []byte("\\n"))
+		if err2 := json.Unmarshal(clean, &req); err2 != nil {
+			http.Error(w, "invalid json after fallback: "+err2.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	if req.BotID == "" {
