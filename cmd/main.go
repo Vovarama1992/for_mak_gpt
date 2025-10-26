@@ -48,24 +48,28 @@ func main() {
 	defer baseLogger.Sync()
 	zl := logger.NewZapLogger(baseLogger.Sugar())
 
-	// инфраструктура
+	// --- инфраструктура ---
 	recordRepo := infra.NewRecordRepo(db)
 	subscriptionRepo := infra.NewSubscriptionRepo(db)
+	tariffRepo := infra.NewTariffRepo(db)
 
 	s3Client, err := infra.NewS3Client()
 	if err != nil {
 		log.Fatalf("failed to init s3 client: %v", err)
 	}
 
+	// --- доменные сервисы ---
 	s3Service := domain.NewS3Service(s3Client)
 	recordService := domain.NewRecordService(recordRepo, s3Service)
 	subscriptionService := domain.NewSubscriptionService(subscriptionRepo)
+	tariffService := domain.NewTariffService(tariffRepo)
 
-	// хендлеры
+	// --- хендлеры ---
 	recordHandler := delivery.NewRecordHandler(recordService, zl)
 	subscriptionHandler := delivery.NewSubscriptionHandler(subscriptionService)
+	tariffHandler := delivery.NewTariffHandler(tariffService)
 
-	// роутер
+	// --- маршруты ---
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -73,7 +77,7 @@ func main() {
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
 
-	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler)
+	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler, tariffHandler)
 
 	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)

@@ -7,8 +7,13 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func RegisterRoutes(r chi.Router, h *RecordHandler, hSubs *SubscriptionHandler) {
-
+// RegisterRoutes регистрирует все HTTP-маршруты приложения
+func RegisterRoutes(
+	r chi.Router,
+	h *RecordHandler,
+	hSubs *SubscriptionHandler,
+	hTariff *TariffHandler,
+) {
 	// --- записи ---
 	r.With(
 		httputil.RecoverMiddleware,
@@ -37,4 +42,7 @@ func RegisterRoutes(r chi.Router, h *RecordHandler, hSubs *SubscriptionHandler) 
 	r.With(httputil.RecoverMiddleware).Post("/subscribe/activate", hSubs.Activate)
 	r.With(httputil.RecoverMiddleware).Get("/subscribe/status/{telegram_id}", hSubs.GetStatus)
 	r.With(httputil.RecoverMiddleware).Get("/admin/subscriptions", hSubs.ListAll)
+
+	// --- тарифные планы ---
+	r.With(httputil.RecoverMiddleware).Get("/tariffs", hTariff.List)
 }

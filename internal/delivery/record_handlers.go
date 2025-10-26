@@ -1,8 +1,9 @@
 package delivery
 
 import (
+	"bytes"
 	"encoding/json"
-	"log"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -24,6 +25,15 @@ func NewRecordHandler(recordService ports.RecordService, log *logger.ZapLogger) 
 }
 
 func (h *RecordHandler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Патчим «битые» переводы строк в тексте JSON
+	clean := bytes.ReplaceAll(body, []byte("\n"), []byte("\\n"))
+
 	var req struct {
 		TelegramID int64  `json:"telegram_id"`
 		Role       string `json:"role"`
@@ -31,12 +41,11 @@ func (h *RecordHandler) AddTextRecordJSON(w http.ResponseWriter, r *http.Request
 		BotID      string `json:"bot_id"`
 	}
 
-	log.Printf("[AddTextRecordJSON] request from %s", r.RemoteAddr)
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+	if err := json.Unmarshal(clean, &req); err != nil {
+		http.Error(w, "invalid json after patch: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+
 	if req.BotID == "" {
 		http.Error(w, "missing bot_id", http.StatusBadRequest)
 		return
