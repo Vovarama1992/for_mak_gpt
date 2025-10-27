@@ -80,16 +80,14 @@ func main() {
 		w.Write([]byte("pong"))
 	})
 
-	// --- Telegram bots ---
-	go func() {
-		app := telegram.BotApp{
-			SubscriptionService: subscriptionService,
-			TariffService:       tariffService,
-		}
-		if err := app.RunAll(); err != nil {
-			log.Printf("telegram error: %v", err)
-		}
-	}()
+	// --- Telegram bots initialization ---
+	botApp := &telegram.BotApp{
+		SubscriptionService: subscriptionService,
+		TariffService:       tariffService,
+	}
+	if err := botApp.InitBots(); err != nil {
+		log.Fatalf("failed to init telegram bots: %v", err)
+	}
 
 	addr := ":" + port
 	zl.Log(logger.LogEntry{

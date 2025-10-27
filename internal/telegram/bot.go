@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"context"
 	"log"
 	"os"
 	"strings"
@@ -13,9 +14,12 @@ import (
 type BotApp struct {
 	SubscriptionService ports.SubscriptionService
 	TariffService       ports.TariffService
+	bots                map[string]*tgbotapi.BotAPI
+	mu                  sync.RWMutex
 }
 
-func (app *BotApp) RunAll() error {
+func (app *BotApp) InitBots() error {
+	app.bots = make(map[string]*tgbotapi.BotAPI)
 	tokensEnv := os.Getenv("BOT_TOKENS")
 	if tokensEnv == "" {
 		log.Println("no BOT_TOKENS provided")
@@ -23,34 +27,46 @@ func (app *BotApp) RunAll() error {
 	}
 
 	tokens := strings.Split(tokensEnv, ",")
-	var wg sync.WaitGroup
-
 	for _, token := range tokens {
 		token = strings.TrimSpace(token)
 		if token == "" {
 			continue
 		}
 
-		wg.Add(1)
-		go func(tok string) {
-			defer wg.Done()
+		bot, err := tgbotapi.NewBotAPI(token)
+		if err != nil {
+			log.Printf("failed to init bot: %v", err)
+			continue
+		}
 
-			bot, err := tgbotapi.NewBotAPI(tok)
-			if err != nil {
-				log.Printf("failed to start bot: %v", err)
-				return
-			}
-			log.Printf("bot started: %s", bot.Self.UserName)
+		app.mu.Lock()
+		app.bots[bot.Self.UserName] = bot
+		app.mu.Unlock()
+		log.Printf("bot ready for send: %s", bot.Self.UserName)
+	}
+	return nil
+}
 
-			dispatcher := NewDispatcher(
-				bot,
-				app.SubscriptionService,
-				app.TariffService,
-			)
-			dispatcher.Run()
-		}(token)
+// CheckSubscriptionAndShowMenu проверяет подписку и показывает меню, если её нет
+func (app *BotApp) CheckSubscriptionAndShowMenu(ctx context.Context, botID string, telegramID int64) {
+	app.mu.RLock()
+	bot := app.bots[botID]
+	app.mu.RUnlock()
+	if bot == nil {
+		log.Printf("bot not found for id: %s", botID)
+		return
 	}
 
-	wg.Wait()
-	return nil
+	status, err := app.SubscriptionService.GetStatus(ctx, botID, telegramID)
+	if err != nil {
+		log.Printf("failed to get subscription status: %v", err)
+		return
+	}
+
+	if status == "active" || status == "pending" {
+		return // подписка есть — ничего не показываем
+	}
+
+	menu := NewMenu()
+	menu.ShowTariffs(ctx, bot, &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: telegramID}}, app.TariffService)
 }

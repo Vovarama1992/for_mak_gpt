@@ -3,6 +3,8 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"os"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -21,28 +23,25 @@ func (m *Menu) ShowTariffs(ctx context.Context, bot *tgbotapi.BotAPI, msg *tgbot
 		return
 	}
 
+	apiBase := os.Getenv("API_BASE_URL")
+	if apiBase == "" {
+		apiBase = "https://aifull.ru/api"
+	}
+
 	text := "🚫 У вас нет активной подписки.\n\nВыберите подходящий тариф:"
-	list := ""
+	var rows [][]tgbotapi.InlineKeyboardButton
 	for _, t := range tariffs {
-		list += fmt.Sprintf("• %s — %.2f ₽ / %d дн.\n", t.Name, t.Price, t.PeriodDays)
+		q := url.Values{}
+		q.Set("bot_id", bot.Self.UserName)
+		q.Set("telegram_id", fmt.Sprintf("%d", msg.Chat.ID))
+		q.Set("plan", t.Code)
+
+		link := fmt.Sprintf("%s/subscribe/create?%s", apiBase, q.Encode())
+		btn := tgbotapi.NewInlineKeyboardButtonURL(fmt.Sprintf("%s — %.2f ₽", t.Name, t.Price), link)
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(btn))
 	}
 
-	msgCfg := tgbotapi.NewMessage(msg.Chat.ID, text+"\n\n"+list)
-	msgCfg.ReplyMarkup = TariffsKeyboard(tariffs)
+	msgCfg := tgbotapi.NewMessage(msg.Chat.ID, text)
+	msgCfg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
 	bot.Send(msgCfg)
-}
-
-func (m *Menu) HandleCallback(ctx context.Context, bot *tgbotapi.BotAPI, cb *tgbotapi.CallbackQuery, subSrv ports.SubscriptionService) {
-	code := cb.Data
-	if code == "" {
-		bot.Send(tgbotapi.NewMessage(cb.Message.Chat.ID, "Некорректный тариф"))
-		bot.Request(tgbotapi.NewCallback(cb.ID, ""))
-		return
-	}
-
-	subSrv.Create(ctx, bot.Self.UserName, cb.Message.Chat.ID, code)
-	text := fmt.Sprintf("✅ Подписка '%s' оформлена!\nОжидайте активации.", code)
-	bot.Send(tgbotapi.NewMessage(cb.Message.Chat.ID, text))
-
-	bot.Request(tgbotapi.NewCallback(cb.ID, ""))
 }

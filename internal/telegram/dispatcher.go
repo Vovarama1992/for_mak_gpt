@@ -27,35 +27,17 @@ func NewDispatcher(
 	}
 }
 
-func (d *Dispatcher) Run() {
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 30
-	updates := d.bot.GetUpdatesChan(u)
-
-	for update := range updates {
-		go d.routeUpdate(context.Background(), update)
-	}
-}
-
-func (d *Dispatcher) routeUpdate(ctx context.Context, upd tgbotapi.Update) {
-	switch {
-	case upd.Message != nil:
-		d.handleMessage(ctx, upd.Message)
-	case upd.CallbackQuery != nil:
-		d.handleCallback(ctx, upd.CallbackQuery)
-	}
-}
-
-func (d *Dispatcher) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
-	status, err := d.subscriptionSrv.GetStatus(ctx, d.bot.Self.UserName, msg.Chat.ID)
-	if err != nil || (status != "active" && status != "pending") {
-		d.menu.ShowTariffs(ctx, d.bot, msg, d.tariffSrv)
+// CheckAndShowMenu проверяет подписку и показывает меню, если её нет
+func (d *Dispatcher) CheckAndShowMenu(ctx context.Context, telegramID int64) {
+	status, err := d.subscriptionSrv.GetStatus(ctx, d.bot.Self.UserName, telegramID)
+	if err != nil {
 		return
 	}
 
-	// здесь идёт логика обработки сообщений (GPT и т.п.)
-}
+	if status == "active" || status == "pending" {
+		return // подписка есть, меню не показываем
+	}
 
-func (d *Dispatcher) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
-	d.menu.HandleCallback(ctx, d.bot, cb, d.subscriptionSrv)
+	msg := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: telegramID}}
+	d.menu.ShowTariffs(ctx, d.bot, msg, d.tariffSrv)
 }
