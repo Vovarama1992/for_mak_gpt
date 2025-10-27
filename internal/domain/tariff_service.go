@@ -6,14 +6,14 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 )
 
-type tariffService struct {
+type TariffService struct {
 	repo ports.TariffRepo
 }
 
 func NewTariffService(repo ports.TariffRepo) ports.TariffService {
-	return &tariffService{repo: repo}
+	return &TariffService{repo: repo}
 }
 
-func (s *tariffService) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
+func (s *TariffService) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 	return s.repo.ListAll(ctx)
 }

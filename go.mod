@@ -11,6 +11,7 @@ require (
 	github.com/go-chi/cors v1.2.2 // indirect
 	github.com/go-chi/httprate v0.15.0 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
+	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect

@@ -13,6 +13,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/delivery"
 	"github.com/Vovarama1992/make_ziper/internal/domain"
 	"github.com/Vovarama1992/make_ziper/internal/infra"
+	"github.com/Vovarama1992/make_ziper/internal/telegram"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
@@ -48,7 +49,6 @@ func main() {
 	defer baseLogger.Sync()
 	zl := logger.NewZapLogger(baseLogger.Sugar())
 
-	// --- инфраструктура ---
 	recordRepo := infra.NewRecordRepo(db)
 	subscriptionRepo := infra.NewSubscriptionRepo(db)
 	tariffRepo := infra.NewTariffRepo(db)
@@ -58,18 +58,15 @@ func main() {
 		log.Fatalf("failed to init s3 client: %v", err)
 	}
 
-	// --- доменные сервисы ---
 	s3Service := domain.NewS3Service(s3Client)
 	recordService := domain.NewRecordService(recordRepo, s3Service)
 	subscriptionService := domain.NewSubscriptionService(subscriptionRepo)
 	tariffService := domain.NewTariffService(tariffRepo)
 
-	// --- хендлеры ---
 	recordHandler := delivery.NewRecordHandler(recordService, zl)
 	subscriptionHandler := delivery.NewSubscriptionHandler(subscriptionService)
 	tariffHandler := delivery.NewTariffHandler(tariffService)
 
-	// --- маршруты ---
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -78,11 +75,21 @@ func main() {
 	}))
 
 	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler, tariffHandler)
-
 	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("pong"))
 	})
+
+	// --- Telegram bots ---
+	go func() {
+		app := telegram.BotApp{
+			SubscriptionService: subscriptionService,
+			TariffService:       tariffService,
+		}
+		if err := app.RunAll(); err != nil {
+			log.Printf("telegram error: %v", err)
+		}
+	}()
 
 	addr := ":" + port
 	zl.Log(logger.LogEntry{

@@ -7,15 +7,15 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 )
 
-type subscriptionService struct {
+type SubscriptionService struct {
 	repo ports.SubscriptionRepo
 }
 
 func NewSubscriptionService(repo ports.SubscriptionRepo) ports.SubscriptionService {
-	return &subscriptionService{repo: repo}
+	return &SubscriptionService{repo: repo}
 }
 
-func (s *subscriptionService) Create(ctx context.Context, botID string, telegramID int64, planCode string) error {
+func (s *SubscriptionService) Create(ctx context.Context, botID string, telegramID int64, planCode string) error {
 	// на этом этапе просто создаём запись с pending
 	sub := &ports.Subscription{
 		BotID:      botID,
@@ -26,11 +26,11 @@ func (s *subscriptionService) Create(ctx context.Context, botID string, telegram
 	return s.repo.Create(ctx, sub)
 }
 
-func (s *subscriptionService) Activate(ctx context.Context, botID string, telegramID int64) error {
+func (s *SubscriptionService) Activate(ctx context.Context, botID string, telegramID int64) error {
 	return s.repo.UpdateStatus(ctx, botID, telegramID, "active")
 }
 
-func (s *subscriptionService) GetStatus(ctx context.Context, botID string, telegramID int64) (string, error) {
+func (s *SubscriptionService) GetStatus(ctx context.Context, botID string, telegramID int64) (string, error) {
 	sub, err := s.repo.Get(ctx, botID, telegramID)
 	if err != nil {
 		return "", err
@@ -41,6 +41,6 @@ func (s *subscriptionService) GetStatus(ctx context.Context, botID string, teleg
 	return sub.Status, nil
 }
 
-func (s *subscriptionService) ListAll(ctx context.Context) ([]*ports.Subscription, error) {
+func (s *SubscriptionService) ListAll(ctx context.Context) ([]*ports.Subscription, error) {
 	return s.repo.ListAll(ctx)
 }
