@@ -49,36 +49,27 @@ func main() {
 	defer baseLogger.Sync()
 	zl := logger.NewZapLogger(baseLogger.Sugar())
 
+	// --- Repos ---
 	recordRepo := infra.NewRecordRepo(db)
 	subscriptionRepo := infra.NewSubscriptionRepo(db)
 	tariffRepo := infra.NewTariffRepo(db)
 
+	// --- External clients ---
 	s3Client, err := infra.NewS3Client()
 	if err != nil {
 		log.Fatalf("failed to init s3 client: %v", err)
 	}
 
+	// --- Services ---
 	s3Service := domain.NewS3Service(s3Client)
 	recordService := domain.NewRecordService(recordRepo, s3Service)
 	subscriptionService := domain.NewSubscriptionService(subscriptionRepo)
 	tariffService := domain.NewTariffService(tariffRepo)
 
+	// --- Handlers ---
 	recordHandler := delivery.NewRecordHandler(recordService, zl)
 	subscriptionHandler := delivery.NewSubscriptionHandler(subscriptionService)
 	tariffHandler := delivery.NewTariffHandler(tariffService)
-
-	r := chi.NewRouter()
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
-	}))
-
-	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler, tariffHandler)
-	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("pong"))
-	})
 
 	// --- Telegram bots initialization ---
 	botApp := &telegram.BotApp{
@@ -88,6 +79,22 @@ func main() {
 	if err := botApp.InitBots(); err != nil {
 		log.Fatalf("failed to init telegram bots: %v", err)
 	}
+	hBot := telegram.NewBotHandler(botApp)
+
+	// --- Router ---
+	r := chi.NewRouter()
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
+	}))
+
+	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler, tariffHandler, hBot)
+
+	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("pong"))
+	})
 
 	addr := ":" + port
 	zl.Log(logger.LogEntry{
