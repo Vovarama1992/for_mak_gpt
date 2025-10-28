@@ -16,7 +16,13 @@ func NewMenu() *Menu {
 	return &Menu{}
 }
 
-func (m *Menu) ShowTariffs(ctx context.Context, bot *tgbotapi.BotAPI, msg *tgbotapi.Message, tariffSrv ports.TariffService) {
+func (m *Menu) ShowTariffs(
+	ctx context.Context,
+	botID string, // <- теперь явно принимаем bot_id
+	bot *tgbotapi.BotAPI,
+	msg *tgbotapi.Message,
+	tariffSrv ports.TariffService,
+) {
 	tariffs, err := tariffSrv.ListAll(ctx)
 	if err != nil || len(tariffs) == 0 {
 		bot.Send(tgbotapi.NewMessage(msg.Chat.ID, "Не удалось получить список тарифов"))
@@ -32,9 +38,9 @@ func (m *Menu) ShowTariffs(ctx context.Context, bot *tgbotapi.BotAPI, msg *tgbot
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for _, t := range tariffs {
 		q := url.Values{}
-		q.Set("bot_id", bot.Self.UserName)
+		q.Set("bot_id", botID) // <- важно, сюда идёт ai_assistant / copy_assistant
 		q.Set("telegram_id", fmt.Sprintf("%d", msg.Chat.ID))
-		q.Set("plan", t.Code)
+		q.Set("plan_code", t.Code)
 
 		link := fmt.Sprintf("%s/subscribe/create?%s", apiBase, q.Encode())
 		btn := tgbotapi.NewInlineKeyboardButtonURL(fmt.Sprintf("%s — %.2f ₽", t.Name, t.Price), link)

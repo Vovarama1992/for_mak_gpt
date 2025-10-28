@@ -28,8 +28,8 @@ func NewDispatcher(
 }
 
 // CheckAndShowMenu проверяет подписку и показывает меню, если её нет
-func (d *Dispatcher) CheckAndShowMenu(ctx context.Context, telegramID int64) {
-	status, err := d.subscriptionSrv.GetStatus(ctx, d.bot.Self.UserName, telegramID)
+func (d *Dispatcher) CheckAndShowMenu(ctx context.Context, botID string, telegramID int64) {
+	status, err := d.subscriptionSrv.GetStatus(ctx, botID, telegramID)
 	if err != nil {
 		return
 	}
@@ -39,5 +39,5 @@ func (d *Dispatcher) CheckAndShowMenu(ctx context.Context, telegramID int64) {
 	}
 
 	msg := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: telegramID}}
-	d.menu.ShowTariffs(ctx, d.bot, msg, d.tariffSrv)
+	d.menu.ShowTariffs(ctx, botID, d.bot, msg, d.tariffSrv)
 }

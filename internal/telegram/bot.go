@@ -26,23 +26,33 @@ func (app *BotApp) InitBots() error {
 		return nil
 	}
 
-	tokens := strings.Split(tokensEnv, ",")
-	for _, token := range tokens {
-		token = strings.TrimSpace(token)
-		if token == "" {
+	// порядок: ai_assistant=token1,copy_assistant=token2
+	pairs := strings.Split(tokensEnv, ",")
+	for _, pair := range pairs {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		parts := strings.SplitN(pair, "=", 2)
+		if len(parts) != 2 {
+			log.Printf("invalid BOT_TOKENS pair: %s", pair)
 			continue
 		}
 
+		botID := parts[0]
+		token := parts[1]
+
 		bot, err := tgbotapi.NewBotAPI(token)
 		if err != nil {
-			log.Printf("failed to init bot: %v", err)
+			log.Printf("failed to init bot %s: %v", botID, err)
 			continue
 		}
 
 		app.mu.Lock()
-		app.bots[bot.Self.UserName] = bot
+		app.bots[botID] = bot
 		app.mu.Unlock()
-		log.Printf("bot ready for send: %s", bot.Self.UserName)
+
+		log.Printf("bot ready for send: %s (bot_id=%s)", bot.Self.UserName, botID)
 	}
 	return nil
 }
@@ -68,5 +78,6 @@ func (app *BotApp) CheckSubscriptionAndShowMenu(ctx context.Context, botID strin
 	}
 
 	menu := NewMenu()
-	menu.ShowTariffs(ctx, bot, &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: telegramID}}, app.TariffService)
+	msg := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: telegramID}}
+	menu.ShowTariffs(ctx, botID, bot, msg, app.TariffService)
 }
