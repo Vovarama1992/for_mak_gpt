@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/Vovarama1992/go-utils/httputil"
+	"github.com/Vovarama1992/make_ziper/internal/telegram"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -13,6 +14,7 @@ func RegisterRoutes(
 	h *RecordHandler,
 	hSubs *SubscriptionHandler,
 	hTariff *TariffHandler,
+	hBot *telegram.BotHandler,
 ) {
 	// --- записи ---
 	r.With(
@@ -45,4 +47,6 @@ func RegisterRoutes(
 
 	// --- тарифные планы ---
 	r.With(httputil.RecoverMiddleware).Get("/tariffs", hTariff.List)
+
+	r.With(httputil.RecoverMiddleware).Post("/telegram/show-menu", hBot.ShowMenu)
 }
