@@ -22,11 +22,10 @@ func (app *BotApp) InitBots() error {
 	app.bots = make(map[string]*tgbotapi.BotAPI)
 	tokensEnv := os.Getenv("BOT_TOKENS")
 	if tokensEnv == "" {
-		log.Println("no BOT_TOKENS provided")
+		log.Println("[InitBots] no BOT_TOKENS provided")
 		return nil
 	}
 
-	// порядок: ai_assistant=token1,copy_assistant=token2
 	pairs := strings.Split(tokensEnv, ",")
 	for _, pair := range pairs {
 		pair = strings.TrimSpace(pair)
@@ -35,7 +34,7 @@ func (app *BotApp) InitBots() error {
 		}
 		parts := strings.SplitN(pair, "=", 2)
 		if len(parts) != 2 {
-			log.Printf("invalid BOT_TOKENS pair: %s", pair)
+			log.Printf("[InitBots] invalid BOT_TOKENS pair: %s", pair)
 			continue
 		}
 
@@ -44,7 +43,7 @@ func (app *BotApp) InitBots() error {
 
 		bot, err := tgbotapi.NewBotAPI(token)
 		if err != nil {
-			log.Printf("failed to init bot %s: %v", botID, err)
+			log.Printf("[InitBots] failed to init bot %s: %v", botID, err)
 			continue
 		}
 
@@ -52,32 +51,42 @@ func (app *BotApp) InitBots() error {
 		app.bots[botID] = bot
 		app.mu.Unlock()
 
-		log.Printf("bot ready for send: %s (bot_id=%s)", bot.Self.UserName, botID)
+		log.Printf("[InitBots] bot ready for send: @%s (bot_id=%s)", bot.Self.UserName, botID)
 	}
 	return nil
 }
 
 // CheckSubscriptionAndShowMenu проверяет подписку и показывает меню, если её нет
 func (app *BotApp) CheckSubscriptionAndShowMenu(ctx context.Context, botID string, telegramID int64) {
+	log.Printf("[CheckSubscriptionAndShowMenu] start: bot_id=%s, telegram_id=%d", botID, telegramID)
+
 	app.mu.RLock()
 	bot := app.bots[botID]
 	app.mu.RUnlock()
+
 	if bot == nil {
-		log.Printf("bot not found for id: %s", botID)
+		log.Printf("[CheckSubscriptionAndShowMenu] bot not found for id: %s", botID)
 		return
 	}
 
 	status, err := app.SubscriptionService.GetStatus(ctx, botID, telegramID)
 	if err != nil {
-		log.Printf("failed to get subscription status: %v", err)
+		log.Printf("[CheckSubscriptionAndShowMenu] failed to get subscription status: %v", err)
 		return
 	}
 
+	log.Printf("[CheckSubscriptionAndShowMenu] subscription status=%s", status)
+
 	if status == "active" || status == "pending" {
-		return // подписка есть — ничего не показываем
+		log.Printf("[CheckSubscriptionAndShowMenu] subscription already active or pending, skip showing menu")
+		return
 	}
 
 	menu := NewMenu()
 	msg := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: telegramID}}
+
+	log.Printf("[CheckSubscriptionAndShowMenu] showing tariffs menu for user=%d via bot=%s", telegramID, botID)
 	menu.ShowTariffs(ctx, botID, bot, msg, app.TariffService)
+
+	log.Printf("[CheckSubscriptionAndShowMenu] menu.ShowTariffs finished for user=%d", telegramID)
 }
