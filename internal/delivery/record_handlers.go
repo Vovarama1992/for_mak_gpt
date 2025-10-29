@@ -3,9 +3,11 @@ package delivery
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/Vovarama1992/go-utils/logger"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
@@ -145,8 +147,32 @@ func (h *RecordHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	origin := r.Header.Get("Origin")
+	isAdmin := strings.Contains(origin, "aifull.ru") // определяем, что запрос пришёл с админки
+
+	for i := range history {
+		if !isAdmin {
+			continue // GPT — не трогаем
+		}
+		if history[i].ImageURL == nil || *history[i].ImageURL == "" {
+			continue
+		}
+
+		raw := *history[i].ImageURL
+		if strings.Contains(raw, "%2F") {
+			parts := strings.SplitN(raw, botID+"%2F", 2)
+			if len(parts) == 2 {
+				fixed := fmt.Sprintf("https://aifull.ru/api/images/%s/%s",
+					botID,
+					strings.ReplaceAll(parts[1], "%2F", "/"),
+				)
+				history[i].ImageURL = &fixed
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(history)
+	_ = json.NewEncoder(w).Encode(history)
 }
 
 func (h *RecordHandler) ListUsers(w http.ResponseWriter, r *http.Request) {

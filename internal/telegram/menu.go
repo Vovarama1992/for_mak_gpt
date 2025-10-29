@@ -3,8 +3,6 @@ package telegram
 import (
 	"context"
 	"fmt"
-	"net/url"
-	"os"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -12,13 +10,12 @@ import (
 
 type Menu struct{}
 
-func NewMenu() *Menu {
-	return &Menu{}
-}
+func NewMenu() *Menu { return &Menu{} }
 
+// ShowTariffs — показывает пользователю список тарифов (pending создаётся в RunListeners)
 func (m *Menu) ShowTariffs(
 	ctx context.Context,
-	botID string, // <- теперь явно принимаем bot_id
+	botID string,
 	bot *tgbotapi.BotAPI,
 	msg *tgbotapi.Message,
 	tariffSrv ports.TariffService,
@@ -29,25 +26,20 @@ func (m *Menu) ShowTariffs(
 		return
 	}
 
-	apiBase := os.Getenv("API_BASE_URL")
-	if apiBase == "" {
-		apiBase = "https://aifull.ru/api"
-	}
-
 	text := "🚫 У вас нет активной подписки.\n\nВыберите подходящий тариф:"
 	var rows [][]tgbotapi.InlineKeyboardButton
-	for _, t := range tariffs {
-		q := url.Values{}
-		q.Set("bot_id", botID) // <- важно, сюда идёт ai_assistant / copy_assistant
-		q.Set("telegram_id", fmt.Sprintf("%d", msg.Chat.ID))
-		q.Set("plan_code", t.Code)
 
-		link := fmt.Sprintf("%s/subscribe/create?%s", apiBase, q.Encode())
-		btn := tgbotapi.NewInlineKeyboardButtonURL(fmt.Sprintf("%s — %.2f ₽", t.Name, t.Price), link)
+	for _, t := range tariffs {
+		btn := tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("%s — %.2f ₽", t.Name, t.Price),
+			fmt.Sprintf("subscribe:%s", t.Code),
+		)
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(btn))
 	}
 
 	msgCfg := tgbotapi.NewMessage(msg.Chat.ID, text)
 	msgCfg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
-	bot.Send(msgCfg)
+	if _, err := bot.Send(msgCfg); err != nil {
+		fmt.Printf("[ShowTariffs] send error: %v\n", err)
+	}
 }

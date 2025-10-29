@@ -79,7 +79,6 @@ func main() {
 	if err := botApp.InitBots(); err != nil {
 		log.Fatalf("failed to init telegram bots: %v", err)
 	}
-	hBot := telegram.NewBotHandler(botApp)
 
 	// --- Router ---
 	r := chi.NewRouter()
@@ -89,7 +88,7 @@ func main() {
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
 
-	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler, tariffHandler, hBot)
+	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler, tariffHandler)
 
 	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
