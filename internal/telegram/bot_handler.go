@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -41,7 +42,7 @@ func (h *BotHandler) ShowMenu(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		log.Printf("[ShowMenu] calling CheckSubscriptionAndShowMenu for bot_id=%s, telegram_id=%d", req.BotID, tid)
-		h.app.CheckSubscriptionAndShowMenu(r.Context(), req.BotID, tid)
+		h.app.CheckSubscriptionAndShowMenu(context.Background(), req.BotID, tid)
 	}()
 
 	w.Header().Set("Content-Type", "application/json")
