@@ -63,7 +63,7 @@ func main() {
 	// --- Services ---
 	s3Service := domain.NewS3Service(s3Client)
 	recordService := domain.NewRecordService(recordRepo, s3Service)
-	subscriptionService := domain.NewSubscriptionService(subscriptionRepo)
+	subscriptionService := domain.NewSubscriptionService(subscriptionRepo, tariffRepo)
 	tariffService := domain.NewTariffService(tariffRepo)
 
 	// --- Handlers ---
