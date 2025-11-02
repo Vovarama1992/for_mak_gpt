@@ -56,10 +56,12 @@ func extractTelegramID(u tgbotapi.Update) int64 {
 // handleMessage — обрабатывает любые входящие тексты
 func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotapi.BotAPI, chatID, tgID int64, status string) {
 	switch status {
+
 	case "none":
 		log.Printf("[bot_loop] no subscription botID=%s tgID=%d → show menu", botID, tgID)
 		menu := app.BuildSubscriptionMenu(ctx)
-		msg := tgbotapi.NewMessage(chatID, MsgNoSubscription)
+		text := app.BuildSubscriptionText()
+		msg := tgbotapi.NewMessage(chatID, text)
 		msg.ReplyMarkup = menu
 		bot.Send(msg)
 
@@ -75,6 +77,8 @@ func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotap
 
 	default:
 		log.Printf("[bot_loop] unknown status=%s botID=%s tgID=%d", status, botID, tgID)
+		msg := tgbotapi.NewMessage(chatID, "⚠️ Неизвестный статус подписки.")
+		bot.Send(msg)
 	}
 }
 

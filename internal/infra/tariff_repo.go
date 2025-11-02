@@ -17,7 +17,7 @@ func NewTariffRepo(db *sql.DB) ports.TariffRepo {
 
 func (r *tariffRepo) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, code, name, price, period_days, features
+		SELECT id, code, name, price, period_days, voice_minutes, description, features
 		FROM tariff_plans
 		ORDER BY price ASC
 	`)
@@ -29,7 +29,16 @@ func (r *tariffRepo) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 	var plans []*ports.TariffPlan
 	for rows.Next() {
 		var t ports.TariffPlan
-		if err := rows.Scan(&t.ID, &t.Code, &t.Name, &t.Price, &t.PeriodDays, &t.Features); err != nil {
+		if err := rows.Scan(
+			&t.ID,
+			&t.Code,
+			&t.Name,
+			&t.Price,
+			&t.PeriodDays,
+			&t.VoiceMinutes,
+			&t.Description,
+			&t.Features,
+		); err != nil {
 			return nil, err
 		}
 		plans = append(plans, &t)

@@ -10,7 +10,6 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// BuildSubscriptionMenu — формирует клавиатуру с тарифами.
 func (app *BotApp) BuildSubscriptionMenu(ctx context.Context) tgbotapi.InlineKeyboardMarkup {
 	tariffs, err := app.TariffService.ListAll(ctx)
 	if err != nil {
@@ -23,11 +22,18 @@ func (app *BotApp) BuildSubscriptionMenu(ctx context.Context) tgbotapi.InlineKey
 
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for _, t := range tariffs {
-		label := fmt.Sprintf("%s — %s", t.Name, formatRUB(t.Price))
+		label := fmt.Sprintf("%s — %s (%d мин)", t.Name, formatRUB(t.Price), t.VoiceMinutes)
 		btn := tgbotapi.NewInlineKeyboardButtonData(label, t.Code)
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(btn))
 	}
 	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+func (app *BotApp) BuildSubscriptionText() string {
+	return "🎓 Тарифы AI-Репетитора\n\n" +
+		"💬 Текст и фото — бесплатно.\n" +
+		"🎧 Платишь только за голосовые занятия.\n\n" +
+		"Выбери пакет ниже ⬇️"
 }
 
 // errorMenu — заглушка, если тарифы не удалось получить.
