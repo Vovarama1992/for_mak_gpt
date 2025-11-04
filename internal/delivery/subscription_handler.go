@@ -28,17 +28,21 @@ func (h *SubscriptionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	if req.BotID == "" || req.TelegramID == 0 {
-		http.Error(w, "missing bot_id or telegram_id", http.StatusBadRequest)
+	if req.BotID == "" || req.TelegramID == 0 || req.PlanCode == "" {
+		http.Error(w, "missing required fields", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.service.Create(r.Context(), req.BotID, req.TelegramID, req.PlanCode); err != nil {
+	paymentURL, err := h.service.Create(r.Context(), req.BotID, req.TelegramID, req.PlanCode)
+	if err != nil {
 		http.Error(w, "failed to create subscription: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]any{"status": "created"})
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status":      "created",
+		"payment_url": paymentURL,
+	})
 }
 
 // POST /subscribe/activate
@@ -49,36 +53,20 @@ func (h *SubscriptionHandler) Activate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// пробуем вытащить bot_id и telegram_id из metadata
-	var botID string
-	var telegramID int64
-
-	if meta, ok := body["metadata"].(map[string]any); ok {
-		if v, ok := meta["bot_id"].(string); ok {
-			botID = v
-		}
-		if v, ok := meta["telegram_id"].(string); ok {
-			if id, err := strconv.ParseInt(v, 10, 64); err == nil {
-				telegramID = id
-			}
-		}
+	// Юкасса всегда передаёт payment_id в поле object.id
+	object, ok := body["object"].(map[string]any)
+	if !ok {
+		http.Error(w, "missing object", http.StatusBadRequest)
+		return
 	}
-
-	// если нет metadata — fallback на старый формат
-	if botID == "" || telegramID == 0 {
-		botID, _ = body["bot_id"].(string)
-		if v, ok := body["telegram_id"].(float64); ok {
-			telegramID = int64(v)
-		}
-	}
-
-	if botID == "" || telegramID == 0 {
-		http.Error(w, "missing bot_id or telegram_id", http.StatusBadRequest)
+	paymentID, _ := object["id"].(string)
+	if paymentID == "" {
+		http.Error(w, "missing payment_id", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.service.Activate(r.Context(), botID, telegramID); err != nil {
-		http.Error(w, "failed to activate: "+err.Error(), http.StatusInternalServerError)
+	if err := h.service.Activate(r.Context(), paymentID); err != nil {
+		http.Error(w, "failed to activate subscription: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 

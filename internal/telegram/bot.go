@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -90,13 +91,17 @@ func (app *BotApp) handleCallback(ctx context.Context, botID string, bot *tgbota
 
 	switch status {
 	case "none":
-		err := app.SubscriptionService.Create(ctx, botID, tgID, cb.Data)
+		paymentURL, err := app.SubscriptionService.Create(ctx, botID, tgID, cb.Data)
 		if err != nil {
-			log.Printf("[bot_loop] create pending fail botID=%s tgID=%d: %v", botID, tgID, err)
+			log.Printf("[bot_loop] create payment fail botID=%s tgID=%d: %v", botID, tgID, err)
+			bot.Request(tgbotapi.NewCallback(cb.ID, "Ошибка оформления"))
+			msg := tgbotapi.NewMessage(chatID, "Произошла ошибка при создании оплаты, попробуйте позже.")
+			bot.Send(msg)
 			return
 		}
+
 		bot.Request(tgbotapi.NewCallback(cb.ID, "Заявка принята"))
-		msg := tgbotapi.NewMessage(chatID, MsgAccepted)
+		msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Заявка принята!\nДля завершения оплаты перейдите по ссылке:\n%s", paymentURL))
 		bot.Send(msg)
 
 	case "pending", "active":

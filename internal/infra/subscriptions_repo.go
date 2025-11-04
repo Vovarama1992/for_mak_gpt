@@ -18,8 +18,17 @@ func NewSubscriptionRepo(db *sql.DB) ports.SubscriptionRepo {
 
 func (r *subscriptionRepo) Create(ctx context.Context, s *ports.Subscription) error {
 	query := `
-		INSERT INTO subscriptions (bot_id, telegram_id, plan_id, status, started_at, expires_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO subscriptions (
+			bot_id,
+			telegram_id,
+			plan_id,
+			status,
+			started_at,
+			expires_at,
+			updated_at,
+			yookassa_payment_id
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`
 	return r.db.QueryRowContext(
@@ -32,21 +41,47 @@ func (r *subscriptionRepo) Create(ctx context.Context, s *ports.Subscription) er
 		s.StartedAt,
 		s.ExpiresAt,
 		time.Now(),
+		s.YookassaPaymentID,
 	).Scan(&s.ID)
 }
 
-func (r *subscriptionRepo) UpdateStatus(ctx context.Context, botID string, telegramID int64, status string) error {
+func (r *subscriptionRepo) GetByPaymentID(ctx context.Context, paymentID string) (*ports.Subscription, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, bot_id, telegram_id, plan_id, status, started_at, expires_at, updated_at, yookassa_payment_id
+		FROM subscriptions
+		WHERE yookassa_payment_id = $1
+	`, paymentID)
+
+	var s ports.Subscription
+	err := row.Scan(
+		&s.ID,
+		&s.BotID,
+		&s.TelegramID,
+		&s.PlanID,
+		&s.Status,
+		&s.StartedAt,
+		&s.ExpiresAt,
+		&s.UpdatedAt,
+		&s.YookassaPaymentID,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return &s, err
+}
+
+func (r *subscriptionRepo) UpdateStatus(ctx context.Context, id int, status string) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE subscriptions
 		SET status = $1, updated_at = $2
-		WHERE bot_id = $3 AND telegram_id = $4
-	`, status, time.Now(), botID, telegramID)
+		WHERE id = $3
+	`, status, time.Now(), id)
 	return err
 }
 
 func (r *subscriptionRepo) Get(ctx context.Context, botID string, telegramID int64) (*ports.Subscription, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, bot_id, telegram_id, plan_id, status, started_at, expires_at, updated_at
+		SELECT id, bot_id, telegram_id, plan_id, status, started_at, expires_at, updated_at, yookassa_payment_id
 		FROM subscriptions
 		WHERE bot_id = $1 AND telegram_id = $2
 	`, botID, telegramID)
@@ -61,6 +96,7 @@ func (r *subscriptionRepo) Get(ctx context.Context, botID string, telegramID int
 		&s.StartedAt,
 		&s.ExpiresAt,
 		&s.UpdatedAt,
+		&s.YookassaPaymentID,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -70,7 +106,7 @@ func (r *subscriptionRepo) Get(ctx context.Context, botID string, telegramID int
 
 func (r *subscriptionRepo) ListAll(ctx context.Context) ([]*ports.Subscription, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, bot_id, telegram_id, plan_id, status, started_at, expires_at, updated_at
+		SELECT id, bot_id, telegram_id, plan_id, status, started_at, expires_at, updated_at, yookassa_payment_id
 		FROM subscriptions
 		ORDER BY updated_at DESC
 	`)
@@ -91,6 +127,7 @@ func (r *subscriptionRepo) ListAll(ctx context.Context) ([]*ports.Subscription, 
 			&s.StartedAt,
 			&s.ExpiresAt,
 			&s.UpdatedAt,
+			&s.YookassaPaymentID,
 		); err != nil {
 			return nil, err
 		}
