@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
@@ -45,15 +46,38 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("unknown plan code: %s", planCode)
 	}
 
-	// === создаём платёж в Юкассе ===
 	apiURL := os.Getenv("YOOKASSA_API_URL")
 	shopID := os.Getenv("YOOKASSA_SHOP_ID")
 	secretKey := os.Getenv("YOOKASSA_SECRET_KEY")
-	returnURL := os.Getenv("YOOKASSA_RETURN_URL")
+	botTokens := os.Getenv("BOT_TOKENS")
 
 	if apiURL == "" || shopID == "" || secretKey == "" {
 		return "", fmt.Errorf("yookassa env variables missing")
 	}
+
+	// достаём username бота по botID
+	var botUsername string
+	pairs := strings.Split(botTokens, ",")
+	for _, p := range pairs {
+		parts := strings.SplitN(p, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		name := parts[0]
+		if name == botID {
+			// Telegram username — это всё до двоеточия
+			token := parts[1]
+			usernamePart := strings.Split(token, ":")[0]
+			botUsername = usernamePart
+			break
+		}
+	}
+	if botUsername == "" {
+		return "", fmt.Errorf("bot username not found for botID=%s", botID)
+	}
+
+	// return_url под конкретного бота
+	returnURL := fmt.Sprintf("https://t.me/%s?start=paid_%s", botUsername, botID)
 
 	body := map[string]any{
 		"amount": map[string]any{
@@ -105,7 +129,6 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("invalid yookassa response: missing id or url")
 	}
 
-	// сохраняем подписку
 	sub := &ports.Subscription{
 		BotID:             botID,
 		TelegramID:        telegramID,
