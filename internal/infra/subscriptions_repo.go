@@ -16,99 +16,79 @@ func NewSubscriptionRepo(db *sql.DB) ports.SubscriptionRepo {
 	return &subscriptionRepo{db: db}
 }
 
+func (r *subscriptionRepo) scanRow(row *sql.Row) (*ports.Subscription, error) {
+	var s ports.Subscription
+	var yid sql.NullString
+	err := row.Scan(
+		&s.ID,
+		&s.BotID,
+		&s.TelegramID,
+		&s.PlanID,
+		&s.Status,
+		&s.StartedAt,
+		&s.ExpiresAt,
+		&s.UpdatedAt,
+		&yid,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if yid.Valid {
+		s.YookassaPaymentID = yid.String
+	}
+	return &s, nil
+}
+
 func (r *subscriptionRepo) Create(ctx context.Context, s *ports.Subscription) error {
 	query := `
 		INSERT INTO subscriptions (
-			bot_id,
-			telegram_id,
-			plan_id,
-			status,
-			started_at,
-			expires_at,
-			updated_at,
-			yookassa_payment_id
+			bot_id, telegram_id, plan_id, status,
+			started_at, expires_at, updated_at, yookassa_payment_id
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 		RETURNING id
 	`
 	return r.db.QueryRowContext(
-		ctx,
-		query,
-		s.BotID,
-		s.TelegramID,
-		s.PlanID,
-		s.Status,
-		s.StartedAt,
-		s.ExpiresAt,
-		time.Now(),
-		s.YookassaPaymentID,
+		ctx, query,
+		s.BotID, s.TelegramID, s.PlanID, s.Status,
+		s.StartedAt, s.ExpiresAt, time.Now(), s.YookassaPaymentID,
 	).Scan(&s.ID)
 }
 
 func (r *subscriptionRepo) GetByPaymentID(ctx context.Context, paymentID string) (*ports.Subscription, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, bot_id, telegram_id, plan_id, status, started_at, expires_at, updated_at, yookassa_payment_id
-		FROM subscriptions
-		WHERE yookassa_payment_id = $1
+		SELECT id, bot_id, telegram_id, plan_id, status,
+		       started_at, expires_at, updated_at, yookassa_payment_id
+		FROM subscriptions WHERE yookassa_payment_id = $1
 	`, paymentID)
+	return r.scanRow(row)
+}
 
-	var s ports.Subscription
-	err := row.Scan(
-		&s.ID,
-		&s.BotID,
-		&s.TelegramID,
-		&s.PlanID,
-		&s.Status,
-		&s.StartedAt,
-		&s.ExpiresAt,
-		&s.UpdatedAt,
-		&s.YookassaPaymentID,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	return &s, err
+func (r *subscriptionRepo) Get(ctx context.Context, botID string, telegramID int64) (*ports.Subscription, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, bot_id, telegram_id, plan_id, status,
+		       started_at, expires_at, updated_at, yookassa_payment_id
+		FROM subscriptions WHERE bot_id=$1 AND telegram_id=$2
+	`, botID, telegramID)
+	return r.scanRow(row)
 }
 
 func (r *subscriptionRepo) UpdateStatus(ctx context.Context, id int, status string) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE subscriptions
-		SET status = $1, updated_at = $2
-		WHERE id = $3
+		SET status=$1, updated_at=$2 WHERE id=$3
 	`, status, time.Now(), id)
 	return err
 }
 
-func (r *subscriptionRepo) Get(ctx context.Context, botID string, telegramID int64) (*ports.Subscription, error) {
-	row := r.db.QueryRowContext(ctx, `
-		SELECT id, bot_id, telegram_id, plan_id, status, started_at, expires_at, updated_at, yookassa_payment_id
-		FROM subscriptions
-		WHERE bot_id = $1 AND telegram_id = $2
-	`, botID, telegramID)
-
-	var s ports.Subscription
-	err := row.Scan(
-		&s.ID,
-		&s.BotID,
-		&s.TelegramID,
-		&s.PlanID,
-		&s.Status,
-		&s.StartedAt,
-		&s.ExpiresAt,
-		&s.UpdatedAt,
-		&s.YookassaPaymentID,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	return &s, err
-}
-
 func (r *subscriptionRepo) ListAll(ctx context.Context) ([]*ports.Subscription, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, bot_id, telegram_id, plan_id, status, started_at, expires_at, updated_at, yookassa_payment_id
-		FROM subscriptions
-		ORDER BY updated_at DESC
+		SELECT id, bot_id, telegram_id, plan_id, status,
+		       started_at, expires_at, updated_at, yookassa_payment_id
+		FROM subscriptions ORDER BY updated_at DESC
 	`)
 	if err != nil {
 		return nil, err
@@ -118,18 +98,15 @@ func (r *subscriptionRepo) ListAll(ctx context.Context) ([]*ports.Subscription, 
 	var subs []*ports.Subscription
 	for rows.Next() {
 		var s ports.Subscription
+		var yid sql.NullString
 		if err := rows.Scan(
-			&s.ID,
-			&s.BotID,
-			&s.TelegramID,
-			&s.PlanID,
-			&s.Status,
-			&s.StartedAt,
-			&s.ExpiresAt,
-			&s.UpdatedAt,
-			&s.YookassaPaymentID,
+			&s.ID, &s.BotID, &s.TelegramID, &s.PlanID, &s.Status,
+			&s.StartedAt, &s.ExpiresAt, &s.UpdatedAt, &yid,
 		); err != nil {
 			return nil, err
+		}
+		if yid.Valid {
+			s.YookassaPaymentID = yid.String
 		}
 		subs = append(subs, &s)
 	}
