@@ -37,7 +37,9 @@ func (r *subscriptionRepo) scanRow(row *sql.Row) (*ports.Subscription, error) {
 		return nil, err
 	}
 	if yid.Valid {
-		s.YookassaPaymentID = yid.String
+		s.YookassaPaymentID = &yid.String
+	} else {
+		s.YookassaPaymentID = nil
 	}
 	return &s, nil
 }
@@ -106,7 +108,9 @@ func (r *subscriptionRepo) ListAll(ctx context.Context) ([]*ports.Subscription, 
 			return nil, err
 		}
 		if yid.Valid {
-			s.YookassaPaymentID = yid.String
+			s.YookassaPaymentID = &yid.String
+		} else {
+			s.YookassaPaymentID = nil
 		}
 		subs = append(subs, &s)
 	}

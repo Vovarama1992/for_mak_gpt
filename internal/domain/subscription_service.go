@@ -44,16 +44,17 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("unknown plan code: %s", planCode)
 	}
 
-	// если тариф бесплатный — активируем сразу
+	// бесплатный план — активируем сразу, без Юкассы
 	if plan.Price == 0 {
 		expiresAt := time.Now().Add(time.Duration(plan.PeriodDays) * 24 * time.Hour)
 		sub := &ports.Subscription{
-			BotID:      botID,
-			TelegramID: telegramID,
-			PlanID:     plan.ID,
-			Status:     "active",
-			StartedAt:  time.Now(),
-			ExpiresAt:  &expiresAt,
+			BotID:             botID,
+			TelegramID:        telegramID,
+			PlanID:            plan.ID,
+			Status:            "active",
+			StartedAt:         time.Now(),
+			ExpiresAt:         &expiresAt,
+			YookassaPaymentID: nil,
 		}
 		if err := s.repo.Create(ctx, sub); err != nil {
 			return "", fmt.Errorf("failed to activate free plan: %w", err)
@@ -61,7 +62,7 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", nil
 	}
 
-	// --- платные тарифы через Юкассу ---
+	// --- платные ---
 	apiURL := os.Getenv("YOOKASSA_API_URL")
 	shopID := os.Getenv("YOOKASSA_SHOP_ID")
 	secretKey := os.Getenv("YOOKASSA_SECRET_KEY")
@@ -71,13 +72,16 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("yookassa env variables missing")
 	}
 
+	// достаём username бота по botID
 	var botUsername string
-	for _, p := range strings.Split(botTokens, ",") {
-		parts := strings.SplitN(p, "=", 2)
+	pairs := strings.Split(botTokens, ",")
+	for _, p := range pairs {
+		parts := strings.SplitN(strings.TrimSpace(p), "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
-		if parts[0] == botID {
+		name := parts[0]
+		if name == botID {
 			token := parts[1]
 			botUsername = strings.Split(token, ":")[0]
 			break
@@ -145,7 +149,7 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		PlanID:            plan.ID,
 		Status:            "pending",
 		StartedAt:         time.Now(),
-		YookassaPaymentID: yresp.ID,
+		YookassaPaymentID: &yresp.ID,
 	}
 	if err := s.repo.Create(ctx, sub); err != nil {
 		return "", fmt.Errorf("failed to create subscription: %w", err)
