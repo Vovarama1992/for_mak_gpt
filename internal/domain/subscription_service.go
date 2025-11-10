@@ -33,35 +33,35 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("failed to list tariffs: %w", err)
 	}
 
-	var plan ports.TariffPlan
+	var plan *ports.TariffPlan
 	for _, t := range tariffs {
 		if t.Code == planCode {
-			plan = *t
+			plan = t
 			break
 		}
 	}
-	if plan.ID == 0 {
+	if plan == nil {
 		return "", fmt.Errorf("unknown plan code: %s", planCode)
 	}
 
-	// --- если тариф бесплатный — активируем сразу ---
+	// если тариф бесплатный — активируем сразу
 	if plan.Price == 0 {
-		exp := time.Now().Add(time.Duration(plan.PeriodDays) * 24 * time.Hour)
+		expiresAt := time.Now().Add(time.Duration(plan.PeriodDays) * 24 * time.Hour)
 		sub := &ports.Subscription{
 			BotID:      botID,
 			TelegramID: telegramID,
 			PlanID:     plan.ID,
 			Status:     "active",
 			StartedAt:  time.Now(),
-			ExpiresAt:  &exp,
+			ExpiresAt:  &expiresAt,
 		}
 		if err := s.repo.Create(ctx, sub); err != nil {
 			return "", fmt.Errorf("failed to activate free plan: %w", err)
 		}
-		return "Бесплатная подписка активирована!", nil
+		return "", nil
 	}
 
-	// --- обычная логика с Юкассой ---
+	// --- платные тарифы через Юкассу ---
 	apiURL := os.Getenv("YOOKASSA_API_URL")
 	shopID := os.Getenv("YOOKASSA_SHOP_ID")
 	secretKey := os.Getenv("YOOKASSA_SECRET_KEY")
@@ -72,8 +72,7 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 	}
 
 	var botUsername string
-	pairs := strings.Split(botTokens, ",")
-	for _, p := range pairs {
+	for _, p := range strings.Split(botTokens, ",") {
 		parts := strings.SplitN(p, "=", 2)
 		if len(parts) != 2 {
 			continue
@@ -96,7 +95,7 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 			"currency": "RUB",
 		},
 		"capture":     true,
-		"description": fmt.Sprintf("Subscription %s for user %d", planCode, telegramID),
+		"description": fmt.Sprintf("Subscription %s for user %d", plan.Code, telegramID),
 		"confirmation": map[string]any{
 			"type":       "redirect",
 			"return_url": returnURL,
