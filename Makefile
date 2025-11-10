@@ -12,8 +12,8 @@ build-front:
 	cd make_front && \
 	npm install && \
 	npm run build && \
-	rm -rf ../makeziper/front-dist/* && \
-	cp -r dist/* ../make_ziper/front-dist/
+	rm -rf ../repetitor/front-dist/* && \
+    cp -r dist/* ../repetitor/front-dist/
 
 build:
 	docker compose build
