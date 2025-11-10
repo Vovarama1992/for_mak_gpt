@@ -34,7 +34,7 @@ func (app *BotApp) runBotLoop(botID string, bot *tgbotapi.BotAPI) {
 
 		switch {
 		case update.Message != nil:
-			app.handleMessage(ctx, botID, bot, update.Message.Chat.ID, tgID, status)
+			app.handleMessage(ctx, botID, bot, update.Message.Chat.ID, tgID, status, update)
 
 		case update.CallbackQuery != nil:
 			app.handleCallback(ctx, botID, bot, update.CallbackQuery, status)
@@ -42,7 +42,6 @@ func (app *BotApp) runBotLoop(botID string, bot *tgbotapi.BotAPI) {
 	}
 }
 
-// extractTelegramID — достаёт userID из апдейта
 func extractTelegramID(u tgbotapi.Update) int64 {
 	switch {
 	case u.Message != nil && u.Message.From != nil:
@@ -54,8 +53,9 @@ func extractTelegramID(u tgbotapi.Update) int64 {
 	}
 }
 
-// handleMessage — обрабатывает любые входящие тексты
-func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotapi.BotAPI, chatID, tgID int64, status string) {
+func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotapi.BotAPI,
+	chatID, tgID int64, status string, update tgbotapi.Update) {
+
 	switch status {
 
 	case "none":
@@ -73,7 +73,22 @@ func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotap
 
 	case "active":
 		log.Printf("[bot_loop] active botID=%s tgID=%d", botID, tgID)
-		msg := tgbotapi.NewMessage(chatID, MsgActive)
+
+		if update.Message == nil || update.Message.Text == "" {
+			msg := tgbotapi.NewMessage(chatID, "📎 Отправь текстовое сообщение.")
+			bot.Send(msg)
+			return
+		}
+
+		reply, err := app.AiService.GetReply(ctx, botID, tgID, update.Message.Text)
+		if err != nil {
+			log.Printf("[bot_loop] ai reply fail botID=%s tgID=%d: %v", botID, tgID, err)
+			msg := tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке запроса.")
+			bot.Send(msg)
+			return
+		}
+
+		msg := tgbotapi.NewMessage(chatID, reply)
 		bot.Send(msg)
 
 	default:
@@ -83,8 +98,9 @@ func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotap
 	}
 }
 
-// handleCallback — выбор тарифа из меню
-func (app *BotApp) handleCallback(ctx context.Context, botID string, bot *tgbotapi.BotAPI, cb *tgbotapi.CallbackQuery, status string) {
+func (app *BotApp) handleCallback(ctx context.Context, botID string, bot *tgbotapi.BotAPI,
+	cb *tgbotapi.CallbackQuery, status string) {
+
 	tgID := cb.From.ID
 	chatID := cb.Message.Chat.ID
 	log.Printf("[bot_loop] callback botID=%s tgID=%d data=%s", botID, tgID, cb.Data)
@@ -101,7 +117,8 @@ func (app *BotApp) handleCallback(ctx context.Context, botID string, bot *tgbota
 		}
 
 		bot.Request(tgbotapi.NewCallback(cb.ID, "Заявка принята"))
-		msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Заявка принята!\nДля завершения оплаты перейдите по ссылке:\n%s", paymentURL))
+		msg := tgbotapi.NewMessage(chatID,
+			fmt.Sprintf("✅ Заявка принята!\nДля завершения оплаты перейдите по ссылке:\n%s", paymentURL))
 		bot.Send(msg)
 
 	case "pending", "active":

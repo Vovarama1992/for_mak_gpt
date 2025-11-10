@@ -10,6 +10,7 @@ import (
 
 	"github.com/Vovarama1992/go-utils/httputil"
 	"github.com/Vovarama1992/go-utils/logger"
+	"github.com/Vovarama1992/make_ziper/internal/ai"
 	"github.com/Vovarama1992/make_ziper/internal/delivery"
 	"github.com/Vovarama1992/make_ziper/internal/domain"
 	"github.com/Vovarama1992/make_ziper/internal/infra"
@@ -71,10 +72,15 @@ func main() {
 	subscriptionHandler := delivery.NewSubscriptionHandler(subscriptionService)
 	tariffHandler := delivery.NewTariffHandler(tariffService)
 
+	// --- AI module ---
+	aiClient := ai.NewOpenAIClient()
+	aiService := ai.NewAiService(aiClient, recordService)
+
 	// --- Telegram bots initialization ---
 	botApp := &telegram.BotApp{
 		SubscriptionService: subscriptionService,
 		TariffService:       tariffService,
+		AiService:           aiService,
 	}
 	if err := botApp.InitBots(); err != nil {
 		log.Fatalf("failed to init telegram bots: %v", err)
