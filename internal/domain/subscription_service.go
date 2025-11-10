@@ -33,19 +33,35 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("failed to list tariffs: %w", err)
 	}
 
-	var planID int
-	var price float64
+	var plan ports.TariffPlan
 	for _, t := range tariffs {
 		if t.Code == planCode {
-			planID = t.ID
-			price = t.Price
+			plan = *t
 			break
 		}
 	}
-	if planID == 0 {
+	if plan.ID == 0 {
 		return "", fmt.Errorf("unknown plan code: %s", planCode)
 	}
 
+	// --- если тариф бесплатный — активируем сразу ---
+	if plan.Price == 0 {
+		exp := time.Now().Add(time.Duration(plan.PeriodDays) * 24 * time.Hour)
+		sub := &ports.Subscription{
+			BotID:      botID,
+			TelegramID: telegramID,
+			PlanID:     plan.ID,
+			Status:     "active",
+			StartedAt:  time.Now(),
+			ExpiresAt:  &exp,
+		}
+		if err := s.repo.Create(ctx, sub); err != nil {
+			return "", fmt.Errorf("failed to activate free plan: %w", err)
+		}
+		return "Бесплатная подписка активирована!", nil
+	}
+
+	// --- обычная логика с Юкассой ---
 	apiURL := os.Getenv("YOOKASSA_API_URL")
 	shopID := os.Getenv("YOOKASSA_SHOP_ID")
 	secretKey := os.Getenv("YOOKASSA_SECRET_KEY")
@@ -55,7 +71,6 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("yookassa env variables missing")
 	}
 
-	// достаём username бота по botID
 	var botUsername string
 	pairs := strings.Split(botTokens, ",")
 	for _, p := range pairs {
@@ -63,12 +78,9 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		if len(parts) != 2 {
 			continue
 		}
-		name := parts[0]
-		if name == botID {
-			// Telegram username — это всё до двоеточия
+		if parts[0] == botID {
 			token := parts[1]
-			usernamePart := strings.Split(token, ":")[0]
-			botUsername = usernamePart
+			botUsername = strings.Split(token, ":")[0]
 			break
 		}
 	}
@@ -76,12 +88,11 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("bot username not found for botID=%s", botID)
 	}
 
-	// return_url под конкретного бота
 	returnURL := fmt.Sprintf("https://t.me/%s?start=paid_%s", botUsername, botID)
 
 	body := map[string]any{
 		"amount": map[string]any{
-			"value":    fmt.Sprintf("%.2f", price),
+			"value":    fmt.Sprintf("%.2f", plan.Price),
 			"currency": "RUB",
 		},
 		"capture":     true,
@@ -132,7 +143,7 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 	sub := &ports.Subscription{
 		BotID:             botID,
 		TelegramID:        telegramID,
-		PlanID:            planID,
+		PlanID:            plan.ID,
 		Status:            "pending",
 		StartedAt:         time.Now(),
 		YookassaPaymentID: yresp.ID,
