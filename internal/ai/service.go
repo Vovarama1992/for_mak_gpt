@@ -22,20 +22,28 @@ func NewAiService(client *OpenAIClient, recordSvc ports.RecordService) *AiServic
 }
 
 func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64, userText string) (string, error) {
-	// 0) Сохраняем вход пользователя (чтобы память была у КАЖДОГО бота отдельно)
+	log.Printf("[ai] >>> START botID=%s telegramID=%d userText=%q", botID, telegramID, userText)
+
 	if txt := strings.TrimSpace(userText); txt != "" {
 		if _, err := s.recordService.AddText(ctx, botID, telegramID, "user", txt); err != nil {
 			log.Printf("[ai] save user text fail: %v", err)
 		}
 	}
 
-	// 1) Тянем историю из БД
 	history, err := s.recordService.GetHistory(ctx, botID, telegramID)
 	if err != nil {
 		log.Printf("[ai] history load fail: %v", err)
+	} else {
+		log.Printf("[ai] history fetched for botID=%s telegramID=%d -> %d records", botID, telegramID, len(history))
+		for i, r := range history {
+			if i >= 3 {
+				log.Printf("[ai] ... (%d more records hidden)", len(history)-3)
+				break
+			}
+			log.Printf("[ai] record[%d]: role=%s type=%s text=%q", i, r.Role, r.Type, safePtr(r.Text))
+		}
 	}
 
-	// 2) Готовим сообщения для GPT
 	var messages []openai.ChatCompletionMessage
 	for _, r := range history {
 		if r.Type != "text" || r.Text == nil || strings.TrimSpace(*r.Text) == "" {
@@ -50,17 +58,26 @@ func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64
 			Content: *r.Text,
 		})
 	}
+	log.Printf("[ai] sending %d messages to GPT", len(messages))
 
-	// 3) Запрос к GPT
 	reply, err := s.openaiClient.GetCompletion(ctx, messages)
 	if err != nil {
+		log.Printf("[ai] GPT error: %v", err)
 		return "", err
 	}
+	log.Printf("[ai] GPT reply: %q", reply)
 
-	// 4) Сохраняем ответ ассистента
 	if _, err := s.recordService.AddText(ctx, botID, telegramID, "tutor", reply); err != nil {
 		log.Printf("[ai] save reply fail: %v", err)
 	}
 
+	log.Printf("[ai] <<< END botID=%s telegramID=%d", botID, telegramID)
 	return reply, nil
+}
+
+func safePtr(p *string) string {
+	if p == nil {
+		return "<nil>"
+	}
+	return *p
 }
