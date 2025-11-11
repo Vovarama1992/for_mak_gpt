@@ -54,6 +54,7 @@ func main() {
 	recordRepo := infra.NewRecordRepo(db)
 	subscriptionRepo := infra.NewSubscriptionRepo(db)
 	tariffRepo := infra.NewTariffRepo(db)
+	promptRepo := infra.NewPromptRepo(db)
 
 	// --- External clients ---
 	s3Client, err := infra.NewS3Client()
@@ -74,7 +75,7 @@ func main() {
 
 	// --- AI module ---
 	aiClient := ai.NewOpenAIClient()
-	aiService := ai.NewAiService(aiClient, recordService)
+	aiService := ai.NewAiService(aiClient, recordService, promptRepo)
 
 	// --- Telegram bots initialization ---
 	botApp := &telegram.BotApp{

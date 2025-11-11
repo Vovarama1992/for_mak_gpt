@@ -3,7 +3,6 @@ package ai
 import (
 	"context"
 	"log"
-	"os"
 	"strings"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
@@ -13,26 +12,26 @@ import (
 type AiService struct {
 	openaiClient  *OpenAIClient
 	recordService ports.RecordService
+	promptRepo    ports.PromptRepo
 }
 
-func NewAiService(client *OpenAIClient, recordSvc ports.RecordService) *AiService {
+func NewAiService(client *OpenAIClient, recordSvc ports.RecordService, promptRepo ports.PromptRepo) *AiService {
 	return &AiService{
 		openaiClient:  client,
 		recordService: recordSvc,
+		promptRepo:    promptRepo,
 	}
 }
 
 func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64, userText string) (string, error) {
 	log.Printf("[ai] >>> START botID=%s telegramID=%d userText=%q", botID, telegramID, userText)
 
-	// сохраняем новое сообщение пользователя
 	if txt := strings.TrimSpace(userText); txt != "" {
 		if _, err := s.recordService.AddText(ctx, botID, telegramID, "user", txt); err != nil {
 			log.Printf("[ai] save user text fail: %v", err)
 		}
 	}
 
-	// достаём историю сообщений
 	history, err := s.recordService.GetHistory(ctx, botID, telegramID)
 	if err != nil {
 		log.Printf("[ai] history load fail: %v", err)
@@ -47,13 +46,13 @@ func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64
 		}
 	}
 
-	// системный промпт из окружения
-	systemPrompt := os.Getenv("OPENAI_SYSTEM_PROMPT")
-	if systemPrompt == "" {
+	// достаём системный промпт из БД
+	systemPrompt, err := s.promptRepo.GetByBotID(ctx, botID)
+	if err != nil || strings.TrimSpace(systemPrompt) == "" {
+		log.Printf("[ai] no prompt found for bot %s, using default", botID)
 		systemPrompt = "Ты доброжелательная девушка-репетитор. Отвечай понятно, логично и с лёгким воодушевлением, помогая ученику разобраться в теме."
 	}
 
-	// формируем список сообщений
 	messages := []openai.ChatCompletionMessage{
 		{Role: "system", Content: systemPrompt},
 	}
@@ -74,7 +73,6 @@ func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64
 
 	log.Printf("[ai] sending %d messages to GPT", len(messages))
 
-	// получаем ответ от GPT
 	reply, err := s.openaiClient.GetCompletion(ctx, messages)
 	if err != nil {
 		log.Printf("[ai] GPT error: %v", err)
@@ -82,7 +80,6 @@ func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64
 	}
 	log.Printf("[ai] GPT reply: %q", reply)
 
-	// сохраняем ответ
 	if _, err := s.recordService.AddText(ctx, botID, telegramID, "tutor", reply); err != nil {
 		log.Printf("[ai] save reply fail: %v", err)
 	}
@@ -97,3 +94,4 @@ func safePtr(p *string) string {
 	}
 	return *p
 }
+
