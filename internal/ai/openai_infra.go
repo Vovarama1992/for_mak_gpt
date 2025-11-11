@@ -23,8 +23,13 @@ func NewOpenAIClient() *OpenAIClient {
 }
 
 func (c *OpenAIClient) GetCompletion(ctx context.Context, messages []openai.ChatCompletionMessage) (string, error) {
+	model := os.Getenv("OPENAI_MODEL")
+	if model == "" {
+		model = openai.GPT4oMini
+	}
+
 	resp, err := c.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model:    openai.GPT4oMini,
+		Model:    model,
 		Messages: messages,
 	})
 	if err != nil {

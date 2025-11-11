@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
@@ -24,12 +25,14 @@ func NewAiService(client *OpenAIClient, recordSvc ports.RecordService) *AiServic
 func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64, userText string) (string, error) {
 	log.Printf("[ai] >>> START botID=%s telegramID=%d userText=%q", botID, telegramID, userText)
 
+	// сохраняем новое сообщение пользователя
 	if txt := strings.TrimSpace(userText); txt != "" {
 		if _, err := s.recordService.AddText(ctx, botID, telegramID, "user", txt); err != nil {
 			log.Printf("[ai] save user text fail: %v", err)
 		}
 	}
 
+	// достаём историю сообщений
 	history, err := s.recordService.GetHistory(ctx, botID, telegramID)
 	if err != nil {
 		log.Printf("[ai] history load fail: %v", err)
@@ -44,7 +47,17 @@ func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64
 		}
 	}
 
-	var messages []openai.ChatCompletionMessage
+	// системный промпт из окружения
+	systemPrompt := os.Getenv("OPENAI_SYSTEM_PROMPT")
+	if systemPrompt == "" {
+		systemPrompt = "Ты доброжелательная девушка-репетитор. Отвечай понятно, логично и с лёгким воодушевлением, помогая ученику разобраться в теме."
+	}
+
+	// формируем список сообщений
+	messages := []openai.ChatCompletionMessage{
+		{Role: "system", Content: systemPrompt},
+	}
+
 	for _, r := range history {
 		if r.Type != "text" || r.Text == nil || strings.TrimSpace(*r.Text) == "" {
 			continue
@@ -58,8 +71,10 @@ func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64
 			Content: *r.Text,
 		})
 	}
+
 	log.Printf("[ai] sending %d messages to GPT", len(messages))
 
+	// получаем ответ от GPT
 	reply, err := s.openaiClient.GetCompletion(ctx, messages)
 	if err != nil {
 		log.Printf("[ai] GPT error: %v", err)
@@ -67,6 +82,7 @@ func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64
 	}
 	log.Printf("[ai] GPT reply: %q", reply)
 
+	// сохраняем ответ
 	if _, err := s.recordService.AddText(ctx, botID, telegramID, "tutor", reply); err != nil {
 		log.Printf("[ai] save reply fail: %v", err)
 	}
