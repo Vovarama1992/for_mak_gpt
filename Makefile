@@ -1,4 +1,4 @@
-.PHONY: refresh build up down logs build-front
+.PHONY: refresh build up down logs build-front commit
 
 refresh:
 	git pull origin master
@@ -13,7 +13,7 @@ build-front:
 	npm install && \
 	npm run build && \
 	rm -rf ../repetitor/front-dist/* && \
-    cp -r dist/* ../repetitor/front-dist/
+	cp -r dist/* ../repetitor/front-dist/
 
 build:
 	docker compose build
@@ -26,3 +26,8 @@ down:
 
 logs:
 	docker compose logs -f
+
+commit:
+	git add .
+	git commit -m "$${m:-update}"
+	git push origin master
