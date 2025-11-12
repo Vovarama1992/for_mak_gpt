@@ -14,6 +14,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/delivery"
 	"github.com/Vovarama1992/make_ziper/internal/domain"
 	"github.com/Vovarama1992/make_ziper/internal/infra"
+	"github.com/Vovarama1992/make_ziper/internal/speech"
 	"github.com/Vovarama1992/make_ziper/internal/telegram"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -62,26 +63,25 @@ func main() {
 		log.Fatalf("failed to init s3 client: %v", err)
 	}
 
+	// --- Speech client (ElevenLabs) ---
+	speechClient := speech.NewElevenLabsClient()
+	speechService := speech.NewService(speechClient)
+
 	// --- Services ---
 	s3Service := domain.NewS3Service(s3Client)
 	recordService := domain.NewRecordService(recordRepo, s3Service)
 	subscriptionService := domain.NewSubscriptionService(subscriptionRepo, tariffRepo)
 	tariffService := domain.NewTariffService(tariffRepo)
-
-	// --- Handlers ---
-	recordHandler := delivery.NewRecordHandler(recordService, zl)
-	subscriptionHandler := delivery.NewSubscriptionHandler(subscriptionService)
-	tariffHandler := delivery.NewTariffHandler(tariffService)
-
-	// --- AI module ---
 	aiClient := ai.NewOpenAIClient()
 	aiService := ai.NewAiService(aiClient, recordService, promptRepo)
 
-	// --- Telegram bots initialization ---
+	// --- Telegram bots ---
 	botApp := &telegram.BotApp{
 		SubscriptionService: subscriptionService,
 		TariffService:       tariffService,
 		AiService:           aiService,
+		SpeechService:       speechService,
+		RecordService:       recordService,
 	}
 	if err := botApp.InitBots(); err != nil {
 		log.Fatalf("failed to init telegram bots: %v", err)
@@ -95,6 +95,9 @@ func main() {
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
 
+	recordHandler := delivery.NewRecordHandler(recordService, zl)
+	subscriptionHandler := delivery.NewSubscriptionHandler(subscriptionService)
+	tariffHandler := delivery.NewTariffHandler(tariffService)
 	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler, tariffHandler)
 
 	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, _ *http.Request) {

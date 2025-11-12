@@ -3,8 +3,12 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
-	"time"
+	"mime/multipart"
+	"net/http"
+	"os"
+	"path/filepath"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -65,37 +69,147 @@ func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotap
 		msg := tgbotapi.NewMessage(chatID, text)
 		msg.ReplyMarkup = menu
 		bot.Send(msg)
+		return
 
 	case "pending":
 		log.Printf("[bot_loop] pending botID=%s tgID=%d", botID, tgID)
 		msg := tgbotapi.NewMessage(chatID, MsgPending)
 		bot.Send(msg)
+		return
 
 	case "active":
 		log.Printf("[bot_loop] active botID=%s tgID=%d", botID, tgID)
 
-		if update.Message == nil || update.Message.Text == "" {
-			msg := tgbotapi.NewMessage(chatID, "📎 Отправь текстовое сообщение.")
-			bot.Send(msg)
+		msg := update.Message
+
+		// --- голосовое ---
+		if msg.Voice != nil {
+			handleVoice(ctx, app, bot, botID, chatID, tgID, msg)
 			return
 		}
 
-		reply, err := app.AiService.GetReply(ctx, botID, tgID, update.Message.Text)
+		// --- изображение ---
+		if len(msg.Photo) > 0 {
+			handlePhoto(ctx, app, bot, botID, chatID, tgID, msg)
+			return
+		}
+
+		// --- текст ---
+		if msg.Text == "" {
+			bot.Send(tgbotapi.NewMessage(chatID, "📎 Отправь текст, голос или фото."))
+			return
+		}
+
+		reply, err := app.AiService.GetReply(ctx, botID, tgID, msg.Text)
 		if err != nil {
-			log.Printf("[bot_loop] ai reply fail botID=%s tgID=%d: %v", botID, tgID, err)
-			msg := tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке запроса.")
-			bot.Send(msg)
+			log.Printf("[bot_loop] ai reply fail: %v", err)
+			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке запроса."))
 			return
 		}
 
-		msg := tgbotapi.NewMessage(chatID, reply)
-		bot.Send(msg)
+		outVoice := fmt.Sprintf("/tmp/reply_text_%d.mp3", tgID)
+		if err := app.SpeechService.Synthesize(ctx, reply, outVoice); err == nil {
+			voice := tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice))
+			bot.Send(voice)
+		} else {
+			bot.Send(tgbotapi.NewMessage(chatID, reply))
+		}
 
 	default:
-		log.Printf("[bot_loop] unknown status=%s botID=%s tgID=%d", status, botID, tgID)
-		msg := tgbotapi.NewMessage(chatID, "⚠️ Неизвестный статус подписки.")
-		bot.Send(msg)
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Неизвестный статус подписки."))
 	}
+}
+
+// --- голос ---
+func handleVoice(ctx context.Context, app *BotApp, bot *tgbotapi.BotAPI,
+	botID string, chatID, tgID int64, msg *tgbotapi.Message) {
+
+	fileID := msg.Voice.FileID
+	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
+	if err != nil {
+		log.Printf("[bot_loop] get voice file fail: %v", err)
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось получить голосовое."))
+		return
+	}
+
+	url := file.Link(bot.Token)
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Printf("[bot_loop] download voice fail: %v", err)
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при загрузке голосового."))
+		return
+	}
+	defer resp.Body.Close()
+
+	path := fmt.Sprintf("/tmp/%s.ogg", fileID)
+	out, _ := os.Create(path)
+	io.Copy(out, resp.Body)
+	out.Close()
+
+	text, err := app.SpeechService.Transcribe(ctx, path)
+	if err != nil {
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось распознать голос."))
+		return
+	}
+	app.RecordService.AddText(ctx, botID, tgID, "user", text)
+
+	reply, err := app.AiService.GetReply(ctx, botID, tgID, text)
+	if err != nil {
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при ответе."))
+		return
+	}
+
+	outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
+	if err := app.SpeechService.Synthesize(ctx, reply, outVoice); err != nil {
+		bot.Send(tgbotapi.NewMessage(chatID, reply))
+		return
+	}
+
+	voice := tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice))
+	bot.Send(voice)
+	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
+}
+
+// --- фото ---
+func handlePhoto(ctx context.Context, app *BotApp, bot *tgbotapi.BotAPI,
+	botID string, chatID, tgID int64, msg *tgbotapi.Message) {
+
+	photo := msg.Photo[len(msg.Photo)-1] // берем лучшее качество
+	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: photo.FileID})
+	if err != nil {
+		log.Printf("[bot_loop] get photo fail: %v", err)
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось получить фото."))
+		return
+	}
+
+	url := file.Link(bot.Token)
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Printf("[bot_loop] download photo fail: %v", err)
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка загрузки фото."))
+		return
+	}
+	defer resp.Body.Close()
+
+	tmpFile := fmt.Sprintf("/tmp/%s.jpg", photo.FileID)
+	out, _ := os.Create(tmpFile)
+	io.Copy(out, resp.Body)
+	out.Close()
+
+	f, _ := os.Open(tmpFile)
+	defer f.Close()
+
+	app.RecordService.AddImage(ctx, botID, tgID, "user", multipart.File(f), filepath.Base(tmpFile), "image/jpeg")
+
+	urlMsg := fmt.Sprintf("📷 Пользователь прислал изображение: %s", url)
+	reply, err := app.AiService.GetReply(ctx, botID, tgID, urlMsg)
+	if err != nil {
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки фото."))
+		return
+	}
+
+	bot.Send(tgbotapi.NewMessage(chatID, reply))
+	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
 }
 
 func (app *BotApp) handleCallback(ctx context.Context, botID string, bot *tgbotapi.BotAPI,
@@ -111,14 +225,14 @@ func (app *BotApp) handleCallback(ctx context.Context, botID string, bot *tgbota
 		if err != nil {
 			log.Printf("[bot_loop] create payment fail botID=%s tgID=%d: %v", botID, tgID, err)
 			bot.Request(tgbotapi.NewCallback(cb.ID, "Ошибка оформления"))
-			msg := tgbotapi.NewMessage(chatID, "Произошла ошибка при создании оплаты, попробуйте позже.")
+			msg := tgbotapi.NewMessage(chatID, "Произошла ошибка при создании оплаты, попробуй позже.")
 			bot.Send(msg)
 			return
 		}
 
 		bot.Request(tgbotapi.NewCallback(cb.ID, "Заявка принята"))
 		msg := tgbotapi.NewMessage(chatID,
-			fmt.Sprintf("✅ Заявка принята!\nДля завершения оплаты перейдите по ссылке:\n%s", paymentURL))
+			fmt.Sprintf("✅ Заявка принята!\nДля завершения оплаты перейди по ссылке:\n%s", paymentURL))
 		bot.Send(msg)
 
 	case "pending", "active":
@@ -126,9 +240,4 @@ func (app *BotApp) handleCallback(ctx context.Context, botID string, bot *tgbota
 		msg := tgbotapi.NewMessage(chatID, MsgAlreadySubscribed)
 		bot.Send(msg)
 	}
-}
-
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-	log.Printf("[bot_loop] init %s", time.Now().Format(time.RFC3339))
 }

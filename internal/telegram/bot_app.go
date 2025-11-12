@@ -7,6 +7,7 @@ import (
 
 	"github.com/Vovarama1992/make_ziper/internal/ai"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
+	"github.com/Vovarama1992/make_ziper/internal/speech"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -14,6 +15,8 @@ type BotApp struct {
 	SubscriptionService ports.SubscriptionService
 	TariffService       ports.TariffService
 	AiService           ai.Service
+	SpeechService       *speech.Service
+	RecordService       ports.RecordService
 	bots                map[string]*tgbotapi.BotAPI
 }
 
