@@ -1,4 +1,4 @@
-.PHONY: refresh build up down logs build-front commit
+.PHONY: refresh build up down logs build-front commit migrate
 
 refresh:
 	git pull origin master
@@ -31,3 +31,6 @@ commit:
 	git add .
 	git commit -m "$${m:-update}"
 	git push origin master
+
+migrate:
+	cat migrations/*.sql | docker exec -i makeziper_db psql -U postgres -d makeziper

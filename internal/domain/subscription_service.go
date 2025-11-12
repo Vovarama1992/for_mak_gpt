@@ -44,7 +44,7 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("unknown plan code: %s", planCode)
 	}
 
-	// бесплатный план — активируем сразу, без Юкассы
+	// бесплатный план
 	if plan.Price == 0 {
 		expiresAt := time.Now().Add(time.Duration(plan.PeriodDays) * 24 * time.Hour)
 		sub := &ports.Subscription{
@@ -62,7 +62,6 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", nil
 	}
 
-	// --- платные ---
 	apiURL := os.Getenv("YOOKASSA_API_URL")
 	shopID := os.Getenv("YOOKASSA_SHOP_ID")
 	secretKey := os.Getenv("YOOKASSA_SECRET_KEY")
@@ -72,18 +71,12 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("yookassa env variables missing")
 	}
 
-	// достаём username бота по botID
+	// username бота по botID
 	var botUsername string
-	pairs := strings.Split(botTokens, ",")
-	for _, p := range pairs {
+	for _, p := range strings.Split(botTokens, ",") {
 		parts := strings.SplitN(strings.TrimSpace(p), "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		name := parts[0]
-		if name == botID {
-			token := parts[1]
-			botUsername = strings.Split(token, ":")[0]
+		if len(parts) == 2 && parts[0] == botID {
+			botUsername = strings.Split(parts[1], ":")[0]
 			break
 		}
 	}
@@ -103,6 +96,21 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		"confirmation": map[string]any{
 			"type":       "redirect",
 			"return_url": returnURL,
+		},
+		"receipt": map[string]any{
+			"customer": map[string]any{
+				"email": fmt.Sprintf("user_%d@example.com", telegramID),
+			},
+			"items": []map[string]any{
+				{
+					"description":     fmt.Sprintf("Подписка %s", plan.Code),
+					"quantity":        "1.00",
+					"amount":          map[string]any{"value": fmt.Sprintf("%.2f", plan.Price), "currency": "RUB"},
+					"vat_code":        1,
+					"payment_subject": "service",
+					"payment_mode":    "full_prepayment",
+				},
+			},
 		},
 		"metadata": map[string]any{
 			"bot_id":      botID,
