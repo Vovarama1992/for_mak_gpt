@@ -3,8 +3,10 @@ package speech
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -22,7 +24,7 @@ func NewElevenLabsClient() *ElevenLabsClient {
 	}
 	voice := os.Getenv("ELEVENLABS_VOICE_ID")
 	if voice == "" {
-		voice = "21m00Tcm4TlvDq8ikWAM" // Rachel (дефолт)
+		voice = "21m00Tcm4TlvDq8ikWAM"
 	}
 	return &ElevenLabsClient{
 		apiKey: key,
@@ -30,17 +32,70 @@ func NewElevenLabsClient() *ElevenLabsClient {
 	}
 }
 
-// Transcribe — пока заглушка (можно потом подключить Whisper или другой STT).
+// === SPEECH → TEXT ===
 func (c *ElevenLabsClient) Transcribe(ctx context.Context, filePath string) (string, error) {
-	return "", fmt.Errorf("transcribe not implemented for ElevenLabs")
+	url := "https://api.elevenlabs.io/v1/speech-to-text"
+
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("open file: %w", err)
+	}
+	defer f.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	if err != nil {
+		return "", fmt.Errorf("create form file: %w", err)
+	}
+
+	if _, err := io.Copy(part, f); err != nil {
+		return "", fmt.Errorf("copy file: %w", err)
+	}
+
+	if err := writer.Close(); err != nil {
+		return "", fmt.Errorf("writer close: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, body)
+	if err != nil {
+		return "", fmt.Errorf("build request: %w", err)
+	}
+
+	req.Header.Set("xi-api-key", c.apiKey)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request fail: %w", err)
+	}
+	defer resp.Body.Close()
+
+	raw, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode >= 300 {
+		return "", fmt.Errorf("stt failed (%d): %s", resp.StatusCode, string(raw))
+	}
+
+	var out struct {
+		Text string `json:"text"`
+	}
+
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return "", fmt.Errorf("json decode fail: %w raw=%s", err, raw)
+	}
+
+	return out.Text, nil
 }
 
-// Synthesize — превращает текст в голосовой файл (mp3 или wav)
+// === TEXT → SPEECH ===
 func (c *ElevenLabsClient) Synthesize(ctx context.Context, text, outPath string) error {
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", c.voice)
 
 	payload := []byte(fmt.Sprintf(`{"text": %q}`, text))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
@@ -55,20 +110,20 @@ func (c *ElevenLabsClient) Synthesize(ctx context.Context, text, outPath string)
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("tts failed: %s", string(body))
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("tts failed: %s", string(b))
 	}
 
-	dir := filepath.Dir(outPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
 		return err
 	}
-	outFile, err := os.Create(outPath)
+
+	out, err := os.Create(outPath)
 	if err != nil {
 		return err
 	}
-	defer outFile.Close()
+	defer out.Close()
 
-	_, err = io.Copy(outFile, resp.Body)
+	_, err = io.Copy(out, resp.Body)
 	return err
 }
