@@ -36,35 +36,32 @@ func NewElevenLabsClient() *ElevenLabsClient {
 func (c *ElevenLabsClient) Transcribe(ctx context.Context, filePath string) (string, error) {
 	url := "https://api.elevenlabs.io/v1/speech-to-text"
 
-	f, err := os.Open(filePath)
+	file, err := os.Open(filePath)
 	if err != nil {
-		return "", fmt.Errorf("open file: %w", err)
+		return "", fmt.Errorf("open file fail: %w", err)
 	}
-	defer f.Close()
+	defer file.Close()
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	// file
+	// модель (ОБЯЗАТЕЛЬНО)
+	_ = writer.WriteField("model_id", "scribe_v2")
+
+	// файл
 	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
-		return "", fmt.Errorf("create form file: %w", err)
+		return "", fmt.Errorf("form file fail: %w", err)
 	}
-	if _, err := io.Copy(part, f); err != nil {
-		return "", fmt.Errorf("copy file: %w", err)
-	}
-
-	// REQUIRED BY ELEVENLABS
-	// model_id must be provided: "eleven_multilingual_v2" — основной STT-модель.
-	_ = writer.WriteField("model_id", "eleven_multilingual_v2")
-
-	if err := writer.Close(); err != nil {
-		return "", fmt.Errorf("writer close: %w", err)
+	if _, err := io.Copy(part, file); err != nil {
+		return "", fmt.Errorf("copy fail: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, body)
+	writer.Close()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
 	if err != nil {
-		return "", fmt.Errorf("build request: %w", err)
+		return "", fmt.Errorf("request build fail: %w", err)
 	}
 
 	req.Header.Set("xi-api-key", c.apiKey)
@@ -76,18 +73,18 @@ func (c *ElevenLabsClient) Transcribe(ctx context.Context, filePath string) (str
 	}
 	defer resp.Body.Close()
 
-	raw, _ := io.ReadAll(resp.Body)
+	respBytes, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("stt failed (%d): %s", resp.StatusCode, string(raw))
+		return "", fmt.Errorf("stt failed (%d): %s", resp.StatusCode, string(respBytes))
 	}
 
 	var out struct {
 		Text string `json:"text"`
 	}
 
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", fmt.Errorf("json decode fail: %w raw=%s", err, raw)
+	if err := json.Unmarshal(respBytes, &out); err != nil {
+		return "", fmt.Errorf("json decode fail: %w raw=%s", err, string(respBytes))
 	}
 
 	return out.Text, nil
