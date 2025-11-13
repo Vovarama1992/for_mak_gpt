@@ -45,14 +45,18 @@ func (c *ElevenLabsClient) Transcribe(ctx context.Context, filePath string) (str
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
+	// file
 	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
 		return "", fmt.Errorf("create form file: %w", err)
 	}
-
 	if _, err := io.Copy(part, f); err != nil {
 		return "", fmt.Errorf("copy file: %w", err)
 	}
+
+	// REQUIRED BY ELEVENLABS
+	// model_id must be provided: "eleven_multilingual_v2" — основной STT-модель.
+	_ = writer.WriteField("model_id", "eleven_multilingual_v2")
 
 	if err := writer.Close(); err != nil {
 		return "", fmt.Errorf("writer close: %w", err)
