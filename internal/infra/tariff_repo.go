@@ -17,7 +17,15 @@ func NewTariffRepo(db *sql.DB) ports.TariffRepo {
 
 func (r *tariffRepo) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, code, name, price, period_days, voice_minutes, description, features
+		SELECT 
+			id,
+			code,
+			name,
+			price,
+			duration_minutes,
+			voice_minutes,
+			description,
+			features
 		FROM tariff_plans
 		ORDER BY price ASC
 	`)
@@ -34,7 +42,7 @@ func (r *tariffRepo) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 			&t.Code,
 			&t.Name,
 			&t.Price,
-			&t.PeriodDays,
+			&t.DurationMinutes,
 			&t.VoiceMinutes,
 			&t.Description,
 			&t.Features,
@@ -44,4 +52,39 @@ func (r *tariffRepo) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 		plans = append(plans, &t)
 	}
 	return plans, rows.Err()
+}
+
+func (r *tariffRepo) GetByID(ctx context.Context, id int) (*ports.TariffPlan, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT 
+			id,
+			code,
+			name,
+			price,
+			duration_minutes,
+			voice_minutes,
+			description,
+			features
+		FROM tariff_plans
+		WHERE id = $1
+	`, id)
+
+	var t ports.TariffPlan
+	if err := row.Scan(
+		&t.ID,
+		&t.Code,
+		&t.Name,
+		&t.Price,
+		&t.DurationMinutes,
+		&t.VoiceMinutes,
+		&t.Description,
+		&t.Features,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &t, nil
 }

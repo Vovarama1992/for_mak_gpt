@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -30,6 +29,7 @@ func NewSubscriptionService(repo ports.SubscriptionRepo, tariffRepo ports.Tariff
 }
 
 func (s *SubscriptionService) Create(ctx context.Context, botID string, telegramID int64, planCode string) (string, error) {
+	// ищем тариф
 	tariffs, err := s.tariffRepo.ListAll(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to list tariffs: %w", err)
@@ -46,55 +46,24 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("unknown plan code: %s", planCode)
 	}
 
-	// бесплатный план
-	if plan.Price == 0 {
-		expiresAt := time.Now().Add(time.Duration(plan.PeriodDays) * 24 * time.Hour)
-		sub := &ports.Subscription{
-			BotID:             botID,
-			TelegramID:        telegramID,
-			PlanID:            plan.ID,
-			Status:            "active",
-			StartedAt:         time.Now(),
-			ExpiresAt:         &expiresAt,
-			YookassaPaymentID: nil,
-		}
-		if err := s.repo.Create(ctx, sub); err != nil {
-			return "", fmt.Errorf("failed to activate free plan: %w", err)
-		}
-		return "", nil
-	}
+	// =====================================================================
+	// ВСЕ тарифы платные — создаём платёж Юкассы
+	// =====================================================================
 
 	apiURL := os.Getenv("YOOKASSA_API_URL")
 	shopID := os.Getenv("YOOKASSA_SHOP_ID")
 	secretKey := os.Getenv("YOOKASSA_SECRET_KEY")
-	botTokens := os.Getenv("BOT_TOKENS")
 
-	if shopID == "" || secretKey == "" {
-		return "", fmt.Errorf("yookassa env variables missing: shopID/secretKey required")
-	}
-
-	// нормализуем apiURL: если задан базовый url, дополним до /v3/payments
-	if apiURL == "" {
-		return "", fmt.Errorf("yookassa env variable YOOKASSA_API_URL missing")
+	if apiURL == "" || shopID == "" || secretKey == "" {
+		return "", fmt.Errorf("missing yookassa env variables")
 	}
 	if !strings.Contains(apiURL, "/v3/payments") {
 		apiURL = strings.TrimRight(apiURL, "/") + "/v3/payments"
 	}
 
-	// username бота по botID
-	var botUsername string
-	for _, p := range strings.Split(botTokens, ",") {
-		parts := strings.SplitN(strings.TrimSpace(p), "=", 2)
-		if len(parts) == 2 && parts[0] == botID {
-			botUsername = strings.Split(parts[1], ":")[0]
-			break
-		}
-	}
-	if botUsername == "" {
-		return "", fmt.Errorf("bot username not found for botID=%s", botID)
-	}
-
-	returnURL := fmt.Sprintf("https://t.me/%s?start=paid_%s", botUsername, botID)
+	// 🎯 ПРАВИЛЬНЫЙ RETURN_URL
+	// сюда вернётся браузер после оплаты
+	returnURL := "https://aifulls.com/success.html"
 
 	body := map[string]any{
 		"amount": map[string]any{
@@ -128,28 +97,19 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		},
 	}
 
-	// сериализуем тело и логируем
 	reqBody, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("marshal request body: %w", err)
 	}
-	log.Printf("[yookassa][request] url=%s shop=%s plan=%s telegram_id=%d body=%s", apiURL, shopID, plan.Code, telegramID, string(reqBody))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
 		return "", fmt.Errorf("failed to build request: %w", err)
 	}
-
-	// Basic auth (shopID:secret)
 	req.SetBasicAuth(shopID, secretKey)
-
-	// Idempotence key — важно
 	idemp := fmt.Sprintf("%d", time.Now().UnixNano())
 	req.Header.Set("Idempotence-Key", idemp)
 	req.Header.Set("Content-Type", "application/json")
-
-	// логируем заголовки (без секретов)
-	log.Printf("[yookassa][request.headers] Idempotence-Key=%s Content-Type=%s BasicAuthUser=%s", idemp, req.Header.Get("Content-Type"), shopID)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -158,10 +118,7 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(resp.Body)
-	log.Printf("[yookassa][response] status=%d body=%s", resp.StatusCode, string(respBody))
-
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		// возвращаем тело в ошибке — сразу видно причину валидэйшна
 		return "", fmt.Errorf("yookassa returned status %d: %s", resp.StatusCode, string(respBody))
 	}
 
@@ -177,9 +134,10 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 	}
 
 	if yresp.ID == "" || yresp.Confirmation.URL == "" {
-		return "", fmt.Errorf("invalid yookassa response: missing id or url; raw=%s", string(respBody))
+		return "", fmt.Errorf("invalid yookassa response: %s", string(respBody))
 	}
 
+	// подписка пока pending
 	sub := &ports.Subscription{
 		BotID:             botID,
 		TelegramID:        telegramID,
@@ -188,6 +146,7 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		StartedAt:         time.Now(),
 		YookassaPaymentID: &yresp.ID,
 	}
+
 	if err := s.repo.Create(ctx, sub); err != nil {
 		return "", fmt.Errorf("failed to create subscription: %w", err)
 	}
@@ -203,7 +162,19 @@ func (s *SubscriptionService) Activate(ctx context.Context, paymentID string) er
 	if sub == nil {
 		return fmt.Errorf("subscription not found for paymentID: %s", paymentID)
 	}
-	return s.repo.UpdateStatus(ctx, sub.ID, "active")
+
+	plan, err := s.tariffRepo.GetByID(ctx, sub.PlanID)
+	if err != nil {
+		return fmt.Errorf("failed to load tariff plan: %w", err)
+	}
+	if plan == nil {
+		return fmt.Errorf("tariff plan not found for plan_id=%d", sub.PlanID)
+	}
+
+	startedAt := time.Now()
+	expiresAt := startedAt.Add(time.Duration(plan.DurationMinutes) * time.Minute)
+
+	return s.repo.Activate(ctx, sub.ID, startedAt, expiresAt)
 }
 
 func (s *SubscriptionService) GetStatus(ctx context.Context, botID string, telegramID int64) (string, error) {

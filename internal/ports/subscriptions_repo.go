@@ -20,7 +20,10 @@ type Subscription struct {
 type SubscriptionRepo interface {
 	Create(ctx context.Context, s *Subscription) error
 	GetByPaymentID(ctx context.Context, paymentID string) (*Subscription, error)
-	UpdateStatus(ctx context.Context, id int, status string) error
 	Get(ctx context.Context, botID string, telegramID int64) (*Subscription, error)
+	UpdateStatus(ctx context.Context, id int, status string) error
 	ListAll(ctx context.Context) ([]*Subscription, error)
+
+	// новое
+	Activate(ctx context.Context, id int, startedAt, expiresAt time.Time) error
 }

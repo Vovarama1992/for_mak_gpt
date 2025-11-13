@@ -22,18 +22,26 @@ func (app *BotApp) BuildSubscriptionMenu(ctx context.Context) tgbotapi.InlineKey
 
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for _, t := range tariffs {
-		label := fmt.Sprintf("%s — %s (%d мин)", t.Name, formatRUB(t.Price), t.VoiceMinutes)
+		// Показываем нормальное описание:
+		// Пример: 1 час обучения — 300 ₽ (10 мин голоса)
+		label := fmt.Sprintf(
+			"%s — %s (%d мин голоса)",
+			t.Name,
+			formatRUB(t.Price),
+			t.VoiceMinutes,
+		)
+
 		btn := tgbotapi.NewInlineKeyboardButtonData(label, t.Code)
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(btn))
 	}
+
 	return tgbotapi.NewInlineKeyboardMarkup(rows...)
 }
 
 func (app *BotApp) BuildSubscriptionText() string {
 	return "🎓 Тарифы AI-Репетитора\n\n" +
-		"💬 Текст и фото — бесплатно.\n" +
-		"🎧 Платишь только за голосовые занятия.\n\n" +
-		"Выбери пакет ниже ⬇️"
+		"Каждый пакет включает доступ к занятиям и голосовые минуты.\n" +
+		"Выберите подходящий тариф ниже ⬇️"
 }
 
 // errorMenu — заглушка, если тарифы не удалось получить.

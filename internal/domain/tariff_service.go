@@ -17,3 +17,7 @@ func NewTariffService(repo ports.TariffRepo) ports.TariffService {
 func (s *TariffService) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 	return s.repo.ListAll(ctx)
 }
+
+func (s *TariffService) GetByID(ctx context.Context, id int) (*ports.TariffPlan, error) {
+	return s.repo.GetByID(ctx, id)
+}

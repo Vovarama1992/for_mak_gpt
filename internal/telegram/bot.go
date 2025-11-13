@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -39,7 +38,6 @@ func (app *BotApp) runBotLoop(botID string, bot *tgbotapi.BotAPI) {
 		switch {
 		case update.Message != nil:
 			app.handleMessage(ctx, botID, bot, update.Message.Chat.ID, tgID, status, update)
-
 		case update.CallbackQuery != nil:
 			app.handleCallback(ctx, botID, bot, update.CallbackQuery, status)
 		}
@@ -61,7 +59,6 @@ func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotap
 	chatID, tgID int64, status string, update tgbotapi.Update) {
 
 	switch status {
-
 	case "none":
 		log.Printf("[bot_loop] no subscription botID=%s tgID=%d → show menu", botID, tgID)
 		menu := app.BuildSubscriptionMenu(ctx)
@@ -84,12 +81,20 @@ func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotap
 
 		// --- голосовое ---
 		if msg.Voice != nil {
+			if !app.checkVoiceAllowed(ctx, botID, tgID) {
+				bot.Send(tgbotapi.NewMessage(chatID, "🔇 В этом тарифе голос временно недоступен."))
+				return
+			}
 			handleVoice(ctx, app, bot, botID, chatID, tgID, msg)
 			return
 		}
 
 		// --- изображение ---
 		if len(msg.Photo) > 0 {
+			if !app.checkImageAllowed(ctx, botID, tgID) {
+				bot.Send(tgbotapi.NewMessage(chatID, "🖼 В этом тарифе разбор по фото недоступен."))
+				return
+			}
 			handlePhoto(ctx, app, bot, botID, chatID, tgID, msg)
 			return
 		}
@@ -100,6 +105,17 @@ func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotap
 			return
 		}
 
+		if !app.checkTextAllowed(ctx, botID, tgID) {
+			bot.Send(tgbotapi.NewMessage(chatID, "✏️ В этом тарифе текстовое общение недоступно."))
+			return
+		}
+
+		// сохраняем вопрос пользователя
+		if _, err := app.RecordService.AddText(ctx, botID, tgID, "user", msg.Text); err != nil {
+			log.Printf("[bot_loop] AddText user fail botID=%s tgID=%d err=%v", botID, tgID, err)
+		}
+
+		// единое ядро GPT — всегда текст
 		reply, err := app.AiService.GetReply(ctx, botID, tgID, msg.Text)
 		if err != nil {
 			log.Printf("[bot_loop] ai reply fail: %v", err)
@@ -107,12 +123,12 @@ func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotap
 			return
 		}
 
-		outVoice := fmt.Sprintf("/tmp/reply_text_%d.mp3", tgID)
-		if err := app.SpeechService.Synthesize(ctx, reply, outVoice); err == nil {
-			voice := tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice))
-			bot.Send(voice)
-		} else {
-			bot.Send(tgbotapi.NewMessage(chatID, reply))
+		// текст → текст (без озвучки)
+		bot.Send(tgbotapi.NewMessage(chatID, reply))
+
+		// сохраняем ответ репетитора
+		if _, err := app.RecordService.AddText(ctx, botID, tgID, "tutor", reply); err != nil {
+			log.Printf("[bot_loop] AddText tutor fail botID=%s tgID=%d err=%v", botID, tgID, err)
 		}
 
 	default:
@@ -142,39 +158,67 @@ func handleVoice(ctx context.Context, app *BotApp, bot *tgbotapi.BotAPI,
 	defer resp.Body.Close()
 
 	path := fmt.Sprintf("/tmp/%s.ogg", fileID)
-	out, _ := os.Create(path)
-	io.Copy(out, resp.Body)
+	out, err := os.Create(path)
+	if err != nil {
+		log.Printf("[bot_loop] create tmp voice fail: %v", err)
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке голосового."))
+		return
+	}
+	if _, err := io.Copy(out, resp.Body); err != nil {
+		log.Printf("[bot_loop] save tmp voice fail: %v", err)
+		out.Close()
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при сохранении голосового."))
+		return
+	}
 	out.Close()
 
+	// голос → текст
 	text, err := app.SpeechService.Transcribe(ctx, path)
 	if err != nil {
+		log.Printf("[bot_loop] transcribe fail: %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось распознать голос."))
 		return
 	}
-	app.RecordService.AddText(ctx, botID, tgID, "user", text)
 
+	// сохраняем текст пользователя
+	if _, err := app.RecordService.AddText(ctx, botID, tgID, "user", text); err != nil {
+		log.Printf("[bot_loop] AddText user (voice) fail botID=%s tgID=%d err=%v", botID, tgID, err)
+	}
+
+	// GPT по тексту
 	reply, err := app.AiService.GetReply(ctx, botID, tgID, text)
 	if err != nil {
+		log.Printf("[bot_loop] ai reply fail (voice): %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при ответе."))
 		return
 	}
 
+	// ответ → голос
 	outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
 	if err := app.SpeechService.Synthesize(ctx, reply, outVoice); err != nil {
+		log.Printf("[bot_loop] synth fail: %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, reply))
+		// даже если голос не получился, текстовый ответ всё равно сохраняем
+		if _, err := app.RecordService.AddText(ctx, botID, tgID, "tutor", reply); err != nil {
+			log.Printf("[bot_loop] AddText tutor (voice) fail botID=%s tgID=%d err=%v", botID, tgID, err)
+		}
 		return
 	}
 
 	voice := tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice))
 	bot.Send(voice)
-	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
+
+	// сохраняем ответ репетитора в текстовом виде
+	if _, err := app.RecordService.AddText(ctx, botID, tgID, "tutor", reply); err != nil {
+		log.Printf("[bot_loop] AddText tutor (voice) fail botID=%s tgID=%d err=%v", botID, tgID, err)
+	}
 }
 
 // --- фото ---
 func handlePhoto(ctx context.Context, app *BotApp, bot *tgbotapi.BotAPI,
 	botID string, chatID, tgID int64, msg *tgbotapi.Message) {
 
-	photo := msg.Photo[len(msg.Photo)-1] // берем лучшее качество
+	photo := msg.Photo[len(msg.Photo)-1] // берём лучшее качество
 	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: photo.FileID})
 	if err != nil {
 		log.Printf("[bot_loop] get photo fail: %v", err)
@@ -192,24 +236,51 @@ func handlePhoto(ctx context.Context, app *BotApp, bot *tgbotapi.BotAPI,
 	defer resp.Body.Close()
 
 	tmpFile := fmt.Sprintf("/tmp/%s.jpg", photo.FileID)
-	out, _ := os.Create(tmpFile)
-	io.Copy(out, resp.Body)
+	out, err := os.Create(tmpFile)
+	if err != nil {
+		log.Printf("[bot_loop] create tmp photo fail: %v", err)
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке фото."))
+		return
+	}
+	if _, err := io.Copy(out, resp.Body); err != nil {
+		log.Printf("[bot_loop] save tmp photo fail: %v", err)
+		out.Close()
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при сохранении фото."))
+		return
+	}
 	out.Close()
 
-	f, _ := os.Open(tmpFile)
+	f, err := os.Open(tmpFile)
+	if err != nil {
+		log.Printf("[bot_loop] open tmp photo fail: %v", err)
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке фото."))
+		return
+	}
 	defer f.Close()
 
-	app.RecordService.AddImage(ctx, botID, tgID, "user", multipart.File(f), filepath.Base(tmpFile), "image/jpeg")
+	filename := filepath.Base(tmpFile)
 
+	// сохраняем изображение как запись пользователя
+	if _, err := app.RecordService.AddImage(ctx, botID, tgID, "user", f, filename, "image/jpeg"); err != nil {
+		log.Printf("[bot_loop] AddImage user fail botID=%s tgID=%d err=%v", botID, tgID, err)
+	}
+
+	// текст для GPT про фото
 	urlMsg := fmt.Sprintf("📷 Пользователь прислал изображение: %s", url)
+
 	reply, err := app.AiService.GetReply(ctx, botID, tgID, urlMsg)
 	if err != nil {
+		log.Printf("[bot_loop] ai reply fail (photo): %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки фото."))
 		return
 	}
 
 	bot.Send(tgbotapi.NewMessage(chatID, reply))
-	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
+
+	// сохраняем ответ репетитора
+	if _, err := app.RecordService.AddText(ctx, botID, tgID, "tutor", reply); err != nil {
+		log.Printf("[bot_loop] AddText tutor (photo) fail botID=%s tgID=%d err=%v", botID, tgID, err)
+	}
 }
 
 func (app *BotApp) handleCallback(ctx context.Context, botID string, bot *tgbotapi.BotAPI,
@@ -240,4 +311,17 @@ func (app *BotApp) handleCallback(ctx context.Context, botID string, bot *tgbota
 		msg := tgbotapi.NewMessage(chatID, MsgAlreadySubscribed)
 		bot.Send(msg)
 	}
+}
+
+// чекеры — заглушки, потом сюда заедет логика тарифов и минут
+func (app *BotApp) checkTextAllowed(ctx context.Context, botID string, tgID int64) bool {
+	return true
+}
+
+func (app *BotApp) checkVoiceAllowed(ctx context.Context, botID string, tgID int64) bool {
+	return true
+}
+
+func (app *BotApp) checkImageAllowed(ctx context.Context, botID string, tgID int64) bool {
+	return true
 }

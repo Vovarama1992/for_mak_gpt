@@ -86,6 +86,20 @@ func (r *subscriptionRepo) UpdateStatus(ctx context.Context, id int, status stri
 	return err
 }
 
+func (r *subscriptionRepo) Activate(ctx context.Context, id int, startedAt, expiresAt time.Time) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE subscriptions
+		SET 
+			status = 'active',
+			started_at = $2,
+			expires_at = $3,
+			updated_at = NOW()
+		WHERE id = $1
+	`, id, startedAt, expiresAt)
+
+	return err
+}
+
 func (r *subscriptionRepo) ListAll(ctx context.Context) ([]*ports.Subscription, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, bot_id, telegram_id, plan_id, status,
