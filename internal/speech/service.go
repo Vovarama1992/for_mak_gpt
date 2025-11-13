@@ -6,22 +6,22 @@ import (
 
 // === Интерфейсы ===
 
-type STTClient interface {
+type FromSpeechlient interface {
 	Transcribe(ctx context.Context, filePath string) (string, error)
 }
 
-type TTSClient interface {
+type ToSpeechClient interface {
 	Synthesize(ctx context.Context, text, outPath string) error
 }
 
 // === Единый сервис (и для стт и для ттс) ===
 
 type Service struct {
-	stt STTClient
-	tts TTSClient
+	stt FromSpeechlient
+	tts ToSpeechClient
 }
 
-func NewService(stt STTClient, tts TTSClient) *Service {
+func NewService(stt FromSpeechlient, tts ToSpeechClient) *Service {
 	return &Service{
 		stt: stt,
 		tts: tts,
