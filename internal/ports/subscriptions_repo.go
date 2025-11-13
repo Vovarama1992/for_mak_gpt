@@ -6,24 +6,24 @@ import (
 )
 
 type Subscription struct {
-	ID                int
-	BotID             string
-	TelegramID        int64
-	PlanID            int
-	Status            string
-	StartedAt         time.Time
-	ExpiresAt         *time.Time
-	UpdatedAt         time.Time
-	YookassaPaymentID *string
+	ID                int64      `json:"id"`
+	BotID             string     `json:"bot_id"`
+	TelegramID        int64      `json:"telegram_id"`
+	PlanID            int64      `json:"plan_id"`
+	PlanName          string     `json:"plan_name,omitempty"`
+	Status            string     `json:"status"`
+	StartedAt         *time.Time `json:"started_at"`
+	ExpiresAt         *time.Time `json:"expires_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+	YookassaPaymentID *string    `json:"yookassa_payment_id"`
 }
 
 type SubscriptionRepo interface {
 	Create(ctx context.Context, s *Subscription) error
 	GetByPaymentID(ctx context.Context, paymentID string) (*Subscription, error)
 	Get(ctx context.Context, botID string, telegramID int64) (*Subscription, error)
-	UpdateStatus(ctx context.Context, id int, status string) error
+	UpdateStatus(ctx context.Context, id int64, status string) error
 	ListAll(ctx context.Context) ([]*Subscription, error)
 
-	// новое
-	Activate(ctx context.Context, id int, startedAt, expiresAt time.Time) error
+	Activate(ctx context.Context, id int64, startedAt, expiresAt time.Time) error
 }

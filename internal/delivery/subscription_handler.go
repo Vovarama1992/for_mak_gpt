@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	"github.com/go-chi/chi/v5"
@@ -97,7 +98,6 @@ func (h *SubscriptionHandler) GetStatus(w http.ResponseWriter, r *http.Request) 
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": status})
 }
 
-// GET /admin/subscriptions
 func (h *SubscriptionHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	subs, err := h.service.ListAll(r.Context())
 	if err != nil {
@@ -105,6 +105,41 @@ func (h *SubscriptionHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	type dto struct {
+		ID         int64   `json:"id"`
+		BotID      string  `json:"bot_id"`
+		TelegramID int64   `json:"telegram_id"`
+		PlanName   string  `json:"plan_name"`
+		Status     string  `json:"status"`
+		StartedAt  *string `json:"started_at"`
+		ExpiresAt  *string `json:"expires_at"`
+	}
+
+	out := make([]dto, 0, len(subs))
+
+	for _, s := range subs {
+		var started, expires *string
+
+		if s.StartedAt != nil {
+			str := s.StartedAt.Format(time.RFC3339)
+			started = &str
+		}
+		if s.ExpiresAt != nil {
+			str := s.ExpiresAt.Format(time.RFC3339)
+			expires = &str
+		}
+
+		out = append(out, dto{
+			ID:         s.ID,
+			BotID:      s.BotID,
+			TelegramID: s.TelegramID,
+			PlanName:   s.PlanName,
+			Status:     s.Status,
+			StartedAt:  started,
+			ExpiresAt:  expires,
+		})
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(subs)
+	_ = json.NewEncoder(w).Encode(out)
 }

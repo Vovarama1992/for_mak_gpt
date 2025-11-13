@@ -28,7 +28,11 @@ func NewSubscriptionService(repo ports.SubscriptionRepo, tariffRepo ports.Tariff
 	}
 }
 
+// ------------------------------------------------
+// CREATE
+// ------------------------------------------------
 func (s *SubscriptionService) Create(ctx context.Context, botID string, telegramID int64, planCode string) (string, error) {
+
 	// ищем тариф
 	tariffs, err := s.tariffRepo.ListAll(ctx)
 	if err != nil {
@@ -46,23 +50,19 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("unknown plan code: %s", planCode)
 	}
 
-	// =====================================================================
-	// ВСЕ тарифы платные — создаём платёж Юкассы
-	// =====================================================================
-
+	// юкасса env
 	apiURL := os.Getenv("YOOKASSA_API_URL")
 	shopID := os.Getenv("YOOKASSA_SHOP_ID")
-	secretKey := os.Getenv("YOOKASSA_SECRET_KEY")
+	secret := os.Getenv("YOOKASSA_SECRET_KEY")
 
-	if apiURL == "" || shopID == "" || secretKey == "" {
+	if apiURL == "" || shopID == "" || secret == "" {
 		return "", fmt.Errorf("missing yookassa env variables")
 	}
 	if !strings.Contains(apiURL, "/v3/payments") {
 		apiURL = strings.TrimRight(apiURL, "/") + "/v3/payments"
 	}
 
-	// 🎯 ПРАВИЛЬНЫЙ RETURN_URL
-	// сюда вернётся браузер после оплаты
+	// return URL
 	returnURL := "https://aifulls.com/success.html"
 
 	body := map[string]any{
@@ -97,18 +97,14 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		},
 	}
 
-	reqBody, err := json.Marshal(body)
-	if err != nil {
-		return "", fmt.Errorf("marshal request body: %w", err)
-	}
+	reqBody, _ := json.Marshal(body)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewBuffer(reqBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
-		return "", fmt.Errorf("failed to build request: %w", err)
+		return "", fmt.Errorf("build request: %w", err)
 	}
-	req.SetBasicAuth(shopID, secretKey)
-	idemp := fmt.Sprintf("%d", time.Now().UnixNano())
-	req.Header.Set("Idempotence-Key", idemp)
+	req.SetBasicAuth(shopID, secret)
+	req.Header.Set("Idempotence-Key", fmt.Sprintf("%d", time.Now().UnixNano()))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := s.httpClient.Do(req)
@@ -117,33 +113,34 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("yookassa returned status %d: %s", resp.StatusCode, string(respBody))
+		return "", fmt.Errorf("yookassa returned %d: %s", resp.StatusCode, string(raw))
 	}
 
 	var yresp struct {
 		ID           string `json:"id"`
-		Status       string `json:"status"`
 		Confirmation struct {
 			URL string `json:"confirmation_url"`
 		} `json:"confirmation"`
 	}
-	if err := json.Unmarshal(respBody, &yresp); err != nil {
-		return "", fmt.Errorf("decode yookassa response: %w; raw=%s", err, string(respBody))
+	if err := json.Unmarshal(raw, &yresp); err != nil {
+		return "", fmt.Errorf("decode yookassa: %w", err)
 	}
-
 	if yresp.ID == "" || yresp.Confirmation.URL == "" {
-		return "", fmt.Errorf("invalid yookassa response: %s", string(respBody))
+		return "", fmt.Errorf("invalid yookassa response: %s", string(raw))
 	}
 
-	// подписка пока pending
+	// создаём pending подписку
+	now := time.Now()
+
 	sub := &ports.Subscription{
 		BotID:             botID,
 		TelegramID:        telegramID,
-		PlanID:            plan.ID,
+		PlanID:            int64(plan.ID),
 		Status:            "pending",
-		StartedAt:         time.Now(),
+		StartedAt:         &now,
+		ExpiresAt:         nil,
 		YookassaPaymentID: &yresp.ID,
 	}
 
@@ -154,29 +151,36 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 	return yresp.Confirmation.URL, nil
 }
 
+// ------------------------------------------------
+// ACTIVATE
+// ------------------------------------------------
 func (s *SubscriptionService) Activate(ctx context.Context, paymentID string) error {
+
 	sub, err := s.repo.GetByPaymentID(ctx, paymentID)
 	if err != nil {
-		return fmt.Errorf("failed to find subscription by paymentID: %w", err)
+		return fmt.Errorf("load subscription: %w", err)
 	}
 	if sub == nil {
-		return fmt.Errorf("subscription not found for paymentID: %s", paymentID)
+		return fmt.Errorf("subscription not found for paymentID=%s", paymentID)
 	}
 
-	plan, err := s.tariffRepo.GetByID(ctx, sub.PlanID)
+	plan, err := s.tariffRepo.GetByID(ctx, int(sub.PlanID))
 	if err != nil {
-		return fmt.Errorf("failed to load tariff plan: %w", err)
+		return fmt.Errorf("load plan: %w", err)
 	}
 	if plan == nil {
-		return fmt.Errorf("tariff plan not found for plan_id=%d", sub.PlanID)
+		return fmt.Errorf("plan not found id=%d", sub.PlanID)
 	}
 
-	startedAt := time.Now()
-	expiresAt := startedAt.Add(time.Duration(plan.DurationMinutes) * time.Minute)
+	start := time.Now()
+	exp := start.Add(time.Duration(plan.DurationMinutes) * time.Minute)
 
-	return s.repo.Activate(ctx, sub.ID, startedAt, expiresAt)
+	return s.repo.Activate(ctx, sub.ID, start, exp)
 }
 
+// ------------------------------------------------
+// STATUS
+// ------------------------------------------------
 func (s *SubscriptionService) GetStatus(ctx context.Context, botID string, telegramID int64) (string, error) {
 	sub, err := s.repo.Get(ctx, botID, telegramID)
 	if err != nil {
