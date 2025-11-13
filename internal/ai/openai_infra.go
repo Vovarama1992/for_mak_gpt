@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 
@@ -22,6 +23,7 @@ func NewOpenAIClient() *OpenAIClient {
 	}
 }
 
+// ---- GPT текстовые диалоги ----
 func (c *OpenAIClient) GetCompletion(ctx context.Context, messages []openai.ChatCompletionMessage) (string, error) {
 	model := os.Getenv("OPENAI_MODEL")
 	if model == "" {
@@ -39,4 +41,26 @@ func (c *OpenAIClient) GetCompletion(ctx context.Context, messages []openai.Chat
 		return "", nil
 	}
 	return resp.Choices[0].Message.Content, nil
+}
+
+// ---- Whisper STT ----
+func (c *OpenAIClient) Transcribe(ctx context.Context, filePath string) (string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("open audio file: %w", err)
+	}
+	defer f.Close()
+
+	req := openai.AudioRequest{
+		Model:       openai.Whisper1,
+		FilePath:    filePath,
+		Temperature: 0,
+	}
+
+	resp, err := c.client.CreateTranscription(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("whisper error: %w", err)
+	}
+
+	return resp.Text, nil
 }

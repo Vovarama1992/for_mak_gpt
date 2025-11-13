@@ -3,10 +3,8 @@ package speech
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,64 +28,6 @@ func NewElevenLabsClient() *ElevenLabsClient {
 		apiKey: key,
 		voice:  voice,
 	}
-}
-
-// === SPEECH → TEXT ===
-func (c *ElevenLabsClient) Transcribe(ctx context.Context, filePath string) (string, error) {
-	url := "https://api.elevenlabs.io/v1/speech-to-text"
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", fmt.Errorf("open file fail: %w", err)
-	}
-	defer file.Close()
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	// модель (ОБЯЗАТЕЛЬНО)
-	_ = writer.WriteField("model_id", "scribe_v2")
-
-	// файл
-	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
-	if err != nil {
-		return "", fmt.Errorf("form file fail: %w", err)
-	}
-	if _, err := io.Copy(part, file); err != nil {
-		return "", fmt.Errorf("copy fail: %w", err)
-	}
-
-	writer.Close()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
-	if err != nil {
-		return "", fmt.Errorf("request build fail: %w", err)
-	}
-
-	req.Header.Set("xi-api-key", c.apiKey)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("request fail: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBytes, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("stt failed (%d): %s", resp.StatusCode, string(respBytes))
-	}
-
-	var out struct {
-		Text string `json:"text"`
-	}
-
-	if err := json.Unmarshal(respBytes, &out); err != nil {
-		return "", fmt.Errorf("json decode fail: %w raw=%s", err, string(respBytes))
-	}
-
-	return out.Text, nil
 }
 
 // === TEXT → SPEECH ===

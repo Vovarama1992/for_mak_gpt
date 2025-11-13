@@ -64,8 +64,13 @@ func main() {
 	}
 
 	// --- Speech client (ElevenLabs) ---
-	speechClient := speech.NewElevenLabsClient()
-	speechService := speech.NewService(speechClient)
+	sttClient := ai.NewOpenAIClient()
+
+	// TTS через ElevenLabs
+	ttsClient := speech.NewElevenLabsClient()
+
+	// Единый сервис
+	speechService := speech.NewService(sttClient, ttsClient)
 
 	// --- Services ---
 	s3Service := domain.NewS3Service(s3Client)
