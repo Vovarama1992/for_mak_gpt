@@ -87,6 +87,7 @@ func main() {
 		AiService:           aiService,
 		SpeechService:       speechService,
 		RecordService:       recordService,
+		S3Service:           s3Service, // ← ЭТОГО НЕ ХВАТАЛО
 	}
 	if err := botApp.InitBots(); err != nil {
 		log.Fatalf("failed to init telegram bots: %v", err)
