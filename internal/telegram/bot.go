@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -218,16 +217,20 @@ func handleVoice(ctx context.Context, app *BotApp, bot *tgbotapi.BotAPI,
 func handlePhoto(ctx context.Context, app *BotApp, bot *tgbotapi.BotAPI,
 	botID string, chatID, tgID int64, msg *tgbotapi.Message) {
 
-	photo := msg.Photo[len(msg.Photo)-1] // берём лучшее качество
-	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: photo.FileID})
+	// выбираем фото лучшего качества
+	photo := msg.Photo[len(msg.Photo)-1]
+
+	// получаем файл из телеги
+	fileInfo, err := bot.GetFile(tgbotapi.FileConfig{FileID: photo.FileID})
 	if err != nil {
 		log.Printf("[bot_loop] get photo fail: %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось получить фото."))
 		return
 	}
 
-	url := file.Link(bot.Token)
-	resp, err := http.Get(url)
+	// скачиваем из телеги
+	downloadURL := fileInfo.Link(bot.Token)
+	resp, err := http.Get(downloadURL)
 	if err != nil {
 		log.Printf("[bot_loop] download photo fail: %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка загрузки фото."))
@@ -235,51 +238,45 @@ func handlePhoto(ctx context.Context, app *BotApp, bot *tgbotapi.BotAPI,
 	}
 	defer resp.Body.Close()
 
-	tmpFile := fmt.Sprintf("/tmp/%s.jpg", photo.FileID)
-	out, err := os.Create(tmpFile)
+	// формируем имя файла для S3
+	filename := fmt.Sprintf("%s.jpg", photo.FileID)
+
+	// загружаем в S3
+	publicURL, err := app.S3Service.SaveImage(
+		ctx,
+		botID,
+		tgID,
+		resp.Body,
+		filename,
+		"image/jpeg",
+	)
 	if err != nil {
-		log.Printf("[bot_loop] create tmp photo fail: %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке фото."))
+		log.Printf("[bot_loop] s3 save fail: %v", err)
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка хранения фото."))
 		return
 	}
-	if _, err := io.Copy(out, resp.Body); err != nil {
-		log.Printf("[bot_loop] save tmp photo fail: %v", err)
-		out.Close()
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при сохранении фото."))
-		return
-	}
-	out.Close()
 
-	f, err := os.Open(tmpFile)
-	if err != nil {
-		log.Printf("[bot_loop] open tmp photo fail: %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке фото."))
-		return
-	}
-	defer f.Close()
-
-	filename := filepath.Base(tmpFile)
-
-	// сохраняем изображение как запись пользователя
-	if _, err := app.RecordService.AddImage(ctx, botID, tgID, "user", f, filename, "image/jpeg"); err != nil {
-		log.Printf("[bot_loop] AddImage user fail botID=%s tgID=%d err=%v", botID, tgID, err)
+	// сохраняем в историю как текст (URL)
+	if _, err := app.RecordService.AddText(ctx, botID, tgID, "user", publicURL); err != nil {
+		log.Printf("[bot_loop] AddImage user fail: %v", err)
 	}
 
-	// текст для GPT про фото
-	urlMsg := fmt.Sprintf("📷 Пользователь прислал изображение: %s", url)
+	// формируем сообщение для GPT
+	msgForGpt := fmt.Sprintf("📷 Пользователь прислал изображение: %s", publicURL)
 
-	reply, err := app.AiService.GetReply(ctx, botID, tgID, urlMsg)
+	reply, err := app.AiService.GetReply(ctx, botID, tgID, msgForGpt)
 	if err != nil {
 		log.Printf("[bot_loop] ai reply fail (photo): %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки фото."))
 		return
 	}
 
+	// отправляем ответ пользователю
 	bot.Send(tgbotapi.NewMessage(chatID, reply))
 
 	// сохраняем ответ репетитора
 	if _, err := app.RecordService.AddText(ctx, botID, tgID, "tutor", reply); err != nil {
-		log.Printf("[bot_loop] AddText tutor (photo) fail botID=%s tgID=%d err=%v", botID, tgID, err)
+		log.Printf("[bot_loop] AddText tutor (photo) fail: %v", err)
 	}
 }
 

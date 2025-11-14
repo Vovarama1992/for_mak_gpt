@@ -17,6 +17,7 @@ type BotApp struct {
 	AiService           ai.Service
 	SpeechService       *speech.Service
 	RecordService       ports.RecordService
+	S3Service           ports.S3Service // ← ДОБАВИЛ
 	bots                map[string]*tgbotapi.BotAPI
 }
 

@@ -2,10 +2,9 @@ package ports
 
 import (
 	"context"
-	"mime/multipart"
+	"io"
 )
 
 type S3Service interface {
-	ObjectKey(telegramID int64, filename string) string
-	SaveImage(ctx context.Context, botID string, telegramID int64, file multipart.File, filename, contentType string) (string, error)
+	SaveImage(ctx context.Context, botID string, telegramID int64, file io.Reader, filename, contentType string) (string, error)
 }
