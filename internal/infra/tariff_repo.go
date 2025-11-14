@@ -54,6 +54,54 @@ func (r *tariffRepo) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 	return plans, rows.Err()
 }
 
+func (r *tariffRepo) Create(ctx context.Context, plan *ports.TariffPlan) (*ports.TariffPlan, error) {
+	row := r.db.QueryRowContext(ctx, `
+		INSERT INTO tariff_plans (
+			code,
+			name,
+			price,
+			duration_minutes,
+			voice_minutes,
+			description,
+			features
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING
+			id,
+			code,
+			name,
+			price,
+			duration_minutes,
+			voice_minutes,
+			description,
+			features
+	`,
+		plan.Code,
+		plan.Name,
+		plan.Price,
+		plan.DurationMinutes,
+		plan.VoiceMinutes,
+		plan.Description,
+		plan.Features,
+	)
+
+	var t ports.TariffPlan
+	if err := row.Scan(
+		&t.ID,
+		&t.Code,
+		&t.Name,
+		&t.Price,
+		&t.DurationMinutes,
+		&t.VoiceMinutes,
+		&t.Description,
+		&t.Features,
+	); err != nil {
+		return nil, err
+	}
+
+	return &t, nil
+}
+
 func (r *tariffRepo) GetByID(ctx context.Context, id int) (*ports.TariffPlan, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT 

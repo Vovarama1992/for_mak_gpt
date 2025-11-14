@@ -7,12 +7,16 @@ import (
 
 type TariffRepo interface {
 	ListAll(ctx context.Context) ([]*TariffPlan, error)
-	GetByID(ctx context.Context, id int) (*TariffPlan, error) // ← нужно для Activate()
+	GetByID(ctx context.Context, id int) (*TariffPlan, error)
+
+	Create(ctx context.Context, plan *TariffPlan) (*TariffPlan, error)
 }
 
 type TariffService interface {
 	ListAll(ctx context.Context) ([]*TariffPlan, error)
-	GetByID(ctx context.Context, id int) (*TariffPlan, error) // ← симметрия
+	GetByID(ctx context.Context, id int) (*TariffPlan, error)
+
+	Create(ctx context.Context, plan *TariffPlan) (*TariffPlan, error)
 }
 
 type TariffPlan struct {

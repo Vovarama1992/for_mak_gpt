@@ -45,4 +45,5 @@ func RegisterRoutes(
 
 	// --- тарифные планы ---
 	r.With(httputil.RecoverMiddleware).Get("/tariffs", hTariff.List)
+	r.With(httputil.RecoverMiddleware).Post("/tariffs", hTariff.Create)
 }

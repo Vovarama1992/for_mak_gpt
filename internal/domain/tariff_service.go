@@ -21,3 +21,7 @@ func (s *TariffService) ListAll(ctx context.Context) ([]*ports.TariffPlan, error
 func (s *TariffService) GetByID(ctx context.Context, id int) (*ports.TariffPlan, error) {
 	return s.repo.GetByID(ctx, id)
 }
+
+func (s *TariffService) Create(ctx context.Context, plan *ports.TariffPlan) (*ports.TariffPlan, error) {
+	return s.repo.Create(ctx, plan)
+}
