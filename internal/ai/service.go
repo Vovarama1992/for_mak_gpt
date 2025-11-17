@@ -25,31 +25,36 @@ func NewAiService(client *OpenAIClient, recordSvc ports.RecordService, promptRep
 }
 
 func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64, userText string) (string, error) {
-	log.Printf("[ai] >>> START botID=%s telegramID=%d", botID, telegramID)
+	log.Printf("[ai] >>> START bot=%s tg=%d", botID, telegramID)
 
 	txt := strings.TrimSpace(userText)
 	if txt == "" {
 		return "", fmt.Errorf("empty userText")
 	}
 
-	// 1) Берём готовую «вмещающуюся» историю
+	// 1) История
 	history, err := s.recordService.GetFittingHistory(ctx, botID, telegramID)
 	if err != nil {
-		log.Printf("[ai] history load fail: %v", err)
+		log.Printf("[ai] ⚠️ fitting history load error: %v", err)
+	} else {
+		log.Printf("[ai] ✔️ Fitting history loaded: %d records (GPT sees only trimmed history)", len(history))
 	}
 
-	// 2) Системный промпт
+	// 2) Стиль
 	stylePrompt, err := s.promptRepo.GetByBotID(ctx, botID)
 	if err != nil || strings.TrimSpace(stylePrompt) == "" {
 		stylePrompt = "Ты дружелюбный логичный ассистент."
+		log.Printf("[ai] 🔹 stylePrompt: default used")
+	} else {
+		log.Printf("[ai] 🔹 stylePrompt loaded")
 	}
 
 	// 3) Жёсткая инструкция
 	superPrompt := `У тебя есть промпт (стиль), история диалога и последнее сообщение. 
-Ответь строго на последнее сообщение, учитывая историю и стиль. `
+Ответь строго на последнее сообщение, учитывая историю и стиль.`
 
-	// === Формируем запрос ===
-	msg := []openai.ChatCompletionMessage{
+	// 4) Сборка массива сообщений
+	messages := []openai.ChatCompletionMessage{
 		{Role: "system", Content: superPrompt},
 		{Role: "system", Content: "Промпт: " + stylePrompt},
 	}
@@ -62,23 +67,27 @@ func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64
 		if r.Role == "tutor" {
 			role = "assistant"
 		}
-		msg = append(msg, openai.ChatCompletionMessage{
+		messages = append(messages, openai.ChatCompletionMessage{
 			Role:    role,
 			Content: strings.TrimSpace(*r.Text),
 		})
 	}
 
-	// 4) Последний запрос
-	msg = append(msg, openai.ChatCompletionMessage{
+	// 5) Последний запрос юзера
+	messages = append(messages, openai.ChatCompletionMessage{
 		Role:    "user",
 		Content: txt,
 	})
 
-	// 5) → GPT
-	reply, err := s.openaiClient.GetCompletion(ctx, msg)
+	log.Printf("[ai] 🧩 messages built for GPT: %d", len(messages))
+
+	// 6) Отправляем в GPT
+	reply, err := s.openaiClient.GetCompletion(ctx, messages)
 	if err != nil {
+		log.Printf("[ai] ❌ GPT error: %v", err)
 		return "", err
 	}
 
+	log.Printf("[ai] <<< OK reply received (%d chars)", len(reply))
 	return reply, nil
 }
