@@ -43,7 +43,6 @@ func (c *OpenAIClient) GetCompletion(ctx context.Context, messages []openai.Chat
 	return resp.Choices[0].Message.Content, nil
 }
 
-// ---- Whisper STT ----
 func (c *OpenAIClient) Transcribe(ctx context.Context, filePath string) (string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -59,8 +58,11 @@ func (c *OpenAIClient) Transcribe(ctx context.Context, filePath string) (string,
 
 	resp, err := c.client.CreateTranscription(ctx, req)
 	if err != nil {
+		// Детализированный вывод ошибки
+		log.Printf("[whisper] transcription error: %+v", err)
 		return "", fmt.Errorf("whisper error: %w", err)
 	}
 
+	log.Printf("[whisper] raw response: %#v", resp)
 	return resp.Text, nil
 }
