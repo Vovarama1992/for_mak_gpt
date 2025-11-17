@@ -30,6 +30,7 @@ func (r *subscriptionRepo) scanRow(row *sql.Row) (*ports.Subscription, error) {
 		&s.ExpiresAt,
 		&s.UpdatedAt,
 		&yid,
+		&s.VoiceMinutes, // ⬅️ ЯДРО ФИКСА
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -65,7 +66,8 @@ func (r *subscriptionRepo) GetByPaymentID(ctx context.Context, paymentID string)
 	row := r.db.QueryRowContext(ctx, `
 		SELECT 
 			id, bot_id, telegram_id, plan_id, status,
-			started_at, expires_at, updated_at, yookassa_payment_id
+			started_at, expires_at, updated_at, yookassa_payment_id,
+			voice_minutes
 		FROM subscriptions 
 		WHERE yookassa_payment_id = $1
 	`, paymentID)
@@ -77,7 +79,8 @@ func (r *subscriptionRepo) Get(ctx context.Context, botID string, telegramID int
 	row := r.db.QueryRowContext(ctx, `
 		SELECT 
 			id, bot_id, telegram_id, plan_id, status,
-			started_at, expires_at, updated_at, yookassa_payment_id
+			started_at, expires_at, updated_at, yookassa_payment_id,
+			voice_minutes
 		FROM subscriptions 
 		WHERE bot_id=$1 AND telegram_id=$2
 	`, botID, telegramID)
@@ -122,7 +125,8 @@ func (r *subscriptionRepo) ListAll(ctx context.Context) ([]*ports.Subscription, 
 			s.expires_at,
 			s.updated_at,
 			s.yookassa_payment_id,
-			tp.name AS plan_name
+			tp.name AS plan_name,
+			s.voice_minutes         -- ⬅️ ТУТ ДОБАВЛЕНО
 		FROM subscriptions s
 		LEFT JOIN tariff_plans tp ON tp.id = s.plan_id
 		ORDER BY s.updated_at DESC
@@ -150,6 +154,7 @@ func (r *subscriptionRepo) ListAll(ctx context.Context) ([]*ports.Subscription, 
 			&s.UpdatedAt,
 			&yid,
 			&planName,
+			&s.VoiceMinutes,
 		)
 		if err != nil {
 			return nil, err
