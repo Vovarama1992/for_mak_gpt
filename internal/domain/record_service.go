@@ -3,8 +3,8 @@ package domain
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
-	"mime/multipart"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	tiktoken "github.com/pkoukk/tiktoken-go"
@@ -35,27 +35,28 @@ func (s *recordService) AddText(ctx context.Context, botID string, telegramID in
 	return id, nil
 }
 
-func (s *recordService) AddImage(ctx context.Context, botID string, telegramID int64, role string,
-	file multipart.File, filename, contentType string) (int64, error) {
+func (s *recordService) AddImage(
+	ctx context.Context, botID string, telegramID int64, role string,
+	file io.Reader, filename, contentType string,
+) (int64, string, error) {
 
 	publicURL, err := s.s3service.SaveImage(ctx, botID, telegramID, file, filename, contentType)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 
 	id, err := s.repo.CreateImage(ctx, botID, telegramID, role, publicURL)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 
-	// пересчёт истории — в фоне
 	go func() {
 		if err := s.RecalcHistoryState(context.Background(), botID, telegramID); err != nil {
 			log.Printf("[history] recalc fail: %v", err)
 		}
 	}()
 
-	return id, nil
+	return id, publicURL, nil
 }
 
 func (s *recordService) GetHistory(ctx context.Context, botID string, telegramID int64) ([]ports.Record, error) {

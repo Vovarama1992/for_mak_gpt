@@ -14,7 +14,7 @@ func (app *BotApp) handleText(ctx context.Context, botID string, bot *tgbotapi.B
 	text := msg.Text
 
 	// GPT-ответ (история старее → новый текст → супер-системный промпт)
-	reply, err := app.AiService.GetReply(ctx, botID, tgID, text)
+	reply, err := app.AiService.GetReply(ctx, botID, tgID, text, nil)
 	if err != nil {
 		log.Printf("[text] ai reply fail botID=%s tgID=%d: %v", botID, tgID, err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке запроса."))

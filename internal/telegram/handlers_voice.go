@@ -92,7 +92,7 @@ func (app *BotApp) handleVoice(ctx context.Context, botID string, bot *tgbotapi.
 	}
 
 	// GPT ответ
-	reply, err := app.AiService.GetReply(ctx, botID, tgID, text)
+	reply, err := app.AiService.GetReply(ctx, botID, tgID, text, nil)
 	if err != nil {
 		log.Printf("[voice] ai fail botID=%s tgID=%d err=%v", botID, tgID, err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при ответе."))

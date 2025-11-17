@@ -3,7 +3,7 @@ package ai
 import "context"
 
 type Service interface {
-    // GetReply получает ответ от GPT на новое сообщение пользователя.
-    // При этом сервис сам подтягивает историю из БД и сохраняет новый ответ.
-    GetReply(ctx context.Context, botID string, telegramID int64, userText string) (string, error)
+	// GetReply получает ответ GPT на новое сообщение пользователя.
+	// imageURL — опциональная ссылка на картинку (если nil — речь о тексте/голосе).
+	GetReply(ctx context.Context, botID string, telegramID int64, userText string, imageURL *string) (string, error)
 }

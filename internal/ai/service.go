@@ -25,41 +25,37 @@ func NewAiService(client *OpenAIClient, recordSvc ports.RecordService, promptRep
 	}
 }
 
-func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64, userText string) (string, error) {
-	start := time.Now()
+func (s *AiService) GetReply(
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+	userText string,
+	imageURL *string, // nil если нет фото
+) (string, error) {
 
+	start := time.Now()
 	log.Printf("[ai] >>> START bot=%s tg=%d", botID, telegramID)
 
-	txt := strings.TrimSpace(userText)
-	if txt == "" {
-		return "", fmt.Errorf("empty userText")
-	}
-
-	// 1) История
-	history, _ := s.recordService.GetFittingHistory(ctx, botID, telegramID)
-	log.Printf("[ai] history entries: %d", len(history))
-
-	// 2) Стиль
+	// 1. Стиль
 	stylePrompt, _ := s.promptRepo.GetByBotID(ctx, botID)
 	if strings.TrimSpace(stylePrompt) == "" {
 		stylePrompt = "Ты дружелюбный логичный ассистент."
 	}
 
-	// 3) Ищем последнюю картинку в истории
-	var lastImageURL *string
-	for i := len(history) - 1; i >= 0; i-- {
-		if history[i].ImageURL != nil && *history[i].ImageURL != "" {
-			lastImageURL = history[i].ImageURL
-			break
-		}
-	}
+	// 2. История
+	history, _ := s.recordService.GetFittingHistory(ctx, botID, telegramID)
+	log.Printf("[ai] history entries: %d", len(history))
 
-	// 4) Сборка сообщений
+	// 3. Системное указание
+	superPrompt := `У тебя есть промпт (стиль), история диалога и последнее сообщение.
+Ответь строго на последнее сообщение, учитывая историю и стиль.`
+
 	messages := []openai.ChatCompletionMessage{
-		{Role: "system", Content: "Учитывай стиль, историю и отвечай только на последнее сообщение."},
+		{Role: "system", Content: superPrompt},
 		{Role: "system", Content: "Промпт: " + stylePrompt},
 	}
 
+	// 4. История
 	for _, r := range history {
 		if r.Text == nil || strings.TrimSpace(*r.Text) == "" {
 			continue
@@ -74,25 +70,20 @@ func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64
 		})
 	}
 
-	// 5) Формируем итоговое сообщение — JSON если была картинка
-	var content string
-	if lastImageURL != nil {
-		content = fmt.Sprintf(`[
-			{"type": "text", "text": %q},
-			{"type": "image_url", "image_url": {"url": %q}}
-		]`, txt, *lastImageURL)
-		log.Printf("[ai] using vision payload JSON with image: %s", *lastImageURL)
+	// 5. Последнее сообщение
+	if imageURL != nil {
+		log.Printf("[ai] vision payload, image=%s", *imageURL)
+		userText = fmt.Sprintf("%s\nВот изображение для анализа: %s", userText, *imageURL)
 	} else {
-		content = txt
 		log.Printf("[ai] text-only payload")
 	}
 
 	messages = append(messages, openai.ChatCompletionMessage{
 		Role:    "user",
-		Content: content,
+		Content: userText,
 	})
 
-	// 6) GPT
+	// 6. GPT
 	reply, err := s.openaiClient.GetCompletion(ctx, messages)
 	log.Printf("[ai][%.1fs] GPT done, err=%v", time.Since(start).Seconds(), err)
 

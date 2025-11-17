@@ -28,11 +28,6 @@ func RegisterRoutes(
 	r.With(
 		httputil.RecoverMiddleware,
 		httputil.NewRateLimiter(60, time.Minute),
-	).Post("/record/image", h.AddImageRecord)
-
-	r.With(
-		httputil.RecoverMiddleware,
-		httputil.NewRateLimiter(60, time.Minute),
 	).Get("/history/{telegram_id}", h.GetHistory)
 
 	r.With(httputil.RecoverMiddleware).Get("/admin/users", h.ListUsers)

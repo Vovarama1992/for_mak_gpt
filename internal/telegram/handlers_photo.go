@@ -48,7 +48,6 @@ func (app *BotApp) handlePhoto(ctx context.Context, botID string, bot *tgbotapi.
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка хранения фото."))
 		return
 	}
-
 	log.Printf("[photo] s3_url=%s", publicURL)
 
 	_, err = app.RecordService.AddText(ctx, botID, tgID, "user", publicURL)
@@ -57,9 +56,7 @@ func (app *BotApp) handlePhoto(ctx context.Context, botID string, bot *tgbotapi.
 	}
 
 	gptInput := fmt.Sprintf("📷 Пользователь прислал изображение: %s", publicURL)
-	log.Printf("[photo] gpt_input=%s", gptInput)
-
-	reply, err := app.AiService.GetReply(ctx, botID, tgID, gptInput)
+	reply, err := app.AiService.GetReply(ctx, botID, tgID, gptInput, &publicURL)
 	if err != nil {
 		log.Printf("[photo] ai fail: %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки фото."))
