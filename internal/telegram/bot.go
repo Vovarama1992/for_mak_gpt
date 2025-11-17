@@ -98,18 +98,27 @@ func extractTelegramID(u tgbotapi.Update) int64 {
 func (app *BotApp) checkVoiceAllowed(ctx context.Context, botID string, tgID int64) bool {
 	sub, err := app.SubscriptionService.Get(ctx, botID, tgID)
 	if err != nil {
-		log.Printf("[checkVoiceAllowed] Get fail: %v", err)
+		log.Printf("[voice_check] ❗ Get failed bot=%s tg=%d err=%v", botID, tgID, err)
 		return false
 	}
 	if sub == nil {
+		log.Printf("[voice_check] ❗ No subscription bot=%s tg=%d", botID, tgID)
 		return false
 	}
+
+	log.Printf("[voice_check] status=%s voice_minutes=%d expires=%v",
+		sub.Status, sub.VoiceMinutes, sub.ExpiresAt)
+
 	if sub.Status != "active" {
+		log.Printf("[voice_check] ❌ Not active")
 		return false
 	}
 	if sub.VoiceMinutes <= 0 {
+		log.Printf("[voice_check] ❌ No voice minutes left")
 		return false
 	}
+
+	log.Printf("[voice_check] ✔ Allowed")
 	return true
 }
 
