@@ -23,12 +23,13 @@ func NewOpenAIClient() *OpenAIClient {
 	}
 }
 
-// ---- GPT текстовые диалоги ----
 func (c *OpenAIClient) GetCompletion(ctx context.Context, messages []openai.ChatCompletionMessage) (string, error) {
 	model := os.Getenv("OPENAI_MODEL")
 	if model == "" {
-		model = openai.GPT4oMini
+		model = openai.GPT4oMini // дефолт
 	}
+
+	log.Printf("[openai] using model: %s, messages: %d", model, len(messages))
 
 	resp, err := c.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model:    model,
@@ -40,6 +41,7 @@ func (c *OpenAIClient) GetCompletion(ctx context.Context, messages []openai.Chat
 	if len(resp.Choices) == 0 {
 		return "", nil
 	}
+
 	return resp.Choices[0].Message.Content, nil
 }
 
