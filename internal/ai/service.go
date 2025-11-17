@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	openai "github.com/sashabaranov/go-openai"
@@ -25,6 +26,7 @@ func NewAiService(client *OpenAIClient, recordSvc ports.RecordService, promptRep
 }
 
 func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64, userText string) (string, error) {
+	startTotal := time.Now()
 	log.Printf("[ai] >>> START bot=%s tg=%d", botID, telegramID)
 
 	txt := strings.TrimSpace(userText)
@@ -33,27 +35,24 @@ func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64
 	}
 
 	// 1) История
+	t1 := time.Now()
 	history, err := s.recordService.GetFittingHistory(ctx, botID, telegramID)
-	if err != nil {
-		log.Printf("[ai] ⚠️ fitting history load error: %v", err)
-	} else {
-		log.Printf("[ai] ✔️ Fitting history loaded: %d records (GPT sees only trimmed history)", len(history))
-	}
+	log.Printf("[ai][t=%.1fs] history loaded: %d records (err=%v)",
+		time.Since(t1).Seconds(), len(history), err)
 
 	// 2) Стиль
+	t2 := time.Now()
 	stylePrompt, err := s.promptRepo.GetByBotID(ctx, botID)
 	if err != nil || strings.TrimSpace(stylePrompt) == "" {
 		stylePrompt = "Ты дружелюбный логичный ассистент."
-		log.Printf("[ai] 🔹 stylePrompt: default used")
-	} else {
-		log.Printf("[ai] 🔹 stylePrompt loaded")
 	}
+	log.Printf("[ai][t=%.1fs] stylePrompt resolved", time.Since(t2).Seconds())
 
-	// 3) Жёсткая инструкция
+	// 3) Сборка сообщений
+	t3 := time.Now()
 	superPrompt := `У тебя есть промпт (стиль), история диалога и последнее сообщение. 
-Ответь строго на последнее сообщение, учитывая историю и стиль.`
+	Ответь строго на последнее сообщение, учитывая историю и стиль.`
 
-	// 4) Сборка массива сообщений
 	messages := []openai.ChatCompletionMessage{
 		{Role: "system", Content: superPrompt},
 		{Role: "system", Content: "Промпт: " + stylePrompt},
@@ -72,22 +71,22 @@ func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64
 			Content: strings.TrimSpace(*r.Text),
 		})
 	}
-
-	// 5) Последний запрос юзера
 	messages = append(messages, openai.ChatCompletionMessage{
 		Role:    "user",
 		Content: txt,
 	})
 
-	log.Printf("[ai] 🧩 messages built for GPT: %d", len(messages))
+	log.Printf("[ai][t=%.1fs] messages built: %d msgs", time.Since(t3).Seconds(), len(messages))
 
-	// 6) Отправляем в GPT
+	// 4) GPT запрос
+	t4 := time.Now()
 	reply, err := s.openaiClient.GetCompletion(ctx, messages)
+	log.Printf("[ai][t=%.1fs] GPT responded, err=%v", time.Since(t4).Seconds(), err)
+
 	if err != nil {
-		log.Printf("[ai] ❌ GPT error: %v", err)
 		return "", err
 	}
 
-	log.Printf("[ai] <<< OK reply received (%d chars)", len(reply))
+	log.Printf("[ai] <<< DONE total=%.1fs reply chars=%d", time.Since(startTotal).Seconds(), len(reply))
 	return reply, nil
 }

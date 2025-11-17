@@ -1,4 +1,4 @@
-.PHONY: refresh build up down logs build-front commit migrate db
+.PHONY: refresh build up down logs build-front commit migrate db app-logs
 
 refresh:
 	git pull origin master
@@ -26,6 +26,9 @@ down:
 
 logs:
 	docker compose logs -f
+
+app-logs:
+	docker logs --tail=100 -f makeziper_app
 
 commit:
 	git add .
