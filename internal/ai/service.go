@@ -2,7 +2,6 @@ package ai
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -30,7 +29,7 @@ func (s *AiService) GetReply(
 	botID string,
 	telegramID int64,
 	userText string,
-	imageURL *string, // nil если нет фото
+	imageURL *string, // nil, если обычный текст
 ) (string, error) {
 
 	start := time.Now()
@@ -55,7 +54,7 @@ func (s *AiService) GetReply(
 		{Role: "system", Content: "Промпт: " + stylePrompt},
 	}
 
-	// 4. История
+	// 4. История в виде обычных сообщений
 	for _, r := range history {
 		if r.Text == nil || strings.TrimSpace(*r.Text) == "" {
 			continue
@@ -70,20 +69,35 @@ func (s *AiService) GetReply(
 		})
 	}
 
-	// 5. Последнее сообщение
-	if imageURL != nil {
-		log.Printf("[ai] vision payload, image=%s", *imageURL)
-		userText = fmt.Sprintf("%s\nВот изображение для анализа: %s", userText, *imageURL)
-	} else {
+	// 5. Последнее сообщение: текст или картинка
+	if imageURL == nil {
+		// → обычный текст
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    "user",
+			Content: userText,
+		})
 		log.Printf("[ai] text-only payload")
+	} else {
+		// → текст + картинка (vision)
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role: "user",
+			MultiContent: []openai.ChatMessagePart{
+				{
+					Type: openai.ChatMessagePartTypeText,
+					Text: userText,
+				},
+				{
+					Type: openai.ChatMessagePartTypeImageURL,
+					ImageURL: &openai.ChatMessageImageURL{
+						URL: *imageURL,
+					},
+				},
+			},
+		})
+		log.Printf("[ai] vision payload OK: %s", *imageURL)
 	}
 
-	messages = append(messages, openai.ChatCompletionMessage{
-		Role:    "user",
-		Content: userText,
-	})
-
-	// 6. GPT
+	// 6. Вызов OpenAI
 	reply, err := s.openaiClient.GetCompletion(ctx, messages)
 	log.Printf("[ai][%.1fs] GPT done, err=%v", time.Since(start).Seconds(), err)
 
