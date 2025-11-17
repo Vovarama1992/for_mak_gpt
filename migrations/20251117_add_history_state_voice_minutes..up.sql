@@ -9,3 +9,13 @@ CREATE TABLE history_state (
 
 ALTER TABLE subscriptions
 ADD COLUMN voice_minutes REAL NOT NULL DEFAULT 0;
+
+ALTER TABLE subscriptions
+ALTER COLUMN voice_minutes
+TYPE double precision
+USING voice_minutes::double precision;
+
+ALTER TABLE tariff_plans
+ALTER COLUMN voice_minutes
+TYPE double precision
+USING voice_minutes::double precision;

@@ -25,7 +25,7 @@ type TariffPlan struct {
 	Name            string          `json:"name"`
 	Price           float64         `json:"price"`
 	DurationMinutes int             `json:"duration_minutes"` // ← единая ось времени
-	VoiceMinutes    int             `json:"voice_minutes"`
+	VoiceMinutes    float64         `json:"voice_minutes"`
 	Description     string          `json:"description"`
 	Features        json.RawMessage `json:"features"`
 }

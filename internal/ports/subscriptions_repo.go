@@ -16,7 +16,7 @@ type Subscription struct {
 	ExpiresAt         *time.Time `json:"expires_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 	YookassaPaymentID *string    `json:"yookassa_payment_id"`
-	VoiceMinutes      int        `json:"voice_minutes"` // ← целочисленно
+	VoiceMinutes      float64    `json:"voice_minutes"`
 }
 
 type SubscriptionRepo interface {
@@ -28,5 +28,5 @@ type SubscriptionRepo interface {
 	UseVoiceMinutes(ctx context.Context, botID string, tgID int64, used float64) (bool, error)
 
 	// добавили voiceMinutes
-	Activate(ctx context.Context, id int64, startedAt, expiresAt time.Time, voiceMinutes int) error
+	Activate(ctx context.Context, id int64, startedAt, expiresAt time.Time, voiceMinutes float64) error
 }

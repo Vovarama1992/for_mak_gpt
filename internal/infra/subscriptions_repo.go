@@ -98,7 +98,12 @@ func (r *subscriptionRepo) UpdateStatus(ctx context.Context, id int64, status st
 	return err
 }
 
-func (r *subscriptionRepo) Activate(ctx context.Context, id int64, startedAt, expiresAt time.Time, voiceMinutes int) error {
+func (r *subscriptionRepo) Activate(
+	ctx context.Context,
+	id int64,
+	startedAt, expiresAt time.Time,
+	voiceMinutes float64,
+) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE subscriptions
 		SET 
