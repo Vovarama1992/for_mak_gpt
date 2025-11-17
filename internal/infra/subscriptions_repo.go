@@ -95,16 +95,17 @@ func (r *subscriptionRepo) UpdateStatus(ctx context.Context, id int64, status st
 	return err
 }
 
-func (r *subscriptionRepo) Activate(ctx context.Context, id int64, startedAt, expiresAt time.Time) error {
+func (r *subscriptionRepo) Activate(ctx context.Context, id int64, startedAt, expiresAt time.Time, voiceMinutes int) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE subscriptions
 		SET 
-			status = 'active',
-			started_at = $2,
-			expires_at = $3,
-			updated_at = NOW()
+			status        = 'active',
+			started_at    = $2,
+			expires_at    = $3,
+			voice_minutes = $4,
+			updated_at    = NOW()
 		WHERE id = $1
-	`, id, startedAt, expiresAt)
+	`, id, startedAt, expiresAt, voiceMinutes)
 
 	return err
 }
@@ -165,4 +166,17 @@ func (r *subscriptionRepo) ListAll(ctx context.Context) ([]*ports.Subscription, 
 	}
 
 	return subs, rows.Err()
+}
+
+func (r *subscriptionRepo) UseVoiceMinutes(ctx context.Context, botID string, tgID int64, used float64) (bool, error) {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE subscriptions
+		SET voice_minutes = voice_minutes - $3
+		WHERE bot_id=$1 AND telegram_id=$2 AND voice_minutes >= $3
+	`, botID, tgID, used)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }

@@ -16,6 +16,7 @@ type Subscription struct {
 	ExpiresAt         *time.Time `json:"expires_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 	YookassaPaymentID *string    `json:"yookassa_payment_id"`
+	VoiceMinutes      int        `json:"voice_minutes"` // ← целочисленно
 }
 
 type SubscriptionRepo interface {
@@ -24,6 +25,8 @@ type SubscriptionRepo interface {
 	Get(ctx context.Context, botID string, telegramID int64) (*Subscription, error)
 	UpdateStatus(ctx context.Context, id int64, status string) error
 	ListAll(ctx context.Context) ([]*Subscription, error)
+	UseVoiceMinutes(ctx context.Context, botID string, tgID int64, used float64) (bool, error)
 
-	Activate(ctx context.Context, id int64, startedAt, expiresAt time.Time) error
+	// добавили voiceMinutes
+	Activate(ctx context.Context, id int64, startedAt, expiresAt time.Time, voiceMinutes int) error
 }

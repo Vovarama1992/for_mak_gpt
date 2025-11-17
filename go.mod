@@ -6,6 +6,7 @@ toolchain go1.24.9
 
 require (
 	github.com/Vovarama1992/go-utils v0.0.0-20250804130552-742b8209ae83 // indirect
+	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-chi/chi/v5 v5.2.3 // indirect
 	github.com/go-chi/cors v1.2.2 // indirect
@@ -22,6 +23,7 @@ require (
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/minio-go/v7 v7.0.95 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
+	github.com/pkoukk/tiktoken-go v0.1.8 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/sashabaranov/go-openai v1.41.2 // indirect
 	github.com/tinylib/msgp v1.3.0 // indirect

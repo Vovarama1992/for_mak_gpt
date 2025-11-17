@@ -32,13 +32,11 @@ func NewSubscriptionService(repo ports.SubscriptionRepo, tariffRepo ports.Tariff
 // CREATE
 // ------------------------------------------------
 func (s *SubscriptionService) Create(ctx context.Context, botID string, telegramID int64, planCode string) (string, error) {
-
-	// ищем тариф
+	// тариф
 	tariffs, err := s.tariffRepo.ListAll(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to list tariffs: %w", err)
+		return "", fmt.Errorf("list tariffs: %w", err)
 	}
-
 	var plan *ports.TariffPlan
 	for _, t := range tariffs {
 		if t.Code == planCode {
@@ -62,9 +60,6 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		apiURL = strings.TrimRight(apiURL, "/") + "/v3/payments"
 	}
 
-	// return URL
-	returnURL := "https://aifulls.com/success.html"
-
 	body := map[string]any{
 		"amount": map[string]any{
 			"value":    fmt.Sprintf("%.2f", plan.Price),
@@ -74,22 +69,7 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		"description": fmt.Sprintf("Subscription %s for user %d", plan.Code, telegramID),
 		"confirmation": map[string]any{
 			"type":       "redirect",
-			"return_url": returnURL,
-		},
-		"receipt": map[string]any{
-			"customer": map[string]any{
-				"email": fmt.Sprintf("user_%d@example.com", telegramID),
-			},
-			"items": []map[string]any{
-				{
-					"description":     fmt.Sprintf("Подписка %s", plan.Code),
-					"quantity":        "1.00",
-					"amount":          map[string]any{"value": fmt.Sprintf("%.2f", plan.Price), "currency": "RUB"},
-					"vat_code":        1,
-					"payment_subject": "service",
-					"payment_mode":    "full_prepayment",
-				},
-			},
+			"return_url": "https://aifulls.com/success.html",
 		},
 		"metadata": map[string]any{
 			"bot_id":      botID,
@@ -98,7 +78,6 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 	}
 
 	reqBody, _ := json.Marshal(body)
-
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
 		return "", fmt.Errorf("build request: %w", err)
@@ -131,9 +110,7 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 		return "", fmt.Errorf("invalid yookassa response: %s", string(raw))
 	}
 
-	// создаём pending подписку
 	now := time.Now()
-
 	sub := &ports.Subscription{
 		BotID:             botID,
 		TelegramID:        telegramID,
@@ -145,17 +122,20 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 	}
 
 	if err := s.repo.Create(ctx, sub); err != nil {
-		return "", fmt.Errorf("failed to create subscription: %w", err)
+		return "", fmt.Errorf("create subscription: %w", err)
 	}
 
 	return yresp.Confirmation.URL, nil
+}
+
+func (s *SubscriptionService) Get(ctx context.Context, botID string, telegramID int64) (*ports.Subscription, error) {
+	return s.repo.Get(ctx, botID, telegramID)
 }
 
 // ------------------------------------------------
 // ACTIVATE
 // ------------------------------------------------
 func (s *SubscriptionService) Activate(ctx context.Context, paymentID string) error {
-
 	sub, err := s.repo.GetByPaymentID(ctx, paymentID)
 	if err != nil {
 		return fmt.Errorf("load subscription: %w", err)
@@ -175,7 +155,7 @@ func (s *SubscriptionService) Activate(ctx context.Context, paymentID string) er
 	start := time.Now()
 	exp := start.Add(time.Duration(plan.DurationMinutes) * time.Minute)
 
-	return s.repo.Activate(ctx, sub.ID, start, exp)
+	return s.repo.Activate(ctx, sub.ID, start, exp, plan.VoiceMinutes)
 }
 
 // ------------------------------------------------
@@ -189,9 +169,21 @@ func (s *SubscriptionService) GetStatus(ctx context.Context, botID string, teleg
 	if sub == nil {
 		return "none", nil
 	}
+
+	// если время истекло — считаем её неактивной
+	if sub.ExpiresAt != nil && time.Now().After(*sub.ExpiresAt) {
+		// можно сразу записать "expired" в базу (не обязательно)
+		_ = s.repo.UpdateStatus(ctx, sub.ID, "expired")
+		return "expired", nil
+	}
+
 	return sub.Status, nil
 }
 
 func (s *SubscriptionService) ListAll(ctx context.Context) ([]*ports.Subscription, error) {
 	return s.repo.ListAll(ctx)
+}
+
+func (s *SubscriptionService) UseVoiceMinutes(ctx context.Context, botID string, telegramID int64, used float64) (bool, error) {
+	return s.repo.UseVoiceMinutes(ctx, botID, telegramID, used)
 }

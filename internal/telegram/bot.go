@@ -2,11 +2,7 @@ package telegram
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"os"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -26,23 +22,68 @@ func (app *BotApp) runBotLoop(botID string, bot *tgbotapi.BotAPI) {
 			continue
 		}
 
-		log.Printf("[bot_loop] update received botID=%s tgID=%d", botID, tgID)
-
 		status, err := app.SubscriptionService.GetStatus(ctx, botID, tgID)
 		if err != nil {
 			log.Printf("[bot_loop] getStatus fail botID=%s tgID=%d err=%v", botID, tgID, err)
 			continue
 		}
 
-		switch {
-		case update.Message != nil:
-			app.handleMessage(ctx, botID, bot, update.Message.Chat.ID, tgID, status, update)
-		case update.CallbackQuery != nil:
-			app.handleCallback(ctx, botID, bot, update.CallbackQuery, status)
-		}
+		app.dispatchUpdate(ctx, botID, bot, tgID, status, update)
 	}
 }
 
+func (app *BotApp) dispatchUpdate(ctx context.Context, botID string, bot *tgbotapi.BotAPI,
+	tgID int64, status string, update tgbotapi.Update) {
+
+	switch {
+	case update.Message != nil:
+		app.handleMessage(ctx, botID, bot, update.Message, tgID, status)
+	case update.CallbackQuery != nil:
+		app.handleCallback(ctx, botID, bot, update.CallbackQuery, status)
+	}
+}
+
+func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotapi.BotAPI,
+	msg *tgbotapi.Message, tgID int64, status string) {
+
+	chatID := msg.Chat.ID
+
+	switch status {
+	case "none":
+		menu := app.BuildSubscriptionMenu(ctx)
+		text := app.BuildSubscriptionText()
+		out := tgbotapi.NewMessage(chatID, text)
+		out.ReplyMarkup = menu
+		bot.Send(out)
+
+	case "pending":
+		bot.Send(tgbotapi.NewMessage(chatID, MsgPending))
+
+	case "expired":
+		menu := app.BuildSubscriptionMenu(ctx)
+		text := "⏳ Срок подписки истёк. Продли, чтобы снова пользоваться ботом!"
+		out := tgbotapi.NewMessage(chatID, text)
+		out.ReplyMarkup = menu
+		bot.Send(out)
+
+	case "active":
+		switch {
+		case msg.Voice != nil:
+			app.handleVoice(ctx, botID, bot, msg, tgID)
+		case len(msg.Photo) > 0:
+			app.handlePhoto(ctx, botID, bot, msg, tgID)
+		case msg.Text != "":
+			app.handleText(ctx, botID, bot, msg, tgID)
+		default:
+			bot.Send(tgbotapi.NewMessage(chatID, "📎 Отправь текст, голос или фото."))
+		}
+
+	default:
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Неизвестный статус подписки."))
+	}
+}
+
+// extractTelegramID — выбирает ID пользователя из Update
 func extractTelegramID(u tgbotapi.Update) int64 {
 	switch {
 	case u.Message != nil && u.Message.From != nil:
@@ -54,268 +95,21 @@ func extractTelegramID(u tgbotapi.Update) int64 {
 	}
 }
 
-func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotapi.BotAPI,
-	chatID, tgID int64, status string, update tgbotapi.Update) {
-
-	switch status {
-	case "none":
-		log.Printf("[bot_loop] no subscription botID=%s tgID=%d → show menu", botID, tgID)
-		menu := app.BuildSubscriptionMenu(ctx)
-		text := app.BuildSubscriptionText()
-		msg := tgbotapi.NewMessage(chatID, text)
-		msg.ReplyMarkup = menu
-		bot.Send(msg)
-		return
-
-	case "pending":
-		log.Printf("[bot_loop] pending botID=%s tgID=%d", botID, tgID)
-		msg := tgbotapi.NewMessage(chatID, MsgPending)
-		bot.Send(msg)
-		return
-
-	case "active":
-		log.Printf("[bot_loop] active botID=%s tgID=%d", botID, tgID)
-
-		msg := update.Message
-
-		// --- голосовое ---
-		if msg.Voice != nil {
-			if !app.checkVoiceAllowed(ctx, botID, tgID) {
-				bot.Send(tgbotapi.NewMessage(chatID, "🔇 В этом тарифе голос временно недоступен."))
-				return
-			}
-			handleVoice(ctx, app, bot, botID, chatID, tgID, msg)
-			return
-		}
-
-		// --- изображение ---
-		if len(msg.Photo) > 0 {
-			if !app.checkImageAllowed(ctx, botID, tgID) {
-				bot.Send(tgbotapi.NewMessage(chatID, "🖼 В этом тарифе разбор по фото недоступен."))
-				return
-			}
-			handlePhoto(ctx, app, bot, botID, chatID, tgID, msg)
-			return
-		}
-
-		// --- текст ---
-		if msg.Text == "" {
-			bot.Send(tgbotapi.NewMessage(chatID, "📎 Отправь текст, голос или фото."))
-			return
-		}
-
-		if !app.checkTextAllowed(ctx, botID, tgID) {
-			bot.Send(tgbotapi.NewMessage(chatID, "✏️ В этом тарифе текстовое общение недоступно."))
-			return
-		}
-
-		// сохраняем вопрос пользователя
-		if _, err := app.RecordService.AddText(ctx, botID, tgID, "user", msg.Text); err != nil {
-			log.Printf("[bot_loop] AddText user fail botID=%s tgID=%d err=%v", botID, tgID, err)
-		}
-
-		// единое ядро GPT — всегда текст
-		reply, err := app.AiService.GetReply(ctx, botID, tgID, msg.Text)
-		if err != nil {
-			log.Printf("[bot_loop] ai reply fail: %v", err)
-			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке запроса."))
-			return
-		}
-
-		// текст → текст (без озвучки)
-		bot.Send(tgbotapi.NewMessage(chatID, reply))
-
-		// сохраняем ответ репетитора
-		if _, err := app.RecordService.AddText(ctx, botID, tgID, "tutor", reply); err != nil {
-			log.Printf("[bot_loop] AddText tutor fail botID=%s tgID=%d err=%v", botID, tgID, err)
-		}
-
-	default:
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Неизвестный статус подписки."))
-	}
-}
-
-// --- голос ---
-func handleVoice(ctx context.Context, app *BotApp, bot *tgbotapi.BotAPI,
-	botID string, chatID, tgID int64, msg *tgbotapi.Message) {
-
-	fileID := msg.Voice.FileID
-	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
-	if err != nil {
-		log.Printf("[bot_loop] get voice file fail: %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось получить голосовое."))
-		return
-	}
-
-	url := file.Link(bot.Token)
-	resp, err := http.Get(url)
-	if err != nil {
-		log.Printf("[bot_loop] download voice fail: %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при загрузке голосового."))
-		return
-	}
-	defer resp.Body.Close()
-
-	path := fmt.Sprintf("/tmp/%s.ogg", fileID)
-	out, err := os.Create(path)
-	if err != nil {
-		log.Printf("[bot_loop] create tmp voice fail: %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке голосового."))
-		return
-	}
-	if _, err := io.Copy(out, resp.Body); err != nil {
-		log.Printf("[bot_loop] save tmp voice fail: %v", err)
-		out.Close()
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при сохранении голосового."))
-		return
-	}
-	out.Close()
-
-	// голос → текст
-	text, err := app.SpeechService.Transcribe(ctx, path)
-	if err != nil {
-		log.Printf("[bot_loop] transcribe fail: %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось распознать голос."))
-		return
-	}
-
-	// сохраняем текст пользователя
-	if _, err := app.RecordService.AddText(ctx, botID, tgID, "user", text); err != nil {
-		log.Printf("[bot_loop] AddText user (voice) fail botID=%s tgID=%d err=%v", botID, tgID, err)
-	}
-
-	// GPT по тексту
-	reply, err := app.AiService.GetReply(ctx, botID, tgID, text)
-	if err != nil {
-		log.Printf("[bot_loop] ai reply fail (voice): %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при ответе."))
-		return
-	}
-
-	// ответ → голос
-	outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
-	if err := app.SpeechService.Synthesize(ctx, reply, outVoice); err != nil {
-		log.Printf("[bot_loop] synth fail: %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, reply))
-		// даже если голос не получился, текстовый ответ всё равно сохраняем
-		if _, err := app.RecordService.AddText(ctx, botID, tgID, "tutor", reply); err != nil {
-			log.Printf("[bot_loop] AddText tutor (voice) fail botID=%s tgID=%d err=%v", botID, tgID, err)
-		}
-		return
-	}
-
-	voice := tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice))
-	bot.Send(voice)
-
-	// сохраняем ответ репетитора в текстовом виде
-	if _, err := app.RecordService.AddText(ctx, botID, tgID, "tutor", reply); err != nil {
-		log.Printf("[bot_loop] AddText tutor (voice) fail botID=%s tgID=%d err=%v", botID, tgID, err)
-	}
-}
-
-// --- фото ---
-func handlePhoto(ctx context.Context, app *BotApp, bot *tgbotapi.BotAPI,
-	botID string, chatID, tgID int64, msg *tgbotapi.Message) {
-
-	// выбираем фото лучшего качества
-	photo := msg.Photo[len(msg.Photo)-1]
-
-	// получаем файл из телеги
-	fileInfo, err := bot.GetFile(tgbotapi.FileConfig{FileID: photo.FileID})
-	if err != nil {
-		log.Printf("[bot_loop] get photo fail: %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось получить фото."))
-		return
-	}
-
-	// скачиваем из телеги
-	downloadURL := fileInfo.Link(bot.Token)
-	resp, err := http.Get(downloadURL)
-	if err != nil {
-		log.Printf("[bot_loop] download photo fail: %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка загрузки фото."))
-		return
-	}
-	defer resp.Body.Close()
-
-	// формируем имя файла для S3
-	filename := fmt.Sprintf("%s.jpg", photo.FileID)
-
-	// загружаем в S3
-	publicURL, err := app.S3Service.SaveImage(
-		ctx,
-		botID,
-		tgID,
-		resp.Body,
-		filename,
-		"image/jpeg",
-	)
-	if err != nil {
-		log.Printf("[bot_loop] s3 save fail: %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка хранения фото."))
-		return
-	}
-
-	// сохраняем в историю как текст (URL)
-	if _, err := app.RecordService.AddText(ctx, botID, tgID, "user", publicURL); err != nil {
-		log.Printf("[bot_loop] AddImage user fail: %v", err)
-	}
-
-	// формируем сообщение для GPT
-	msgForGpt := fmt.Sprintf("📷 Пользователь прислал изображение: %s", publicURL)
-
-	reply, err := app.AiService.GetReply(ctx, botID, tgID, msgForGpt)
-	if err != nil {
-		log.Printf("[bot_loop] ai reply fail (photo): %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки фото."))
-		return
-	}
-
-	// отправляем ответ пользователю
-	bot.Send(tgbotapi.NewMessage(chatID, reply))
-
-	// сохраняем ответ репетитора
-	if _, err := app.RecordService.AddText(ctx, botID, tgID, "tutor", reply); err != nil {
-		log.Printf("[bot_loop] AddText tutor (photo) fail: %v", err)
-	}
-}
-
-func (app *BotApp) handleCallback(ctx context.Context, botID string, bot *tgbotapi.BotAPI,
-	cb *tgbotapi.CallbackQuery, status string) {
-
-	tgID := cb.From.ID
-	chatID := cb.Message.Chat.ID
-	log.Printf("[bot_loop] callback botID=%s tgID=%d data=%s", botID, tgID, cb.Data)
-
-	switch status {
-	case "none":
-		paymentURL, err := app.SubscriptionService.Create(ctx, botID, tgID, cb.Data)
-		if err != nil {
-			log.Printf("[bot_loop] create payment fail botID=%s tgID=%d: %v", botID, tgID, err)
-			bot.Request(tgbotapi.NewCallback(cb.ID, "Ошибка оформления"))
-			msg := tgbotapi.NewMessage(chatID, "Произошла ошибка при создании оплаты, попробуй позже.")
-			bot.Send(msg)
-			return
-		}
-
-		bot.Request(tgbotapi.NewCallback(cb.ID, "Заявка принята"))
-		msg := tgbotapi.NewMessage(chatID,
-			fmt.Sprintf("✅ Заявка принята!\nДля завершения оплаты перейди по ссылке:\n%s", paymentURL))
-		bot.Send(msg)
-
-	case "pending", "active":
-		bot.Request(tgbotapi.NewCallback(cb.ID, "Подписка уже оформлена"))
-		msg := tgbotapi.NewMessage(chatID, MsgAlreadySubscribed)
-		bot.Send(msg)
-	}
-}
-
-// чекеры — заглушки, потом сюда заедет логика тарифов и минут
-func (app *BotApp) checkTextAllowed(ctx context.Context, botID string, tgID int64) bool {
-	return true
-}
-
 func (app *BotApp) checkVoiceAllowed(ctx context.Context, botID string, tgID int64) bool {
+	sub, err := app.SubscriptionService.Get(ctx, botID, tgID)
+	if err != nil {
+		log.Printf("[checkVoiceAllowed] Get fail: %v", err)
+		return false
+	}
+	if sub == nil {
+		return false
+	}
+	if sub.Status != "active" {
+		return false
+	}
+	if sub.VoiceMinutes <= 0 {
+		return false
+	}
 	return true
 }
 

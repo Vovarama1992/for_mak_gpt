@@ -126,3 +126,65 @@ func (r *recordRepo) ListUsers(ctx context.Context) ([]ports.UserBots, error) {
 	}
 	return result, nil
 }
+
+func (r *recordRepo) UpsertHistoryState(ctx context.Context, botID string, telegramID int64, lastN, totalTokens int) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO history_state (bot_id, telegram_id, last_n_records, total_tokens, updated_at)
+		VALUES ($1, $2, $3, $4, NOW())
+		ON CONFLICT (bot_id, telegram_id)
+		DO UPDATE SET last_n_records = $3, total_tokens = $4, updated_at = NOW()
+	`, botID, telegramID, lastN, totalTokens)
+	return err
+}
+
+func (r *recordRepo) GetHistoryState(ctx context.Context, botID string, telegramID int64) (int, int, error) {
+	var lastN, totalTokens int
+	err := r.db.QueryRowContext(ctx, `
+		SELECT last_n_records, total_tokens
+		FROM history_state
+		WHERE bot_id = $1 AND telegram_id = $2
+	`, botID, telegramID).Scan(&lastN, &totalTokens)
+	return lastN, totalTokens, err
+}
+
+func (r *recordRepo) GetLastNRecords(ctx context.Context, botID string, telegramID int64, n int) ([]ports.Record, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, telegram_id, bot_id, user_ref, role, record_type, text_content, image_url, created_at
+		FROM records
+		WHERE telegram_id = $1 AND bot_id = $2
+		ORDER BY created_at DESC
+		LIMIT $3
+	`, telegramID, botID, n)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []ports.Record
+	for rows.Next() {
+		var rec ports.Record
+		if err := rows.Scan(
+			&rec.ID,
+			&rec.TelegramID,
+			&rec.BotID,
+			&rec.UserRef,
+			&rec.Role,
+			&rec.Type,
+			&rec.Text,
+			&rec.ImageURL,
+			&rec.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		records = append(records, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// хронологический порядок
+	for i, j := 0, len(records)-1; i < j; i, j = i+1, j-1 {
+		records[i], records[j] = records[j], records[i]
+	}
+	return records, nil
+}

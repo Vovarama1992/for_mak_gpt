@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 
@@ -24,82 +25,60 @@ func NewAiService(client *OpenAIClient, recordSvc ports.RecordService, promptRep
 }
 
 func (s *AiService) GetReply(ctx context.Context, botID string, telegramID int64, userText string) (string, error) {
-	log.Printf("[ai] >>> START botID=%s telegramID=%d userText=%q", botID, telegramID, userText)
+	log.Printf("[ai] >>> START botID=%s telegramID=%d", botID, telegramID)
 
 	txt := strings.TrimSpace(userText)
-	if txt != "" {
-		if _, err := s.recordService.AddText(ctx, botID, telegramID, "user", txt); err != nil {
-			log.Printf("[ai] save user text fail: %v", err)
-		}
+	if txt == "" {
+		return "", fmt.Errorf("empty userText")
 	}
 
-	// грузим старую историю — но тримаем
-	history, err := s.recordService.GetHistory(ctx, botID, telegramID)
+	// 1) Берём готовую «вмещающуюся» историю
+	history, err := s.recordService.GetFittingHistory(ctx, botID, telegramID)
 	if err != nil {
 		log.Printf("[ai] history load fail: %v", err)
-		history = nil
 	}
 
-	// системный промпт
-	systemPrompt, err := s.promptRepo.GetByBotID(ctx, botID)
-	if err != nil || strings.TrimSpace(systemPrompt) == "" {
-		systemPrompt = "Ты доброжелательная девушка-репетитор. Отвечай понятно, логично и с лёгким воодушевлением."
+	// 2) Системный промпт
+	stylePrompt, err := s.promptRepo.GetByBotID(ctx, botID)
+	if err != nil || strings.TrimSpace(stylePrompt) == "" {
+		stylePrompt = "Ты дружелюбный логичный ассистент."
 	}
 
-	// ключевое правило – ВСЕГДА отвечать на последний вопрос, без перенаправлений
-	overridePrompt := "Важно: отвечай строго на ПОСЛЕДНИЙ вопрос пользователя, независимо от истории. Не предлагай меню, не перенаправляй, не упоминай 'профиль'. Просто дай лучший возможный ответ по теме вопроса."
+	// 3) Жёсткая инструкция
+	superPrompt := `У тебя есть промпт (стиль), история диалога и последнее сообщение. 
+Ответь строго на последнее сообщение, учитывая историю и стиль. `
 
-	messages := []openai.ChatCompletionMessage{
-		{Role: "system", Content: systemPrompt},
-		{Role: "system", Content: overridePrompt},
-	}
-
-	// берём до 10 последних текстовых сообщений
-	limit := 10
-	if len(history) > limit {
-		history = history[len(history)-limit:]
+	// === Формируем запрос ===
+	msg := []openai.ChatCompletionMessage{
+		{Role: "system", Content: superPrompt},
+		{Role: "system", Content: "Промпт: " + stylePrompt},
 	}
 
 	for _, r := range history {
-		if r.Type != "text" || r.Text == nil || strings.TrimSpace(*r.Text) == "" {
+		if r.Text == nil || strings.TrimSpace(*r.Text) == "" {
 			continue
 		}
 		role := "user"
 		if r.Role == "tutor" {
 			role = "assistant"
 		}
-		messages = append(messages, openai.ChatCompletionMessage{
+		msg = append(msg, openai.ChatCompletionMessage{
 			Role:    role,
-			Content: *r.Text,
+			Content: strings.TrimSpace(*r.Text),
 		})
 	}
 
-	// последний вопрос всегда в конце (самый важный)
-	messages = append(messages, openai.ChatCompletionMessage{
+	// 4) Последний запрос
+	msg = append(msg, openai.ChatCompletionMessage{
 		Role:    "user",
 		Content: txt,
 	})
 
-	log.Printf("[ai] sending %d messages to GPT", len(messages))
-
-	reply, err := s.openaiClient.GetCompletion(ctx, messages)
+	// 5) → GPT
+	reply, err := s.openaiClient.GetCompletion(ctx, msg)
 	if err != nil {
-		log.Printf("[ai] GPT error: %v", err)
 		return "", err
 	}
 
-	// сохраняем ответ
-	if _, err := s.recordService.AddText(ctx, botID, telegramID, "tutor", reply); err != nil {
-		log.Printf("[ai] save reply fail: %v", err)
-	}
-
-	log.Printf("[ai] <<< END botID=%s telegramID=%d", botID, telegramID)
 	return reply, nil
-}
-
-func safePtr(p *string) string {
-	if p == nil {
-		return "<nil>"
-	}
-	return *p
 }
