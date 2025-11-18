@@ -24,8 +24,7 @@ func (r *tariffRepo) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 			price,
 			duration_minutes,
 			voice_minutes,
-			description,
-			features
+			description
 		FROM tariff_plans
 		ORDER BY price ASC
 	`)
@@ -45,7 +44,6 @@ func (r *tariffRepo) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 			&t.DurationMinutes,
 			&t.VoiceMinutes,
 			&t.Description,
-			&t.Features,
 		); err != nil {
 			return nil, err
 		}
@@ -62,10 +60,9 @@ func (r *tariffRepo) Create(ctx context.Context, plan *ports.TariffPlan) (*ports
 			price,
 			duration_minutes,
 			voice_minutes,
-			description,
-			features
+			description
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING
 			id,
 			code,
@@ -73,8 +70,7 @@ func (r *tariffRepo) Create(ctx context.Context, plan *ports.TariffPlan) (*ports
 			price,
 			duration_minutes,
 			voice_minutes,
-			description,
-			features
+			description
 	`,
 		plan.Code,
 		plan.Name,
@@ -82,7 +78,6 @@ func (r *tariffRepo) Create(ctx context.Context, plan *ports.TariffPlan) (*ports
 		plan.DurationMinutes,
 		plan.VoiceMinutes,
 		plan.Description,
-		plan.Features,
 	)
 
 	var t ports.TariffPlan
@@ -94,7 +89,6 @@ func (r *tariffRepo) Create(ctx context.Context, plan *ports.TariffPlan) (*ports
 		&t.DurationMinutes,
 		&t.VoiceMinutes,
 		&t.Description,
-		&t.Features,
 	); err != nil {
 		return nil, err
 	}
@@ -111,8 +105,7 @@ func (r *tariffRepo) GetByID(ctx context.Context, id int) (*ports.TariffPlan, er
 			price,
 			duration_minutes,
 			voice_minutes,
-			description,
-			features
+			description
 		FROM tariff_plans
 		WHERE id = $1
 	`, id)
@@ -126,7 +119,6 @@ func (r *tariffRepo) GetByID(ctx context.Context, id int) (*ports.TariffPlan, er
 		&t.DurationMinutes,
 		&t.VoiceMinutes,
 		&t.Description,
-		&t.Features,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -146,9 +138,8 @@ func (r *tariffRepo) Update(ctx context.Context, plan *ports.TariffPlan) (*ports
 			price = $3,
 			duration_minutes = $4,
 			voice_minutes = $5,
-			description = $6,
-			features = $7
-		WHERE id = $8
+			description = $6
+		WHERE id = $7
 		RETURNING
 			id,
 			code,
@@ -156,8 +147,7 @@ func (r *tariffRepo) Update(ctx context.Context, plan *ports.TariffPlan) (*ports
 			price,
 			duration_minutes,
 			voice_minutes,
-			description,
-			features
+			description
 	`,
 		plan.Code,
 		plan.Name,
@@ -165,7 +155,6 @@ func (r *tariffRepo) Update(ctx context.Context, plan *ports.TariffPlan) (*ports
 		plan.DurationMinutes,
 		plan.VoiceMinutes,
 		plan.Description,
-		plan.Features,
 		plan.ID,
 	)
 
@@ -178,7 +167,6 @@ func (r *tariffRepo) Update(ctx context.Context, plan *ports.TariffPlan) (*ports
 		&t.DurationMinutes,
 		&t.VoiceMinutes,
 		&t.Description,
-		&t.Features,
 	); err != nil {
 		return nil, err
 	}
