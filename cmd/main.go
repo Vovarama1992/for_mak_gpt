@@ -14,6 +14,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/delivery"
 	"github.com/Vovarama1992/make_ziper/internal/domain"
 	"github.com/Vovarama1992/make_ziper/internal/infra"
+	"github.com/Vovarama1992/make_ziper/internal/prompts"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
 	"github.com/Vovarama1992/make_ziper/internal/telegram"
 	"github.com/go-chi/chi/v5"
@@ -55,7 +56,7 @@ func main() {
 	recordRepo := infra.NewRecordRepo(db)
 	subscriptionRepo := infra.NewSubscriptionRepo(db)
 	tariffRepo := infra.NewTariffRepo(db)
-	promptRepo := infra.NewPromptRepo(db)
+	promptRepo := prompts.NewRepo(db) // ← обновлено
 
 	// --- External clients ---
 	s3Client, err := infra.NewS3Client()
@@ -63,13 +64,9 @@ func main() {
 		log.Fatalf("failed to init s3 client: %v", err)
 	}
 
-	// --- Speech client (ElevenLabs) ---
+	// --- Speech client ---
 	from_speech := ai.NewOpenAIClient()
-
-	// TTS через ElevenLabs
 	to_speech := speech.NewElevenLabsClient()
-
-	// Единый сервис
 	speechService := speech.NewService(from_speech, to_speech)
 
 	// --- Services ---
@@ -77,8 +74,11 @@ func main() {
 	recordService := domain.NewRecordService(recordRepo, s3Service)
 	subscriptionService := domain.NewSubscriptionService(subscriptionRepo, tariffRepo)
 	tariffService := domain.NewTariffService(tariffRepo)
+
 	aiClient := ai.NewOpenAIClient()
 	aiService := ai.NewAiService(aiClient, recordService, promptRepo)
+
+	promptService := prompts.NewService(promptRepo) // ← обновлено
 
 	// --- Telegram bots ---
 	botApp := &telegram.BotApp{
@@ -87,7 +87,7 @@ func main() {
 		AiService:           aiService,
 		SpeechService:       speechService,
 		RecordService:       recordService,
-		S3Service:           s3Service, // ← ЭТОГО НЕ ХВАТАЛО
+		S3Service:           s3Service,
 	}
 	if err := botApp.InitBots(); err != nil {
 		log.Fatalf("failed to init telegram bots: %v", err)
@@ -97,14 +97,16 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
 
 	recordHandler := delivery.NewRecordHandler(recordService, zl)
 	subscriptionHandler := delivery.NewSubscriptionHandler(subscriptionService)
 	tariffHandler := delivery.NewTariffHandler(tariffService)
-	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler, tariffHandler)
+	promptHandler := prompts.NewHandler(promptService) // ← добавлено
+
+	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler, tariffHandler, promptHandler)
 
 	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)

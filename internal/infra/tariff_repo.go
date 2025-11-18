@@ -136,3 +136,61 @@ func (r *tariffRepo) GetByID(ctx context.Context, id int) (*ports.TariffPlan, er
 
 	return &t, nil
 }
+
+func (r *tariffRepo) Update(ctx context.Context, plan *ports.TariffPlan) (*ports.TariffPlan, error) {
+	row := r.db.QueryRowContext(ctx, `
+		UPDATE tariff_plans
+		SET
+			code = $1,
+			name = $2,
+			price = $3,
+			duration_minutes = $4,
+			voice_minutes = $5,
+			description = $6,
+			features = $7
+		WHERE id = $8
+		RETURNING
+			id,
+			code,
+			name,
+			price,
+			duration_minutes,
+			voice_minutes,
+			description,
+			features
+	`,
+		plan.Code,
+		plan.Name,
+		plan.Price,
+		plan.DurationMinutes,
+		plan.VoiceMinutes,
+		plan.Description,
+		plan.Features,
+		plan.ID,
+	)
+
+	var t ports.TariffPlan
+	if err := row.Scan(
+		&t.ID,
+		&t.Code,
+		&t.Name,
+		&t.Price,
+		&t.DurationMinutes,
+		&t.VoiceMinutes,
+		&t.Description,
+		&t.Features,
+	); err != nil {
+		return nil, err
+	}
+
+	return &t, nil
+}
+
+func (r *tariffRepo) Delete(ctx context.Context, id int) error {
+	_, err := r.db.ExecContext(ctx, `
+		DELETE FROM tariff_plans
+		WHERE id = $1
+	`, id)
+
+	return err
+}

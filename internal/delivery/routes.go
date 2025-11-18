@@ -4,15 +4,16 @@ import (
 	"time"
 
 	"github.com/Vovarama1992/go-utils/httputil"
+	"github.com/Vovarama1992/make_ziper/internal/prompts"
 	"github.com/go-chi/chi/v5"
 )
 
-// RegisterRoutes регистрирует все HTTP-маршруты приложения
 func RegisterRoutes(
 	r chi.Router,
 	h *RecordHandler,
 	hSubs *SubscriptionHandler,
 	hTariff *TariffHandler,
+	hPrompts *prompts.Handler,
 ) {
 	// --- записи ---
 	r.With(
@@ -30,15 +31,21 @@ func RegisterRoutes(
 		httputil.NewRateLimiter(60, time.Minute),
 	).Get("/history/{telegram_id}", h.GetHistory)
 
-	r.With(httputil.RecoverMiddleware).Get("/admin/users", h.ListUsers)
+	r.With(httputil.RecoverMiddleware).Get("/users", h.ListUsers)
 
 	// --- подписки ---
 	r.With(httputil.RecoverMiddleware).Post("/subscribe/create", hSubs.Create)
 	r.With(httputil.RecoverMiddleware).Post("/subscribe/activate", hSubs.Activate)
 	r.With(httputil.RecoverMiddleware).Get("/subscribe/status/{telegram_id}", hSubs.GetStatus)
-	r.With(httputil.RecoverMiddleware).Get("/admin/subscriptions", hSubs.ListAll)
+	r.With(httputil.RecoverMiddleware).Get("/subscriptions", hSubs.ListAll)
 
 	// --- тарифные планы ---
 	r.With(httputil.RecoverMiddleware).Get("/tariffs", hTariff.List)
 	r.With(httputil.RecoverMiddleware).Post("/tariffs", hTariff.Create)
+	r.With(httputil.RecoverMiddleware).Put("/tariffs/{id}", hTariff.Update)
+	r.With(httputil.RecoverMiddleware).Delete("/tariffs/{id}", hTariff.Delete)
+
+	// --- GPT промпты ---
+	r.With(httputil.RecoverMiddleware).Get("/prompts", hPrompts.List)
+	r.With(httputil.RecoverMiddleware).Put("/prompts/{bot_id}", hPrompts.Update)
 }

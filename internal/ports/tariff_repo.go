@@ -8,17 +8,18 @@ import (
 type TariffRepo interface {
 	ListAll(ctx context.Context) ([]*TariffPlan, error)
 	GetByID(ctx context.Context, id int) (*TariffPlan, error)
-
 	Create(ctx context.Context, plan *TariffPlan) (*TariffPlan, error)
+	Update(ctx context.Context, plan *TariffPlan) (*TariffPlan, error)
+	Delete(ctx context.Context, id int) error
 }
 
 type TariffService interface {
 	ListAll(ctx context.Context) ([]*TariffPlan, error)
 	GetByID(ctx context.Context, id int) (*TariffPlan, error)
-
 	Create(ctx context.Context, plan *TariffPlan) (*TariffPlan, error)
+	Update(ctx context.Context, plan *TariffPlan) (*TariffPlan, error)
+	Delete(ctx context.Context, id int) error
 }
-
 type TariffPlan struct {
 	ID              int             `json:"id"`
 	Code            string          `json:"code"`

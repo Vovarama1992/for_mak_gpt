@@ -25,3 +25,11 @@ func (s *TariffService) GetByID(ctx context.Context, id int) (*ports.TariffPlan,
 func (s *TariffService) Create(ctx context.Context, plan *ports.TariffPlan) (*ports.TariffPlan, error) {
 	return s.repo.Create(ctx, plan)
 }
+
+func (s *TariffService) Update(ctx context.Context, plan *ports.TariffPlan) (*ports.TariffPlan, error) {
+	return s.repo.Update(ctx, plan)
+}
+
+func (s *TariffService) Delete(ctx context.Context, id int) error {
+	return s.repo.Delete(ctx, id)
+}
