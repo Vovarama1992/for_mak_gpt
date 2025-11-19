@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/Vovarama1992/go-utils/httputil"
-	"github.com/Vovarama1992/make_ziper/internal/prompts"
+	"github.com/Vovarama1992/make_ziper/internal/bots"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -13,7 +13,7 @@ func RegisterRoutes(
 	h *RecordHandler,
 	hSubs *SubscriptionHandler,
 	hTariff *TariffHandler,
-	hPrompts *prompts.Handler,
+	hBots *bots.Handler,
 ) {
 	// --- записи ---
 	r.With(
@@ -45,7 +45,8 @@ func RegisterRoutes(
 	r.With(httputil.RecoverMiddleware).Put("/tariffs/{id}", hTariff.Update)
 	r.With(httputil.RecoverMiddleware).Delete("/tariffs/{id}", hTariff.Delete)
 
-	// --- GPT промпты ---
-	r.With(httputil.RecoverMiddleware).Get("/prompts", hPrompts.List)
-	r.With(httputil.RecoverMiddleware).Put("/prompts/{bot_id}", hPrompts.Update)
+	// --- бот-конфиги ---
+	r.With(httputil.RecoverMiddleware).Get("/bots", hBots.List)
+	r.With(httputil.RecoverMiddleware).Get("/bots/{bot_id}", hBots.Get)
+	r.With(httputil.RecoverMiddleware).Patch("/bots/{bot_id}", hBots.Update)
 }

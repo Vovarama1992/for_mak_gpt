@@ -25,9 +25,6 @@ func (app *BotApp) handleVoice(ctx context.Context, botID string, bot *tgbotapi.
 		return
 	}
 
-	// -----------------------
-	// асинхронное списание голосовых минут
-	// -----------------------
 	usedMinutes := float64(msg.Voice.Duration) / 60.0
 
 	go func() {
@@ -78,7 +75,6 @@ func (app *BotApp) handleVoice(ctx context.Context, botID string, bot *tgbotapi.
 
 	log.Printf("[voice] saved to %s", path)
 
-	// голос -> текст
 	text, err := app.SpeechService.Transcribe(ctx, path)
 	if err != nil {
 		log.Printf("[voice] transcribe fail botID=%s tgID=%d err=%v", botID, tgID, err)
@@ -91,7 +87,6 @@ func (app *BotApp) handleVoice(ctx context.Context, botID string, bot *tgbotapi.
 		log.Printf("[voice] AddText user fail botID=%s tgID=%d err=%v", botID, tgID, err)
 	}
 
-	// GPT ответ
 	reply, err := app.AiService.GetReply(ctx, botID, tgID, text, nil)
 	if err != nil {
 		log.Printf("[voice] ai fail botID=%s tgID=%d err=%v", botID, tgID, err)
@@ -100,9 +95,8 @@ func (app *BotApp) handleVoice(ctx context.Context, botID string, bot *tgbotapi.
 	}
 	log.Printf("[voice] gpt reply: %q", reply)
 
-	// ответ -> голос
 	outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
-	if err := app.SpeechService.Synthesize(ctx, reply, outVoice); err != nil {
+	if err := app.SpeechService.Synthesize(ctx, botID, reply, outVoice); err != nil {
 		log.Printf("[voice] synth fail botID=%s tgID=%d err=%v", botID, tgID, err)
 		bot.Send(tgbotapi.NewMessage(chatID, reply))
 		return

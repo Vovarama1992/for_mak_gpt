@@ -23,10 +23,19 @@ func NewOpenAIClient() *OpenAIClient {
 	}
 }
 
-func (c *OpenAIClient) GetCompletion(ctx context.Context, messages []openai.ChatCompletionMessage) (string, error) {
-	model := os.Getenv("OPENAI_MODEL")
+// ---------------------
+//
+//	CHAT COMPLETION
+//
+// ---------------------
+func (c *OpenAIClient) GetCompletion(
+	ctx context.Context,
+	messages []openai.ChatCompletionMessage,
+	model string,
+) (string, error) {
+
 	if model == "" {
-		model = openai.GPT4oMini // дефолт
+		model = openai.GPT4oMini
 	}
 
 	log.Printf("[openai] using model: %s, messages: %d", model, len(messages))
@@ -38,6 +47,7 @@ func (c *OpenAIClient) GetCompletion(ctx context.Context, messages []openai.Chat
 	if err != nil {
 		return "", err
 	}
+
 	if len(resp.Choices) == 0 {
 		return "", nil
 	}
@@ -45,6 +55,11 @@ func (c *OpenAIClient) GetCompletion(ctx context.Context, messages []openai.Chat
 	return resp.Choices[0].Message.Content, nil
 }
 
+// ---------------------
+//
+//	WHISPER
+//
+// ---------------------
 func (c *OpenAIClient) Transcribe(ctx context.Context, filePath string) (string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -60,7 +75,6 @@ func (c *OpenAIClient) Transcribe(ctx context.Context, filePath string) (string,
 
 	resp, err := c.client.CreateTranscription(ctx, req)
 	if err != nil {
-		// Детализированный вывод ошибки
 		log.Printf("[whisper] transcription error: %+v", err)
 		return "", fmt.Errorf("whisper error: %w", err)
 	}

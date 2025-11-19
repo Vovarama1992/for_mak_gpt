@@ -12,7 +12,6 @@ import (
 
 type ElevenLabsClient struct {
 	apiKey string
-	voice  string
 }
 
 func NewElevenLabsClient() *ElevenLabsClient {
@@ -20,19 +19,15 @@ func NewElevenLabsClient() *ElevenLabsClient {
 	if key == "" {
 		panic("ELEVENLABS_API_KEY not set")
 	}
-	voice := os.Getenv("ELEVENLABS_VOICE_ID")
-	if voice == "" {
-		voice = "21m00Tcm4TlvDq8ikWAM"
-	}
+
 	return &ElevenLabsClient{
 		apiKey: key,
-		voice:  voice,
 	}
 }
 
-// === TEXT → SPEECH ===
-func (c *ElevenLabsClient) Synthesize(ctx context.Context, text, outPath string) error {
-	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", c.voice)
+// TEXT → SPEECH
+func (c *ElevenLabsClient) Synthesize(ctx context.Context, voiceID, text, outPath string) error {
+	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
 
 	payload := []byte(fmt.Sprintf(`{"text": %q}`, text))
 

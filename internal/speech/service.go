@@ -2,29 +2,34 @@ package speech
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/Vovarama1992/make_ziper/internal/bots"
 )
 
 // === Интерфейсы ===
 
-type FromSpeechlient interface {
+type FromSpeechClient interface {
 	Transcribe(ctx context.Context, filePath string) (string, error)
 }
 
 type ToSpeechClient interface {
-	Synthesize(ctx context.Context, text, outPath string) error
+	Synthesize(ctx context.Context, voiceID, text, outPath string) error
 }
 
-// === Единый сервис (и для стт и для ттс) ===
+// === Сервис речи ===
 
 type Service struct {
-	stt FromSpeechlient
-	tts ToSpeechClient
+	stt         FromSpeechClient
+	tts         ToSpeechClient
+	botsService bots.Service
 }
 
-func NewService(stt FromSpeechlient, tts ToSpeechClient) *Service {
+func NewService(stt FromSpeechClient, tts ToSpeechClient, botsSvc bots.Service) *Service {
 	return &Service{
-		stt: stt,
-		tts: tts,
+		stt:         stt,
+		tts:         tts,
+		botsService: botsSvc,
 	}
 }
 
@@ -32,6 +37,17 @@ func (s *Service) Transcribe(ctx context.Context, filePath string) (string, erro
 	return s.stt.Transcribe(ctx, filePath)
 }
 
-func (s *Service) Synthesize(ctx context.Context, text, outPath string) error {
-	return s.tts.Synthesize(ctx, text, outPath)
+func (s *Service) Synthesize(ctx context.Context, botID string, text, outPath string) error {
+	cfg, err := s.botsService.Get(ctx, botID)
+	if err != nil {
+		return fmt.Errorf("load bot config: %w", err)
+	}
+	if cfg == nil {
+		return fmt.Errorf("bot config not found for %s", botID)
+	}
+	if cfg.VoiceID == "" {
+		return fmt.Errorf("empty voice_id for %s", botID)
+	}
+
+	return s.tts.Synthesize(ctx, cfg.VoiceID, text, outPath)
 }

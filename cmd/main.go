@@ -11,10 +11,10 @@ import (
 	"github.com/Vovarama1992/go-utils/httputil"
 	"github.com/Vovarama1992/go-utils/logger"
 	"github.com/Vovarama1992/make_ziper/internal/ai"
+	"github.com/Vovarama1992/make_ziper/internal/bots"
 	"github.com/Vovarama1992/make_ziper/internal/delivery"
 	"github.com/Vovarama1992/make_ziper/internal/domain"
 	"github.com/Vovarama1992/make_ziper/internal/infra"
-	"github.com/Vovarama1992/make_ziper/internal/prompts"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
 	"github.com/Vovarama1992/make_ziper/internal/telegram"
 	"github.com/go-chi/chi/v5"
@@ -52,35 +52,29 @@ func main() {
 	defer baseLogger.Sync()
 	zl := logger.NewZapLogger(baseLogger.Sugar())
 
-	// --- Repos ---
 	recordRepo := infra.NewRecordRepo(db)
 	subscriptionRepo := infra.NewSubscriptionRepo(db)
 	tariffRepo := infra.NewTariffRepo(db)
-	promptRepo := prompts.NewRepo(db) // ← обновлено
+	botRepo := bots.NewRepo(db)
 
-	// --- External clients ---
 	s3Client, err := infra.NewS3Client()
 	if err != nil {
 		log.Fatalf("failed to init s3 client: %v", err)
 	}
 
-	// --- Speech client ---
 	from_speech := ai.NewOpenAIClient()
 	to_speech := speech.NewElevenLabsClient()
-	speechService := speech.NewService(from_speech, to_speech)
 
-	// --- Services ---
 	s3Service := domain.NewS3Service(s3Client)
 	recordService := domain.NewRecordService(recordRepo, s3Service)
 	subscriptionService := domain.NewSubscriptionService(subscriptionRepo, tariffRepo)
 	tariffService := domain.NewTariffService(tariffRepo)
 
 	aiClient := ai.NewOpenAIClient()
-	aiService := ai.NewAiService(aiClient, recordService, promptRepo)
+	botService := bots.NewService(botRepo)
+	aiService := ai.NewAiService(aiClient, recordService, botRepo)
+	speechService := speech.NewService(from_speech, to_speech, botService)
 
-	promptService := prompts.NewService(promptRepo) // ← обновлено
-
-	// --- Telegram bots ---
 	botApp := &telegram.BotApp{
 		SubscriptionService: subscriptionService,
 		TariffService:       tariffService,
@@ -88,12 +82,12 @@ func main() {
 		SpeechService:       speechService,
 		RecordService:       recordService,
 		S3Service:           s3Service,
+		BotsService:         botService, // ← критичное добавление
 	}
 	if err := botApp.InitBots(); err != nil {
 		log.Fatalf("failed to init telegram bots: %v", err)
 	}
 
-	// --- Router ---
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -104,7 +98,7 @@ func main() {
 	recordHandler := delivery.NewRecordHandler(recordService, zl)
 	subscriptionHandler := delivery.NewSubscriptionHandler(subscriptionService)
 	tariffHandler := delivery.NewTariffHandler(tariffService)
-	promptHandler := prompts.NewHandler(promptService) // ← добавлено
+	promptHandler := bots.NewHandler(botService)
 
 	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler, tariffHandler, promptHandler)
 
