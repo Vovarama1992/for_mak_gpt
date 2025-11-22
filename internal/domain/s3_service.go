@@ -7,15 +7,20 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 )
 
 type s3Service struct {
-	client ports.S3Client
+	client   ports.S3Client
+	notifier error_notificator.Notificator
 }
 
-func NewS3Service(client ports.S3Client) ports.S3Service {
-	return &s3Service{client: client}
+func NewS3Service(client ports.S3Client, n error_notificator.Notificator) ports.S3Service {
+	return &s3Service{
+		client:   client,
+		notifier: n,
+	}
 }
 
 // ObjectKey — путь в бакете
@@ -25,7 +30,7 @@ func (s *s3Service) ObjectKey(telegramID int64, filename string) string {
 	return fmt.Sprintf("%d/%s/%s", telegramID, date, clean)
 }
 
-// SaveImage — теперь принимает io.Reader (а не multipart.File)
+// SaveImage — принимает io.Reader
 func (s *s3Service) SaveImage(
 	ctx context.Context,
 	botID string,
@@ -36,11 +41,19 @@ func (s *s3Service) SaveImage(
 ) (string, error) {
 
 	if botID == "" {
-		return "", fmt.Errorf("botID required")
+		err := fmt.Errorf("botID required")
+		s.notifier.Notify(ctx, "unknown", err, "S3Service: botID пустой")
+		return "", err
 	}
 
 	key := s.ObjectKey(telegramID, filename)
 
-	// size = -1 → S3 клиент сам определит
-	return s.client.PutObject(ctx, botID, key, file, -1, contentType)
+	url, err := s.client.PutObject(ctx, botID, key, file, -1, contentType)
+	if err != nil {
+		s.notifier.Notify(ctx, botID, err,
+			fmt.Sprintf("Ошибка загрузки в S3: tg=%d key=%s", telegramID, key))
+		return "", err
+	}
+
+	return url, nil
 }

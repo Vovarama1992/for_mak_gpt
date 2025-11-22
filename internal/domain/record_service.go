@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 
+	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	tiktoken "github.com/pkoukk/tiktoken-go"
 )
@@ -13,22 +14,29 @@ import (
 type recordService struct {
 	repo      ports.RecordRepo
 	s3service ports.S3Service
+	notifier  error_notificator.Notificator
 }
 
-func NewRecordService(repo ports.RecordRepo, s3 ports.S3Service) ports.RecordService {
-	return &recordService{repo: repo, s3service: s3}
+func NewRecordService(repo ports.RecordRepo, s3 ports.S3Service, n error_notificator.Notificator) ports.RecordService {
+	return &recordService{
+		repo:      repo,
+		s3service: s3,
+		notifier:  n,
+	}
 }
 
 func (s *recordService) AddText(ctx context.Context, botID string, telegramID int64, role, text string) (int64, error) {
 	id, err := s.repo.CreateText(ctx, botID, telegramID, role, text)
 	if err != nil {
+		s.notifier.Notify(ctx, botID, err,
+			fmt.Sprintf("Ошибка записи текста в history: tg=%d", telegramID))
 		return 0, err
 	}
 
-	// в фоне пересчитываем историю — не блокируем обработку
 	go func() {
 		if err := s.RecalcHistoryState(context.Background(), botID, telegramID); err != nil {
-			log.Printf("[history] recalc fail: %v", err)
+			s.notifier.Notify(context.Background(), botID, err,
+				fmt.Sprintf("Ошибка перерасчёта истории: tg=%d", telegramID))
 		}
 	}()
 
@@ -42,17 +50,22 @@ func (s *recordService) AddImage(
 
 	publicURL, err := s.s3service.SaveImage(ctx, botID, telegramID, file, filename, contentType)
 	if err != nil {
+		s.notifier.Notify(ctx, botID, err,
+			fmt.Sprintf("Ошибка загрузки фото в S3: tg=%d filename=%s", telegramID, filename))
 		return 0, "", err
 	}
 
 	id, err := s.repo.CreateImage(ctx, botID, telegramID, role, publicURL)
 	if err != nil {
+		s.notifier.Notify(ctx, botID, err,
+			fmt.Sprintf("Ошибка записи image record: tg=%d url=%s", telegramID, publicURL))
 		return 0, "", err
 	}
 
 	go func() {
 		if err := s.RecalcHistoryState(context.Background(), botID, telegramID); err != nil {
-			log.Printf("[history] recalc fail: %v", err)
+			s.notifier.Notify(context.Background(), botID, err,
+				fmt.Sprintf("Ошибка перерасчёта истории после фото: tg=%d", telegramID))
 		}
 	}()
 
@@ -73,15 +86,15 @@ func (s *recordService) RecalcHistoryState(ctx context.Context, botID string, te
 		return err
 	}
 
-	limit := 90000 // потом вынести в конфиг
-	totalTokens := 0
-	lastN := 0
-
 	enc, err := tiktoken.EncodingForModel("gpt-4o-mini")
 	if err != nil {
 		log.Printf("tokenizer init fail: %v", err)
 		return err
 	}
+
+	limit := 90000
+	totalTokens := 0
+	lastN := 0
 
 	for i := len(records) - 1; i >= 0; i-- {
 		tokens := countTokens(records[i], enc)
@@ -96,7 +109,6 @@ func (s *recordService) RecalcHistoryState(ctx context.Context, botID string, te
 		return fmt.Errorf("update history state fail: %w", err)
 	}
 
-	log.Printf("[history] bot=%s tg=%d lastN=%d tokens=%d", botID, telegramID, lastN, totalTokens)
 	return nil
 }
 
@@ -105,24 +117,17 @@ func countTokens(r ports.Record, enc *tiktoken.Tiktoken) int {
 	case r.Type == "text" && r.Text != nil:
 		return len(enc.Encode(*r.Text, nil, nil))
 	case r.Type == "image":
-		return 60 // за картинку GPT обычно добавляет маленький overhead
-	default:
-		return 0
+		return 60
 	}
+	return 0
 }
 
 func (s *recordService) GetFittingHistory(ctx context.Context, botID string, telegramID int64) ([]ports.Record, error) {
 	lastN, _, err := s.repo.GetHistoryState(ctx, botID, telegramID)
 	if err != nil {
+		s.notifier.Notify(ctx, botID, err,
+			fmt.Sprintf("Ошибка получения history_state: tg=%d", telegramID))
 		return nil, err
 	}
 	return s.repo.GetLastNRecords(ctx, botID, telegramID, lastN)
-}
-
-// estimateTokens — можно прикинуть символы / 4, либо использовать реальный токенайзер
-func estimateTokens(r ports.Record) int {
-	if r.Text == nil || *r.Text == "" {
-		return 0
-	}
-	return len(*r.Text) / 4 // грубая оценка: 1 токен ~ 4 символа
 }

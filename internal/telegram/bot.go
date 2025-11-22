@@ -43,12 +43,18 @@ func (app *BotApp) dispatchUpdate(ctx context.Context, botID string, bot *tgbota
 	}
 }
 
-func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotapi.BotAPI,
-	msg *tgbotapi.Message, tgID int64, status string) {
-
+func (app *BotApp) handleMessage(
+	ctx context.Context,
+	botID string,
+	bot *tgbotapi.BotAPI,
+	msg *tgbotapi.Message,
+	tgID int64,
+	status string,
+) {
 	chatID := msg.Chat.ID
 
 	switch status {
+
 	case "none":
 		menu := app.BuildSubscriptionMenu(ctx)
 		text := app.BuildSubscriptionText()
@@ -67,13 +73,34 @@ func (app *BotApp) handleMessage(ctx context.Context, botID string, bot *tgbotap
 		bot.Send(out)
 
 	case "active":
+
+		if _, ok := app.shownKeyboard[botID]; !ok {
+			app.shownKeyboard[botID] = make(map[int64]bool)
+		}
+
+		if !app.shownKeyboard[botID][tgID] {
+			msgOut := tgbotapi.NewMessage(chatID, "Готово 👍")
+			msgOut.ReplyMarkup = buildVoiceKeyboard()
+			bot.Send(msgOut)
+
+			app.shownKeyboard[botID][tgID] = true
+		}
+
+		if msg.Text == "🕒 Остаток минут" {
+			app.ShowVoiceMinutesScreen(ctx, botID, bot, tgID, chatID)
+			return
+		}
+
 		switch {
 		case msg.Voice != nil:
 			app.handleVoice(ctx, botID, bot, msg, tgID)
+
 		case len(msg.Photo) > 0:
 			app.handlePhoto(ctx, botID, bot, msg, tgID)
+
 		case msg.Text != "":
 			app.handleText(ctx, botID, bot, msg, tgID)
+
 		default:
 			bot.Send(tgbotapi.NewMessage(chatID, "📎 Отправь текст, голос или фото."))
 		}

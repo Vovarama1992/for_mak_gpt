@@ -6,6 +6,7 @@ import (
 
 	"github.com/Vovarama1992/make_ziper/internal/ai"
 	"github.com/Vovarama1992/make_ziper/internal/bots"
+	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -14,19 +15,21 @@ import (
 type BotApp struct {
 	SubscriptionService ports.SubscriptionService
 	TariffService       ports.TariffService
-	AiService           ai.Service
+	AiService           *ai.AiService
 	SpeechService       *speech.Service
 	RecordService       ports.RecordService
 	S3Service           ports.S3Service
 
-	BotsService bots.Service // ← добавлено
-	bots        map[string]*tgbotapi.BotAPI
+	BotsService   bots.Service
+	ErrorNotify   error_notificator.Notificator
+	bots          map[string]*tgbotapi.BotAPI
+	shownKeyboard map[string]map[int64]bool
 }
 
 func (app *BotApp) InitBots() error {
 	app.bots = make(map[string]*tgbotapi.BotAPI)
+	app.shownKeyboard = make(map[string]map[int64]bool)
 
-	// читаем все боты из БД
 	cfgs, err := app.BotsService.ListAll(context.Background())
 	if err != nil {
 		return err
@@ -50,4 +53,8 @@ func (app *BotApp) InitBots() error {
 	}
 
 	return nil
+}
+
+func (app *BotApp) GetBots() map[string]*tgbotapi.BotAPI {
+	return app.bots
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/bots"
 	"github.com/Vovarama1992/make_ziper/internal/delivery"
 	"github.com/Vovarama1992/make_ziper/internal/domain"
+	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
 	"github.com/Vovarama1992/make_ziper/internal/infra"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
 	"github.com/Vovarama1992/make_ziper/internal/telegram"
@@ -65,16 +66,31 @@ func main() {
 	from_speech := ai.NewOpenAIClient()
 	to_speech := speech.NewElevenLabsClient()
 
-	s3Service := domain.NewS3Service(s3Client)
-	recordService := domain.NewRecordService(recordRepo, s3Service)
-	subscriptionService := domain.NewSubscriptionService(subscriptionRepo, tariffRepo)
 	tariffService := domain.NewTariffService(tariffRepo)
 
 	aiClient := ai.NewOpenAIClient()
 	botService := bots.NewService(botRepo)
-	aiService := ai.NewAiService(aiClient, recordService, botRepo)
-	speechService := speech.NewService(from_speech, to_speech, botService)
 
+	// === ERROR NOTIFICATOR ===
+	errorInfra := error_notificator.NewInfra(nil)
+	errorService := error_notificator.NewService(errorInfra)
+
+	// === SPEECH SERVICE ===
+	speechService := speech.NewService(
+		from_speech,
+		to_speech,
+		botService,
+		errorService, // <-- 🔥 передаем нотификатор
+	)
+
+	// === AU SERVICE ===
+	s3Service := domain.NewS3Service(s3Client, errorService)
+	recordService := domain.NewRecordService(recordRepo, s3Service, errorService)
+
+	aiService := ai.NewAiService(aiClient, recordService, botRepo, errorService)
+	subscriptionService := domain.NewSubscriptionService(subscriptionRepo, tariffRepo, errorService)
+
+	// === TELEGRAM BOTS ===
 	botApp := &telegram.BotApp{
 		SubscriptionService: subscriptionService,
 		TariffService:       tariffService,
@@ -82,12 +98,18 @@ func main() {
 		SpeechService:       speechService,
 		RecordService:       recordService,
 		S3Service:           s3Service,
-		BotsService:         botService, // ← критичное добавление
+		BotsService:         botService,
+		ErrorNotify:         errorService, // ← ВАЖНО
 	}
+
 	if err := botApp.InitBots(); err != nil {
 		log.Fatalf("failed to init telegram bots: %v", err)
 	}
 
+	// передаём карту bots в нотификатор
+	errorInfra.SetBots(botApp.GetBots())
+
+	// === HTTP SERVER ===
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
