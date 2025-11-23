@@ -8,7 +8,10 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-const adminChatID int64 = 1139929360
+const (
+	adminChatID1 int64 = 1139929360
+	adminChatID2 int64 = 6789440333
+)
 
 type Infra struct {
 	bots map[string]*tgbotapi.BotAPI
@@ -37,12 +40,14 @@ func (i *Infra) Notify(ctx context.Context, botID string, err error, details str
 		details,
 	)
 
-	msg := tgbotapi.NewMessage(adminChatID, text)
+	admins := []int64{adminChatID1, adminChatID2}
 
-	_, sendErr := bot.Send(msg)
-	if sendErr != nil {
-		log.Printf("[error_notificator] send fail: %v", sendErr)
-		return sendErr
+	for _, chatID := range admins {
+		_, sendErr := bot.Send(tgbotapi.NewMessage(chatID, text))
+		if sendErr != nil {
+			log.Printf("[error_notificator] send fail to %d: %v", chatID, sendErr)
+			return sendErr
+		}
 	}
 
 	return nil
