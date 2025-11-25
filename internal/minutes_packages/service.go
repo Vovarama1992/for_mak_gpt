@@ -57,7 +57,7 @@ func (s *service) CreatePayment(
 	packageID int64,
 ) (string, error) {
 
-	// 1. пакет
+	// 1. Пакет минут
 	pkg, err := s.repo.GetByID(ctx, packageID)
 	if err != nil {
 		return "", fmt.Errorf("load minute package: %w", err)
@@ -78,7 +78,7 @@ func (s *service) CreatePayment(
 		apiURL = strings.TrimRight(apiURL, "/") + "/v3/payments"
 	}
 
-	// === 3. body (с receipt — фикс) ===
+	// --- Главное: чек + customer + payment_subject ---
 	body := map[string]any{
 		"amount": map[string]any{
 			"value":    fmt.Sprintf("%.2f", pkg.Price),
@@ -86,29 +86,28 @@ func (s *service) CreatePayment(
 		},
 		"capture": true,
 		"description": fmt.Sprintf(
-			"Minute package '%s' (%d min)",
-			pkg.Name, pkg.Minutes,
+			"Minute package '%s' (%d min)", pkg.Name, pkg.Minutes,
 		),
-
 		"confirmation": map[string]any{
 			"type":       "redirect",
 			"return_url": "https://aifulls.com/success.html",
 		},
 
-		// === ДОБАВЛЕННЫЙ ЧЕК (ОБЯЗАТЕЛЕН) ===
 		"receipt": map[string]any{
 			"customer": map[string]any{
-				"phone": "79384095762",
+				"phone": "+79384095762",
 			},
 			"items": []map[string]any{
 				{
-					"description": fmt.Sprintf("Пакет минут '%s' (%d мин)", pkg.Name, pkg.Minutes),
+					"description": pkg.Name,
 					"quantity":    "1",
 					"amount": map[string]any{
 						"value":    fmt.Sprintf("%.2f", pkg.Price),
 						"currency": "RUB",
 					},
-					"vat_code": 1,
+					"vat_code":        1,
+					"payment_subject": "service",
+					"payment_mode":    "full_payment",
 				},
 			},
 		},
@@ -121,8 +120,8 @@ func (s *service) CreatePayment(
 		},
 	}
 
-	// === 4. execute ===
 	reqBody, _ := json.Marshal(body)
+
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
 		return "", fmt.Errorf("build request: %w", err)
@@ -132,6 +131,7 @@ func (s *service) CreatePayment(
 	req.Header.Set("Idempotence-Key", fmt.Sprintf("%d", time.Now().UnixNano()))
 	req.Header.Set("Content-Type", "application/json")
 
+	// 3. execute
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("request to yookassa: %w", err)
@@ -143,7 +143,7 @@ func (s *service) CreatePayment(
 		return "", fmt.Errorf("yookassa returned %d: %s", resp.StatusCode, string(raw))
 	}
 
-	// === 5. decode ===
+	// 4. decode
 	var yresp struct {
 		ID           string `json:"id"`
 		Confirmation struct {
