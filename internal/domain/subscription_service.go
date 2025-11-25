@@ -87,10 +87,10 @@ func (s *SubscriptionService) Create(
 	}
 
 	if customerPhone == "" {
-		customerPhone = "79000000000" // безопасный дефолт
+		customerPhone = "79000000000"
 	}
 
-	// 3. Тело запроса — КОРРЕКТНОЕ
+	// 3. Формируем тело запроса — ИСПРАВЛЕНО payment_mode
 	body := map[string]any{
 		"amount": map[string]any{
 			"value":    fmt.Sprintf("%.2f", plan.Price),
@@ -112,7 +112,7 @@ func (s *SubscriptionService) Create(
 					"quantity":        "1.00",
 					"amount":          map[string]any{"value": fmt.Sprintf("%.2f", plan.Price), "currency": "RUB"},
 					"payment_subject": "service",
-					"payment_method":  "full_prepayment",
+					"payment_mode":    "full_prepayment", // ← FIX
 					"vat_code":        1,
 				},
 			},
@@ -159,7 +159,6 @@ func (s *SubscriptionService) Create(
 			URL string `json:"confirmation_url"`
 		} `json:"confirmation"`
 	}
-
 	if err := json.Unmarshal(raw, &yresp); err != nil {
 		s.notifier.Notify(ctx, botID, err, "Невалидный JSON от YooKassa")
 		return "", fmt.Errorf("decode yookassa: %w", err)
@@ -171,7 +170,7 @@ func (s *SubscriptionService) Create(
 		return "", err
 	}
 
-	// 6. Сохраняем в БД
+	// 6. Сохраняем
 	now := time.Now()
 	sub := &ports.Subscription{
 		BotID:             botID,
