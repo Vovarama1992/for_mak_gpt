@@ -98,17 +98,17 @@ func (s *service) CreatePayment(
 		// === ДОБАВЛЕННЫЙ ЧЕК (ОБЯЗАТЕЛЕН) ===
 		"receipt": map[string]any{
 			"customer": map[string]any{
-				"full_name": fmt.Sprintf("Telegram %d", telegramID),
+				"phone": "79384095762",
 			},
 			"items": []map[string]any{
 				{
-					"description": pkg.Name,
+					"description": fmt.Sprintf("Пакет минут '%s' (%d мин)", pkg.Name, pkg.Minutes),
 					"quantity":    "1",
 					"amount": map[string]any{
 						"value":    fmt.Sprintf("%.2f", pkg.Price),
 						"currency": "RUB",
 					},
-					"vat_code": 1, // без НДС
+					"vat_code": 1,
 				},
 			},
 		},
