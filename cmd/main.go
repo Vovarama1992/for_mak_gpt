@@ -105,17 +105,17 @@ func main() {
 	)
 
 	// === telegram bots ===
-	botApp := &telegram.BotApp{
-		SubscriptionService:  subscriptionService,
-		TariffService:        tariffService,
-		MinutePackageService: minutePackageService,
-		AiService:            aiService,
-		SpeechService:        speechService,
-		RecordService:        recordService,
-		S3Service:            s3Service,
-		BotsService:          botService,
-		ErrorNotify:          errorService,
-	}
+	botApp := telegram.NewBotApp(
+		subscriptionService,
+		tariffService,
+		minutePackageService,
+		aiService,
+		speechService,
+		recordService,
+		s3Service,
+		botService,
+		errorService,
+	)
 
 	if err := botApp.InitBots(); err != nil {
 		log.Fatalf("failed to init telegram bots: %v", err)

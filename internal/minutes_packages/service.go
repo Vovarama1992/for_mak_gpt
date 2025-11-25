@@ -78,18 +78,41 @@ func (s *service) CreatePayment(
 		apiURL = strings.TrimRight(apiURL, "/") + "/v3/payments"
 	}
 
-	// 3. body
+	// === 3. body (с receipt — фикс) ===
 	body := map[string]any{
 		"amount": map[string]any{
 			"value":    fmt.Sprintf("%.2f", pkg.Price),
 			"currency": "RUB",
 		},
-		"capture":     true,
-		"description": fmt.Sprintf("Minute package '%s' (%d min)", pkg.Name, pkg.Minutes),
+		"capture": true,
+		"description": fmt.Sprintf(
+			"Minute package '%s' (%d min)",
+			pkg.Name, pkg.Minutes,
+		),
+
 		"confirmation": map[string]any{
 			"type":       "redirect",
 			"return_url": "https://aifulls.com/success.html",
 		},
+
+		// === ДОБАВЛЕННЫЙ ЧЕК (ОБЯЗАТЕЛЕН) ===
+		"receipt": map[string]any{
+			"customer": map[string]any{
+				"full_name": fmt.Sprintf("Telegram %d", telegramID),
+			},
+			"items": []map[string]any{
+				{
+					"description": pkg.Name,
+					"quantity":    "1",
+					"amount": map[string]any{
+						"value":    fmt.Sprintf("%.2f", pkg.Price),
+						"currency": "RUB",
+					},
+					"vat_code": 1, // без НДС
+				},
+			},
+		},
+
 		"metadata": map[string]any{
 			"bot_id":       botID,
 			"telegram_id":  fmt.Sprintf("%d", telegramID),
@@ -98,6 +121,7 @@ func (s *service) CreatePayment(
 		},
 	}
 
+	// === 4. execute ===
 	reqBody, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
@@ -108,7 +132,6 @@ func (s *service) CreatePayment(
 	req.Header.Set("Idempotence-Key", fmt.Sprintf("%d", time.Now().UnixNano()))
 	req.Header.Set("Content-Type", "application/json")
 
-	// 4. execute
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("request to yookassa: %w", err)
@@ -120,7 +143,7 @@ func (s *service) CreatePayment(
 		return "", fmt.Errorf("yookassa returned %d: %s", resp.StatusCode, string(raw))
 	}
 
-	// 5. decode
+	// === 5. decode ===
 	var yresp struct {
 		ID           string `json:"id"`
 		Confirmation struct {

@@ -28,6 +28,34 @@ type BotApp struct {
 	shownKeyboard map[string]map[int64]bool
 }
 
+func NewBotApp(
+	subs ports.SubscriptionService,
+	tariffs ports.TariffService,
+	minutePkg mpkg.MinutePackageService,
+	ai *ai.AiService,
+	speech *speech.Service,
+	record ports.RecordService,
+	s3 ports.S3Service,
+	bots bots.Service,
+	errNotify error_notificator.Notificator,
+) *BotApp {
+	if minutePkg == nil {
+		panic("MinutePackageService is nil")
+	}
+
+	return &BotApp{
+		SubscriptionService:  subs,
+		TariffService:        tariffs,
+		MinutePackageService: minutePkg,
+		AiService:            ai,
+		SpeechService:        speech,
+		RecordService:        record,
+		S3Service:            s3,
+		BotsService:          bots,
+		ErrorNotify:          errNotify,
+	}
+}
+
 func (app *BotApp) InitBots() error {
 	app.bots = make(map[string]*tgbotapi.BotAPI)
 	app.shownKeyboard = make(map[string]map[int64]bool)
