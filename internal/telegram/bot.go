@@ -79,7 +79,7 @@ func (app *BotApp) handleMessage(
 		}
 
 		if !app.shownKeyboard[botID][tgID] {
-			msgOut := tgbotapi.NewMessage(chatID, "Готово 👍")
+			msgOut := tgbotapi.NewMessage(chatID, "")
 			msgOut.ReplyMarkup = buildVoiceKeyboard()
 			bot.Send(msgOut)
 

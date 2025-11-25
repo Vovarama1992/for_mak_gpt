@@ -42,12 +42,17 @@ func NewSubscriptionService(
 // ==================================================
 // CREATE
 // ==================================================
-func (s *SubscriptionService) Create(ctx context.Context, botID string, telegramID int64, planCode string) (string, error) {
+func (s *SubscriptionService) Create(
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+	planCode string,
+) (string, error) {
 
-	// 1. Находим тариф
+	// 1. Ищем тариф
 	tariffs, err := s.tariffRepo.ListAll(ctx)
 	if err != nil {
-		s.notifier.Notify(ctx, botID, err, "Ошибка чтения тарифов при создании подписки")
+		s.notifier.Notify(ctx, botID, err, "Ошибка чтения тарифов (подписка)")
 		return "", fmt.Errorf("list tariffs: %w", err)
 	}
 
@@ -69,41 +74,61 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 	apiURL := os.Getenv("YOOKASSA_API_URL")
 	shopID := os.Getenv("YOOKASSA_SHOP_ID")
 	secret := os.Getenv("YOOKASSA_SECRET_KEY")
+	customerPhone := os.Getenv("YOOKASSA_CUSTOMER_PHONE")
 
 	if apiURL == "" || shopID == "" || secret == "" {
-		err := fmt.Errorf("missing Yookassa ENV variables")
+		err := fmt.Errorf("missing yookassa ENV variables")
 		s.notifier.Notify(ctx, botID, err,
-			"Отсутствуют переменные окружения для YooKassa (YOOKASSA_API_URL / SHOP_ID / SECRET)")
+			"Переменные окружения YooKassa отсутствуют")
 		return "", err
 	}
 	if !strings.Contains(apiURL, "/v3/payments") {
 		apiURL = strings.TrimRight(apiURL, "/") + "/v3/payments"
 	}
 
-	// 3. Формируем запрос
+	if customerPhone == "" {
+		customerPhone = "79000000000" // безопасный дефолт
+	}
+
+	// 3. Тело запроса — КОРРЕКТНОЕ
 	body := map[string]any{
 		"amount": map[string]any{
 			"value":    fmt.Sprintf("%.2f", plan.Price),
 			"currency": "RUB",
 		},
 		"capture":     true,
-		"description": fmt.Sprintf("Subscription %s for user %d", plan.Code, telegramID),
+		"description": fmt.Sprintf("Subscription '%s' (user %d)", plan.Code, telegramID),
 		"confirmation": map[string]any{
 			"type":       "redirect",
 			"return_url": "https://aifulls.com/success.html",
+		},
+		"receipt": map[string]any{
+			"customer": map[string]any{
+				"phone": customerPhone,
+			},
+			"items": []map[string]any{
+				{
+					"description":     fmt.Sprintf("Subscription %s", plan.Code),
+					"quantity":        "1.00",
+					"amount":          map[string]any{"value": fmt.Sprintf("%.2f", plan.Price), "currency": "RUB"},
+					"payment_subject": "service",
+					"payment_method":  "full_prepayment",
+					"vat_code":        1,
+				},
+			},
 		},
 		"metadata": map[string]any{
 			"bot_id":       botID,
 			"telegram_id":  fmt.Sprintf("%d", telegramID),
 			"payment_type": "subscription",
+			"plan_code":    plan.Code,
 		},
 	}
 
 	reqBody, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
-		s.notifier.Notify(ctx, botID, err,
-			"Ошибка формирования запроса в YooKassa при создании подписки")
+		s.notifier.Notify(ctx, botID, err, "Ошибка формирования HTTP-запроса в YooKassa")
 		return "", fmt.Errorf("build request: %w", err)
 	}
 
@@ -111,11 +136,10 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 	req.Header.Set("Idempotence-Key", fmt.Sprintf("%d", time.Now().UnixNano()))
 	req.Header.Set("Content-Type", "application/json")
 
-	// 4. Вызов YooKassa
+	// 4. Выполняем запрос
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		s.notifier.Notify(ctx, botID, err,
-			"Ошибка сети при обращении к YooKassa (подписка не создана)")
+		s.notifier.Notify(ctx, botID, err, "Ошибка сети при обращении к YooKassa")
 		return "", fmt.Errorf("yookassa request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -124,31 +148,30 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		err := fmt.Errorf("yookassa returned %d: %s", resp.StatusCode, string(raw))
 		s.notifier.Notify(ctx, botID, err,
-			fmt.Sprintf("YooKassa отклонила запрос (код %d)", resp.StatusCode))
+			fmt.Sprintf("YooKassa отклонила подписку (код %d)", resp.StatusCode))
 		return "", err
 	}
 
-	// 5. Декодируем
+	// 5. Парсим JSON
 	var yresp struct {
 		ID           string `json:"id"`
 		Confirmation struct {
 			URL string `json:"confirmation_url"`
 		} `json:"confirmation"`
 	}
+
 	if err := json.Unmarshal(raw, &yresp); err != nil {
-		s.notifier.Notify(ctx, botID, err,
-			"YooKassa вернула невалидный JSON")
+		s.notifier.Notify(ctx, botID, err, "Невалидный JSON от YooKassa")
 		return "", fmt.Errorf("decode yookassa: %w", err)
 	}
 
 	if yresp.ID == "" || yresp.Confirmation.URL == "" {
 		err := fmt.Errorf("invalid yookassa response: %s", string(raw))
-		s.notifier.Notify(ctx, botID, err,
-			"От YooKassa пришёл пустой ответ без URL оплаты")
+		s.notifier.Notify(ctx, botID, err, "Пустой ответ от YooKassa")
 		return "", err
 	}
 
-	// 6. Сохраняем подписку
+	// 6. Сохраняем в БД
 	now := time.Now()
 	sub := &ports.Subscription{
 		BotID:             botID,
@@ -161,8 +184,7 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 	}
 
 	if err := s.repo.Create(ctx, sub); err != nil {
-		s.notifier.Notify(ctx, botID, err,
-			"Не удалось создать запись подписки в БД")
+		s.notifier.Notify(ctx, botID, err, "Ошибка сохранения подписки в БД")
 		return "", fmt.Errorf("create subscription: %w", err)
 	}
 
