@@ -54,24 +54,72 @@ func (h *SubscriptionHandler) Activate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Юкасса всегда передаёт payment_id в поле object.id
-	object, ok := body["object"].(map[string]any)
+	// Юкасса всегда отдаёт объект в body["object"]
+	obj, ok := body["object"].(map[string]any)
 	if !ok {
 		http.Error(w, "missing object", http.StatusBadRequest)
 		return
 	}
-	paymentID, _ := object["id"].(string)
+
+	// payment id
+	paymentID, _ := obj["id"].(string)
 	if paymentID == "" {
 		http.Error(w, "missing payment_id", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.service.Activate(r.Context(), paymentID); err != nil {
-		http.Error(w, "failed to activate subscription: "+err.Error(), http.StatusInternalServerError)
+	// metadata
+	meta, _ := obj["metadata"].(map[string]any)
+	if meta == nil {
+		http.Error(w, "missing metadata", http.StatusBadRequest)
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]any{"status": "activated"})
+	paymentType, _ := meta["payment_type"].(string)
+	botID, _ := meta["bot_id"].(string)
+	telegramStr, _ := meta["telegram_id"].(string)
+	packageStr, _ := meta["package_id"].(string)
+
+	// разбор telegram_id
+	var telegramID int64
+	if telegramStr != "" {
+		telegramID, _ = strconv.ParseInt(telegramStr, 10, 64)
+	}
+
+	// разбор package_id
+	var packageID int64
+	if packageStr != "" {
+		packageID, _ = strconv.ParseInt(packageStr, 10, 64)
+	}
+
+	// --- роутинг по типу платежа ---
+	switch paymentType {
+
+	case "subscription":
+		// активируем обычную подписку
+		if err := h.service.Activate(r.Context(), paymentID); err != nil {
+			http.Error(w, "failed to activate subscription: "+err.Error(), 500)
+			return
+		}
+
+	case "minute_package":
+		// покупка минут в активную подписку
+		if err := h.service.AddMinutesFromPackage(
+			r.Context(),
+			botID,
+			telegramID,
+			packageID,
+		); err != nil {
+			http.Error(w, "failed to add minutes: "+err.Error(), 500)
+			return
+		}
+
+	default:
+		http.Error(w, "unknown payment_type", 400)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 }
 
 // GET /subscribe/status/{telegram_id}?bot_id=...

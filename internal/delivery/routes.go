@@ -14,6 +14,7 @@ func RegisterRoutes(
 	hSubs *SubscriptionHandler,
 	hTariff *TariffHandler,
 	hBots *bots.Handler,
+	hPkg *MinutePackageHandler, // ← добавили
 ) {
 	// --- записи ---
 	r.With(
@@ -49,4 +50,11 @@ func RegisterRoutes(
 	r.With(httputil.RecoverMiddleware).Get("/bots", hBots.List)
 	r.With(httputil.RecoverMiddleware).Get("/bots/{bot_id}", hBots.Get)
 	r.With(httputil.RecoverMiddleware).Patch("/bots/{bot_id}", hBots.Update)
+
+	// --- пакеты минут ---
+	r.With(httputil.RecoverMiddleware).Get("/minute-packages", hPkg.List)
+	r.With(httputil.RecoverMiddleware).Post("/minute-packages", hPkg.Create)
+	r.With(httputil.RecoverMiddleware).Get("/minute-packages/{id}", hPkg.Get)
+	r.With(httputil.RecoverMiddleware).Patch("/minute-packages/{id}", hPkg.Update)
+	r.With(httputil.RecoverMiddleware).Delete("/minute-packages/{id}", hPkg.Delete)
 }

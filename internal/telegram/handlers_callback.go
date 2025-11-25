@@ -4,23 +4,73 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func (app *BotApp) handleCallback(ctx context.Context, botID string, bot *tgbotapi.BotAPI,
-	cb *tgbotapi.CallbackQuery, status string) {
-
+func (app *BotApp) handleCallback(
+	ctx context.Context,
+	botID string,
+	bot *tgbotapi.BotAPI,
+	cb *tgbotapi.CallbackQuery,
+	status string,
+) {
 	tgID := cb.From.ID
 	chatID := cb.Message.Chat.ID
 	data := cb.Data
 
 	log.Printf("[callback] botID=%s tgID=%d data=%s", botID, tgID, data)
 
+	// ---------------------------
+	// 1) Покупка минут — показать список
+	// ---------------------------
+	if data == "buy_voice" {
+		menu := app.BuildMinutePackagesMenu(ctx)
+		msg := tgbotapi.NewMessage(chatID, "Выбери пакет минут:")
+		msg.ReplyMarkup = menu
+		bot.Send(msg)
+		return
+	}
+
+	// ---------------------------
+	// 2) Пользователь выбрал конкретный пакет минут: pkg_{id}
+	// ---------------------------
+	if strings.HasPrefix(data, "pkg_") {
+		idStr := strings.TrimPrefix(data, "pkg_")
+		id, _ := strconv.ParseInt(idStr, 10, 64)
+
+		pkg, err := app.MinutePackageService.GetByID(ctx, id)
+		if err != nil || pkg == nil || !pkg.Active {
+			bot.Request(tgbotapi.NewCallback(cb.ID, "Ошибка"))
+			bot.Send(tgbotapi.NewMessage(chatID, "❗ Пакет недоступен."))
+			return
+		}
+
+		// создаём платёж (метод появится позже)
+		payURL, err := app.MinutePackageService.CreatePayment(ctx, botID, tgID, pkg.ID)
+		if err != nil {
+			app.ErrorNotify.Notify(ctx, botID, err,
+				fmt.Sprintf("Ошибка создания платежа за пакет минут (%d)", id))
+
+			bot.Request(tgbotapi.NewCallback(cb.ID, "Ошибка"))
+			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось создать оплату. Попробуй позже."))
+			return
+		}
+
+		bot.Request(tgbotapi.NewCallback(cb.ID, "Открываю оплату"))
+		bot.Send(tgbotapi.NewMessage(chatID,
+			fmt.Sprintf("🔄 Для оплаты перейди по ссылке:\n%s", payURL)))
+		return
+	}
+
+	// ---------------------------
+	// 3) Подписки (старые тарифы)
+	// ---------------------------
 	switch status {
 
 	case "none":
-		// пользователь выбирает тариф
 		paymentURL, err := app.SubscriptionService.Create(ctx, botID, tgID, data)
 		if err != nil {
 			log.Printf("[callback] create payment fail: %v", err)
@@ -45,19 +95,16 @@ func (app *BotApp) handleCallback(ctx context.Context, botID string, bot *tgbota
 		return
 
 	case "pending":
-		// платеж уже создан, но не оплачен
 		bot.Request(tgbotapi.NewCallback(cb.ID, "Платёж уже создан"))
 		bot.Send(tgbotapi.NewMessage(chatID, "⏳ Ожидается подтверждение оплаты."))
 		return
 
 	case "active":
-		// активный подписчик кликает на кнопки тарифов
 		bot.Request(tgbotapi.NewCallback(cb.ID, "Уже подписан"))
 		bot.Send(tgbotapi.NewMessage(chatID, MsgAlreadySubscribed))
 		return
 
 	default:
-		// неизвестный статус (вообще не должен случаться)
 		err := fmt.Errorf("unexpected status '%s' for callback '%s'", status, data)
 		app.ErrorNotify.Notify(
 			ctx,

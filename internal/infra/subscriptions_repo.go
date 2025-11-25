@@ -190,3 +190,19 @@ func (r *subscriptionRepo) UseVoiceMinutes(ctx context.Context, botID string, tg
 	n, _ := res.RowsAffected()
 	return n > 0, nil
 }
+
+func (r *subscriptionRepo) AddVoiceMinutes(
+	ctx context.Context,
+	botID string,
+	tgID int64,
+	minutes float64,
+) error {
+	_, err := r.db.ExecContext(ctx, `
+        UPDATE subscriptions
+        SET voice_minutes = voice_minutes + $3,
+            updated_at = NOW()
+        WHERE bot_id = $1 AND telegram_id = $2
+    `, botID, tgID, minutes)
+
+	return err
+}

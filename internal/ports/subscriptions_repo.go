@@ -26,6 +26,7 @@ type SubscriptionRepo interface {
 	UpdateStatus(ctx context.Context, id int64, status string) error
 	ListAll(ctx context.Context) ([]*Subscription, error)
 	UseVoiceMinutes(ctx context.Context, botID string, tgID int64, used float64) (bool, error)
+	AddVoiceMinutes(ctx context.Context, botID string, tgID int64, minutes float64) error
 
 	// добавили voiceMinutes
 	Activate(ctx context.Context, id int64, startedAt, expiresAt time.Time, voiceMinutes float64) error

@@ -14,6 +14,13 @@ type SubscriptionService interface {
 
 	Get(ctx context.Context, botID string, telegramID int64) (*Subscription, error)
 
+	AddMinutesFromPackage(
+		ctx context.Context,
+		botID string,
+		telegramID int64,
+		packageID int64,
+	) error
+
 	// списание голосовых минут. ok=false, если не хватило
 	UseVoiceMinutes(ctx context.Context, botID string, telegramID int64, used float64) (ok bool, err error)
 

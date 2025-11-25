@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
+	"github.com/Vovarama1992/make_ziper/internal/minutes_packages"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 )
 
@@ -20,17 +21,19 @@ type SubscriptionService struct {
 	tariffRepo ports.TariffRepo
 	httpClient *http.Client
 	notifier   error_notificator.Notificator
+	minuteSvc  minutes_packages.MinutePackageService
 }
 
 func NewSubscriptionService(
 	repo ports.SubscriptionRepo,
 	tariffRepo ports.TariffRepo,
+	minuteSvc minutes_packages.MinutePackageService,
 	notifier error_notificator.Notificator,
 ) ports.SubscriptionService {
-
 	return &SubscriptionService{
 		repo:       repo,
 		tariffRepo: tariffRepo,
+		minuteSvc:  minuteSvc,
 		notifier:   notifier,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
@@ -90,8 +93,9 @@ func (s *SubscriptionService) Create(ctx context.Context, botID string, telegram
 			"return_url": "https://aifulls.com/success.html",
 		},
 		"metadata": map[string]any{
-			"bot_id":      botID,
-			"telegram_id": fmt.Sprintf("%d", telegramID),
+			"bot_id":       botID,
+			"telegram_id":  fmt.Sprintf("%d", telegramID),
+			"payment_type": "subscription",
 		},
 	}
 
@@ -252,4 +256,23 @@ func (s *SubscriptionService) UseVoiceMinutes(ctx context.Context, botID string,
 			fmt.Sprintf("Ошибка списания голосовых минут (%.2f)", used))
 	}
 	return ok, err
+}
+
+func (s *SubscriptionService) AddMinutesFromPackage(
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+	packageID int64,
+) error {
+
+	pkg, err := s.minuteSvc.GetByID(ctx, packageID)
+	if err != nil {
+		return err
+	}
+	if pkg == nil || !pkg.Active {
+		return fmt.Errorf("invalid minute package: %d", packageID)
+	}
+
+	// теперь используем repo только для изменения подписки:
+	return s.repo.AddVoiceMinutes(ctx, botID, telegramID, float64(pkg.Minutes))
 }

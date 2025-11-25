@@ -16,6 +16,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/domain"
 	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
 	"github.com/Vovarama1992/make_ziper/internal/infra"
+	"github.com/Vovarama1992/make_ziper/internal/minutes_packages"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
 	"github.com/Vovarama1992/make_ziper/internal/telegram"
 	"github.com/go-chi/chi/v5"
@@ -53,44 +54,57 @@ func main() {
 	defer baseLogger.Sync()
 	zl := logger.NewZapLogger(baseLogger.Sugar())
 
+	// === repos ===
 	recordRepo := infra.NewRecordRepo(db)
 	subscriptionRepo := infra.NewSubscriptionRepo(db)
 	tariffRepo := infra.NewTariffRepo(db)
 	botRepo := bots.NewRepo(db)
+	minutePackageRepo := minutes_packages.NewMinutePackageRepo(db)
 
+	// === S3 ===
 	s3Client, err := infra.NewS3Client()
 	if err != nil {
 		log.Fatalf("failed to init s3 client: %v", err)
 	}
 
+	// === clients ===
 	from_speech := ai.NewOpenAIClient()
 	to_speech := speech.NewElevenLabsClient()
-
-	tariffService := domain.NewTariffService(tariffRepo)
-
 	aiClient := ai.NewOpenAIClient()
 	botService := bots.NewService(botRepo)
 
-	// === ERROR NOTIFICATOR ===
+	// === services ===
+	tariffService := domain.NewTariffService(tariffRepo)
+	minutePackageService := minutes_packages.NewService(minutePackageRepo)
+
+	// === error notificator ===
 	errorInfra := error_notificator.NewInfra(nil)
 	errorService := error_notificator.NewService(errorInfra)
 
-	// === SPEECH SERVICE ===
+	// === speech ===
 	speechService := speech.NewService(
 		from_speech,
 		to_speech,
 		botService,
-		errorService, // <-- 🔥 передаем нотификатор
+		errorService,
 	)
 
-	// === AU SERVICE ===
+	// === S3 + record ===
 	s3Service := domain.NewS3Service(s3Client, errorService)
 	recordService := domain.NewRecordService(recordRepo, s3Service, errorService)
 
+	// === AI ===
 	aiService := ai.NewAiService(aiClient, recordService, botRepo, errorService)
-	subscriptionService := domain.NewSubscriptionService(subscriptionRepo, tariffRepo, errorService)
 
-	// === TELEGRAM BOTS ===
+	// === subscriptions ===
+	subscriptionService := domain.NewSubscriptionService(
+		subscriptionRepo,
+		tariffRepo,
+		minutePackageService,
+		errorService,
+	)
+
+	// === telegram bots ===
 	botApp := &telegram.BotApp{
 		SubscriptionService: subscriptionService,
 		TariffService:       tariffService,
@@ -99,17 +113,16 @@ func main() {
 		RecordService:       recordService,
 		S3Service:           s3Service,
 		BotsService:         botService,
-		ErrorNotify:         errorService, // ← ВАЖНО
+		ErrorNotify:         errorService,
 	}
 
 	if err := botApp.InitBots(); err != nil {
 		log.Fatalf("failed to init telegram bots: %v", err)
 	}
 
-	// передаём карту bots в нотификатор
 	errorInfra.SetBots(botApp.GetBots())
 
-	// === HTTP SERVER ===
+	// === HTTP server ===
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -121,8 +134,16 @@ func main() {
 	subscriptionHandler := delivery.NewSubscriptionHandler(subscriptionService)
 	tariffHandler := delivery.NewTariffHandler(tariffService)
 	promptHandler := bots.NewHandler(botService)
+	minutePackageHandler := delivery.NewMinutePackageHandler(minutePackageService)
 
-	delivery.RegisterRoutes(r, recordHandler, subscriptionHandler, tariffHandler, promptHandler)
+	delivery.RegisterRoutes(
+		r,
+		recordHandler,
+		subscriptionHandler,
+		tariffHandler,
+		promptHandler,
+		minutePackageHandler,
+	)
 
 	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
