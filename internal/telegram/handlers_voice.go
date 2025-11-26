@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Vovarama1992/make_ziper/internal/speech"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -93,9 +94,18 @@ func (app *BotApp) handleVoice(ctx context.Context, botID string, bot *tgbotapi.
 			"Ошибка записи текста пользователя в историю диалога")
 	}
 
+	// === 💭 показать "думаю..." ===
+	thinkingMsg := tgbotapi.NewMessage(chatID, "💭 Думаю...")
+	sentThinking, _ := bot.Send(thinkingMsg)
+
+	// === 🤖 GPT ===
 	reply, err := app.AiService.GetReply(ctx, botID, tgID, text, nil)
+
+	// === ❌ удалить "думаю..." ===
+	delReq := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
+	bot.Request(delReq)
+
 	if err != nil {
-		// AiService сам шлёт уведомление
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при ответе."))
 		return
 	}
@@ -108,6 +118,23 @@ func (app *BotApp) handleVoice(ctx context.Context, botID string, bot *tgbotapi.
 		return
 	}
 	defer os.Remove(outVoice)
+
+	// === 🕒 списываем минуты за TTS (по длительности mp3) ===
+	if durSec, err := speech.AudioDuration(outVoice); err == nil {
+		usedReplyMinutes := durSec / 60.0
+
+		go func() {
+			ok, err := app.SubscriptionService.UseVoiceMinutes(ctx, botID, tgID, usedReplyMinutes)
+			if err != nil {
+				app.ErrorNotify.Notify(ctx, botID, err,
+					fmt.Sprintf("Ошибка списания минут за TTS ответ: tg=%d", tgID))
+				return
+			}
+			if !ok {
+				log.Printf("[voice] async: no voice minutes left for TTS reply tgID=%d", tgID)
+			}
+		}()
+	}
 
 	voice := tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice))
 	if _, err := bot.Send(voice); err != nil {

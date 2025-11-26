@@ -56,11 +56,29 @@ func (app *BotApp) handleMessage(
 	switch status {
 
 	case "none":
-		menu := app.BuildSubscriptionMenu(ctx)
-		text := app.BuildSubscriptionText()
-		out := tgbotapi.NewMessage(chatID, text)
-		out.ReplyMarkup = menu
-		bot.Send(out)
+
+		// если юзер нажал "Старт" — показываем меню подписок
+		if msg.Text == "▶️ Старт" {
+			menu := app.BuildSubscriptionMenu(ctx)
+			text := app.BuildSubscriptionText()
+			out := tgbotapi.NewMessage(chatID, text)
+			out.ReplyMarkup = menu
+			bot.Send(out)
+			return
+		}
+
+		// первый заход — показываем кнопку "Старт"
+		startBtn := tgbotapi.NewReplyKeyboard(
+			tgbotapi.NewKeyboardButtonRow(
+				tgbotapi.NewKeyboardButton("▶️ Старт"),
+			),
+		)
+		startBtn.ResizeKeyboard = true
+
+		welcome := tgbotapi.NewMessage(chatID, "Добро пожаловать! Нажми «Старт», чтобы выбрать тариф.")
+		welcome.ReplyMarkup = startBtn
+		bot.Send(welcome)
+		return
 
 	case "pending":
 		bot.Send(tgbotapi.NewMessage(chatID, MsgPending))

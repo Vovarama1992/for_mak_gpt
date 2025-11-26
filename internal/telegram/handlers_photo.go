@@ -108,9 +108,18 @@ func (app *BotApp) handlePhoto(
 		)
 	}
 
-	// === 5. GPT запрос ===
+	// === 💭 5. Показываем "думаю..." ===
+	thinkingMsg := tgbotapi.NewMessage(chatID, "💭 Думаю...")
+	sentThinking, _ := bot.Send(thinkingMsg)
+
+	// === 🤖 6. GPT запрос ===
 	gptInput := fmt.Sprintf("📷 Пользователь прислал изображение: %s", publicURL)
 	reply, err := app.AiService.GetReply(ctx, botID, tgID, gptInput, &publicURL)
+
+	// === ❌ удаляем сообщение "думаю..." ===
+	delReq := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
+	bot.Request(delReq)
+
 	if err != nil {
 		log.Printf("[photo] ai fail: %v", err)
 
@@ -130,7 +139,7 @@ func (app *BotApp) handlePhoto(
 
 	log.Printf("[photo] ai_reply=%q", reply)
 
-	// === 6. Отправляем ответ пользователю ===
+	// === 7. Отправляем ответ пользователю ===
 	if _, err := bot.Send(tgbotapi.NewMessage(chatID, reply)); err != nil {
 		log.Printf("[photo] send reply fail: %v", err)
 
@@ -146,7 +155,7 @@ func (app *BotApp) handlePhoto(
 		return
 	}
 
-	// === 7. Записываем в историю tutor ===
+	// === 8. Записываем в историю (tutor) ===
 	if _, err := app.RecordService.AddText(ctx, botID, tgID, "tutor", reply); err != nil {
 		log.Printf("[photo] AddText tutor fail: %v", err)
 
