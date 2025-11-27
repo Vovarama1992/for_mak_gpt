@@ -57,7 +57,6 @@ func (app *BotApp) handleMessage(
 
 	case "none":
 
-		// если юзер нажал "Старт" — показываем меню подписок
 		if msg.Text == "▶️ Старт" {
 			menu := app.BuildSubscriptionMenu(ctx)
 			text := app.BuildSubscriptionText()
@@ -67,7 +66,6 @@ func (app *BotApp) handleMessage(
 			return
 		}
 
-		// первый заход — показываем кнопку "Старт"
 		startBtn := tgbotapi.NewReplyKeyboard(
 			tgbotapi.NewKeyboardButtonRow(
 				tgbotapi.NewKeyboardButton("▶️ Старт"),
@@ -75,13 +73,15 @@ func (app *BotApp) handleMessage(
 		)
 		startBtn.ResizeKeyboard = true
 
-		welcome := tgbotapi.NewMessage(chatID, "Добро пожаловать! Нажми «Старт», чтобы выбрать тариф.")
+		welcome := tgbotapi.NewMessage(chatID,
+			"Добро пожаловать! Нажми «Старт», чтобы выбрать тариф.")
 		welcome.ReplyMarkup = startBtn
 		bot.Send(welcome)
 		return
 
 	case "pending":
 		bot.Send(tgbotapi.NewMessage(chatID, MsgPending))
+		return
 
 	case "expired":
 		menu := app.BuildSubscriptionMenu(ctx)
@@ -89,20 +89,14 @@ func (app *BotApp) handleMessage(
 		out := tgbotapi.NewMessage(chatID, text)
 		out.ReplyMarkup = menu
 		bot.Send(out)
+		return
 
 	case "active":
 
-		if _, ok := app.shownKeyboard[botID]; !ok {
-			app.shownKeyboard[botID] = make(map[int64]bool)
-		}
-
-		if !app.shownKeyboard[botID][tgID] {
-			msgOut := tgbotapi.NewMessage(chatID, "")
-			msgOut.ReplyMarkup = buildVoiceKeyboard()
-			bot.Send(msgOut)
-
-			app.shownKeyboard[botID][tgID] = true
-		}
+		// 🔥 ВСЕГДА отправляем клавиатуру Остаток минут
+		msgOut := tgbotapi.NewMessage(chatID, "")
+		msgOut.ReplyMarkup = buildVoiceKeyboard()
+		bot.Send(msgOut)
 
 		if msg.Text == "🕒 Остаток минут" {
 			app.ShowVoiceMinutesScreen(ctx, botID, bot, tgID, chatID)
@@ -123,8 +117,11 @@ func (app *BotApp) handleMessage(
 			bot.Send(tgbotapi.NewMessage(chatID, "📎 Отправь текст, голос или фото."))
 		}
 
+		return
+
 	default:
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Неизвестный статус подписки."))
+		return
 	}
 }
 
