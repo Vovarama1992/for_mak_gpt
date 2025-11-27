@@ -53,7 +53,6 @@ func (app *BotApp) handleMessage(
 ) {
 	chatID := msg.Chat.ID
 
-	// 🔥 ВАЖНЕЙШИЙ ЛОГ
 	log.Printf("[handleMessage] botID=%s tgID=%d status=%s text=%q",
 		botID, tgID, status, msg.Text)
 
@@ -97,7 +96,8 @@ func (app *BotApp) handleMessage(
 
 	case "active":
 
-		msgOut := tgbotapi.NewMessage(chatID, "")
+		// 🔥 ключевой фикс — текст не пустой
+		msgOut := tgbotapi.NewMessage(chatID, "Выбери действие:")
 		msgOut.ReplyMarkup = buildVoiceKeyboard()
 		bot.Send(msgOut)
 

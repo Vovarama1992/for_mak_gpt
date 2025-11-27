@@ -122,12 +122,16 @@ func countTokens(r ports.Record, enc *tiktoken.Tiktoken) int {
 	return 0
 }
 
-func (s *recordService) GetFittingHistory(ctx context.Context, botID string, telegramID int64) ([]ports.Record, error) {
+func (s *recordService) GetFittingHistory(
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+) ([]ports.Record, error) {
+
 	lastN, _, err := s.repo.GetHistoryState(ctx, botID, telegramID)
 	if err != nil {
-		s.notifier.Notify(ctx, botID, err,
-			fmt.Sprintf("Ошибка получения history_state: tg=%d", telegramID))
 		return nil, err
 	}
+
 	return s.repo.GetLastNRecords(ctx, botID, telegramID, lastN)
 }
