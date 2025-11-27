@@ -53,6 +53,10 @@ func (app *BotApp) handleMessage(
 ) {
 	chatID := msg.Chat.ID
 
+	// 🔥 ВАЖНЕЙШИЙ ЛОГ
+	log.Printf("[handleMessage] botID=%s tgID=%d status=%s text=%q",
+		botID, tgID, status, msg.Text)
+
 	switch status {
 
 	case "none":
@@ -93,7 +97,6 @@ func (app *BotApp) handleMessage(
 
 	case "active":
 
-		// 🔥 ВСЕГДА отправляем клавиатуру Остаток минут
 		msgOut := tgbotapi.NewMessage(chatID, "")
 		msgOut.ReplyMarkup = buildVoiceKeyboard()
 		bot.Send(msgOut)
