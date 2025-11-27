@@ -96,10 +96,16 @@ func (app *BotApp) handleMessage(
 
 	case "active":
 
-		// 🔥 ключевой фикс — текст не пустой
-		msgOut := tgbotapi.NewMessage(chatID, "Выбери действие:")
-		msgOut.ReplyMarkup = buildVoiceKeyboard()
-		bot.Send(msgOut)
+		if _, ok := app.shownKeyboard[botID]; !ok {
+			app.shownKeyboard[botID] = make(map[int64]bool)
+		}
+
+		if !app.shownKeyboard[botID][tgID] {
+			msgOut := tgbotapi.NewMessage(chatID, "")
+			msgOut.ReplyMarkup = buildVoiceKeyboard()
+			bot.Send(msgOut)
+			app.shownKeyboard[botID][tgID] = true
+		}
 
 		if msg.Text == "🕒 Остаток минут" {
 			app.ShowVoiceMinutesScreen(ctx, botID, bot, tgID, chatID)
