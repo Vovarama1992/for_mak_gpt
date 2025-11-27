@@ -22,12 +22,10 @@ func (app *BotApp) handleVoice(ctx context.Context, botID string, bot *tgbotapi.
 
 	if !app.checkVoiceAllowed(ctx, botID, tgID) {
 		bot.Send(tgbotapi.NewMessage(chatID, "🔇 В этом тарифе голос временно недоступен."))
-		log.Printf("[voice] not allowed botID=%s tgID=%d", botID, tgID)
 		return
 	}
 
 	usedMinutes := float64(msg.Voice.Duration) / 60.0
-
 	go func() {
 		ok, err := app.SubscriptionService.UseVoiceMinutes(ctx, botID, tgID, usedMinutes)
 		if err != nil {
@@ -43,18 +41,16 @@ func (app *BotApp) handleVoice(ctx context.Context, botID string, bot *tgbotapi.
 	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
 		app.ErrorNotify.Notify(ctx, botID, err,
-			fmt.Sprintf("Не удалось получить файл голосового: tg=%d fileID=%s", tgID, fileID))
+			fmt.Sprintf("Не удалось получить файл: tg=%d fileID=%s", tgID, fileID))
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось получить голосовое."))
 		return
 	}
 
 	url := file.Link(bot.Token)
-	log.Printf("[voice] downloading from %s", url)
-
 	resp, err := http.Get(url)
 	if err != nil {
 		app.ErrorNotify.Notify(ctx, botID, err,
-			fmt.Sprintf("Ошибка загрузки файла по ссылке: %s", url))
+			fmt.Sprintf("Ошибка загрузки файла: %s", url))
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при загрузке голосового."))
 		return
 	}
@@ -68,82 +64,78 @@ func (app *BotApp) handleVoice(ctx context.Context, botID string, bot *tgbotapi.
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке голосового."))
 		return
 	}
-
 	if _, err := io.Copy(out, resp.Body); err != nil {
 		out.Close()
 		app.ErrorNotify.Notify(ctx, botID, err,
 			fmt.Sprintf("Ошибка записи файла: %s", path))
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при сохранении голосового."))
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка сохранения голосового."))
 		return
 	}
 	out.Close()
 	defer os.Remove(path)
 
-	log.Printf("[voice] saved to %s", path)
-
 	text, err := app.SpeechService.Transcribe(ctx, botID, path)
 	if err != nil {
 		app.ErrorNotify.Notify(ctx, botID, err,
-			fmt.Sprintf("Ошибка распознавания речи: файл %s", path))
+			fmt.Sprintf("Ошибка распознавания речи: %s", path))
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось распознать голос."))
 		return
 	}
 
-	if _, err := app.RecordService.AddText(ctx, botID, tgID, "user", text); err != nil {
-		app.ErrorNotify.Notify(ctx, botID, err,
-			"Ошибка записи текста пользователя в историю диалога")
-	}
+	app.RecordService.AddText(ctx, botID, tgID, "user", text)
 
-	// === 💭 показать "думаю..." ===
-	thinkingMsg := tgbotapi.NewMessage(chatID, "💭 Думаю...")
+	// === показываем индикатор ===
+	thinkingMsg := tgbotapi.NewMessage(chatID, "🤖 AI думает…")
 	sentThinking, _ := bot.Send(thinkingMsg)
 
-	// === 🤖 GPT ===
+	// === GPT ===
 	reply, err := app.AiService.GetReply(ctx, botID, tgID, text, nil)
-
-	// === ❌ удалить "думаю..." ===
-	delReq := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
-	bot.Request(delReq)
-
 	if err != nil {
+		del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
+		bot.Request(del)
+
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при ответе."))
 		return
 	}
 
+	// === синтез ответа ===
 	outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
 	if err := app.SpeechService.Synthesize(ctx, botID, reply, outVoice); err != nil {
+
+		del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
+		bot.Request(del)
+
 		app.ErrorNotify.Notify(ctx, botID, err,
-			"Ошибка синтеза ответа в аудио (voice_id неверный?)")
+			"Ошибка синтеза ответа в аудио")
 		bot.Send(tgbotapi.NewMessage(chatID, reply))
 		return
 	}
 	defer os.Remove(outVoice)
 
-	// === 🕒 списываем минуты за TTS (по длительности mp3) ===
+	// === списываем минуты за TTS ===
 	if durSec, err := speech.AudioDuration(outVoice); err == nil {
 		usedReplyMinutes := durSec / 60.0
-
 		go func() {
 			ok, err := app.SubscriptionService.UseVoiceMinutes(ctx, botID, tgID, usedReplyMinutes)
 			if err != nil {
 				app.ErrorNotify.Notify(ctx, botID, err,
-					fmt.Sprintf("Ошибка списания минут за TTS ответ: tg=%d", tgID))
+					fmt.Sprintf("Ошибка списания TTS минут: tg=%d", tgID))
 				return
 			}
 			if !ok {
-				log.Printf("[voice] async: no voice minutes left for TTS reply tgID=%d", tgID)
+				log.Printf("[voice] async: no voice minutes left for TTS tgID=%d", tgID)
 			}
 		}()
 	}
 
+	// === отправляем аудио ===
 	voice := tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice))
-	if _, err := bot.Send(voice); err != nil {
-		app.ErrorNotify.Notify(ctx, botID, err,
-			"Ошибка отправки голосового ответа пользователю")
-	}
+	bot.Send(voice)
 
-	if _, err := app.RecordService.AddText(ctx, botID, tgID, "tutor", reply); err != nil {
-		app.ErrorNotify.Notify(ctx, botID, err,
-			"Ошибка записи ответа GPT в историю диалога")
-	}
+	// === пишем историю ===
+	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
+
+	// === Удаляем индикатор в самом конце ===
+	del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
+	bot.Request(del)
 }

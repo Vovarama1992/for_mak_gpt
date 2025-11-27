@@ -20,16 +20,12 @@ func (app *BotApp) handleText(
 
 	log.Printf("[text] start botID=%s tgID=%d", botID, tgID)
 
-	// === 0. отправляем 'думаю...' ===
-	thinkingMsg := tgbotapi.NewMessage(chatID, "💭 Думаю...")
-	sentThinking, _ := bot.Send(thinkingMsg) // ошибки игнорируем, нам пофиг
+	// === 0. показываем 'AI думает…' ===
+	thinkingMsg := tgbotapi.NewMessage(chatID, "🤖 AI думает…")
+	sentThinking, _ := bot.Send(thinkingMsg)
 
 	// === 1. GPT ===
 	reply, err := app.AiService.GetReply(ctx, botID, tgID, userText, nil)
-
-	// === 2. удаляем 'думаю...' ===
-	delReq := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
-	bot.Request(delReq)
 
 	if err != nil {
 		log.Printf("[text] ai reply fail botID=%s tgID=%d: %v", botID, tgID, err)
@@ -43,15 +39,23 @@ func (app *BotApp) handleText(
 		)
 
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке запроса."))
+
+		// === удаляем индикатор ===
+		del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
+		bot.Request(del)
 		return
 	}
 
-	// === 3. отправляем ответ ===
+	// === 2. отправляем ответ ===
 	bot.Send(tgbotapi.NewMessage(chatID, reply))
 
-	// === 4. пишем историю ===
+	// === 3. пишем историю ===
 	app.RecordService.AddText(ctx, botID, tgID, "user", userText)
 	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
+
+	// === 4. удаляем 'AI думает…' ===
+	del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
+	bot.Request(del)
 
 	log.Printf("[text] done botID=%s tgID=%d", botID, tgID)
 }
