@@ -5,7 +5,7 @@ services:
     shm_size: 1gb
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGEME_STRONG_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-makeziper}
       PGDATA: /var/lib/postgresql/data
     command: >
@@ -17,8 +17,6 @@ services:
       -c effective_cache_size=768MB
     volumes:
       - /var/www/back/pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
