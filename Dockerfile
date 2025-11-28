@@ -13,8 +13,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/main.go
 FROM alpine:3.20
 
 WORKDIR /app
+
 COPY --from=builder /app/main .
-COPY .env.example .env
 COPY migrations ./migrations
 
 EXPOSE 8080
