@@ -116,21 +116,42 @@ func (s *AiService) GetReply(
 
 	// 3. История
 	for _, r := range history {
-		if r.Text == nil {
-			continue
-		}
-		t := strings.TrimSpace(*r.Text)
-		if t == "" {
-			continue
-		}
 		role := "user"
 		if r.Role == "tutor" {
 			role = "assistant"
 		}
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    role,
-			Content: t,
-		})
+
+		// --- если это текст ---
+		if r.Text != nil {
+			t := strings.TrimSpace(*r.Text)
+			if t != "" {
+				messages = append(messages, openai.ChatCompletionMessage{
+					Role:    role,
+					Content: t,
+				})
+			}
+		}
+
+		// --- если это изображение ---
+		if r.ImageURL != nil {
+			url := strings.TrimSpace(*r.ImageURL)
+			if url != "" {
+				messages = append(messages,
+					openai.ChatCompletionMessage{
+						Role: role,
+						MultiContent: []openai.ChatMessagePart{
+							{
+								Type: openai.ChatMessagePartTypeText,
+								Text: "(Пользователь ранее прислал изображение)",
+							},
+							{
+								Type:     openai.ChatMessagePartTypeImageURL,
+								ImageURL: &openai.ChatMessageImageURL{URL: url},
+							},
+						},
+					})
+			}
+		}
 	}
 
 	// 4. Последнее сообщение

@@ -91,7 +91,7 @@ func main() {
 
 	// === S3 + record ===
 	s3Service := domain.NewS3Service(s3Client, errorService)
-	recordService := domain.NewRecordService(recordRepo, s3Service, errorService)
+	recordService := domain.NewRecordService(recordRepo, errorService)
 
 	// === AI ===
 	aiService := ai.NewAiService(aiClient, recordService, botRepo, errorService)

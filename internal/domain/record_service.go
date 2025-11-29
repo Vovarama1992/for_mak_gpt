@@ -3,7 +3,6 @@ package domain
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 
 	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
@@ -12,16 +11,14 @@ import (
 )
 
 type recordService struct {
-	repo      ports.RecordRepo
-	s3service ports.S3Service
-	notifier  error_notificator.Notificator
+	repo     ports.RecordRepo
+	notifier error_notificator.Notificator
 }
 
-func NewRecordService(repo ports.RecordRepo, s3 ports.S3Service, n error_notificator.Notificator) ports.RecordService {
+func NewRecordService(repo ports.RecordRepo, n error_notificator.Notificator) ports.RecordService {
 	return &recordService{
-		repo:      repo,
-		s3service: s3,
-		notifier:  n,
+		repo:     repo,
+		notifier: n,
 	}
 }
 
@@ -34,42 +31,32 @@ func (s *recordService) AddText(ctx context.Context, botID string, telegramID in
 	}
 
 	go func() {
-		if err := s.RecalcHistoryState(context.Background(), botID, telegramID); err != nil {
-			s.notifier.Notify(context.Background(), botID, err,
-				fmt.Sprintf("Ошибка перерасчёта истории: tg=%d", telegramID))
-		}
+		_ = s.RecalcHistoryState(context.Background(), botID, telegramID)
 	}()
 
 	return id, nil
 }
 
 func (s *recordService) AddImage(
-	ctx context.Context, botID string, telegramID int64, role string,
-	file io.Reader, filename, contentType string,
-) (int64, string, error) {
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+	role string,
+	imageURL string,
+) (int64, error) {
 
-	publicURL, err := s.s3service.SaveImage(ctx, botID, telegramID, file, filename, contentType)
+	id, err := s.repo.CreateImage(ctx, botID, telegramID, role, imageURL)
 	if err != nil {
 		s.notifier.Notify(ctx, botID, err,
-			fmt.Sprintf("Ошибка загрузки фото в S3: tg=%d filename=%s", telegramID, filename))
-		return 0, "", err
-	}
-
-	id, err := s.repo.CreateImage(ctx, botID, telegramID, role, publicURL)
-	if err != nil {
-		s.notifier.Notify(ctx, botID, err,
-			fmt.Sprintf("Ошибка записи image record: tg=%d url=%s", telegramID, publicURL))
-		return 0, "", err
+			fmt.Sprintf("Ошибка записи image record: tg=%d url=%s", telegramID, imageURL))
+		return 0, err
 	}
 
 	go func() {
-		if err := s.RecalcHistoryState(context.Background(), botID, telegramID); err != nil {
-			s.notifier.Notify(context.Background(), botID, err,
-				fmt.Sprintf("Ошибка перерасчёта истории после фото: tg=%d", telegramID))
-		}
+		_ = s.RecalcHistoryState(context.Background(), botID, telegramID)
 	}()
 
-	return id, publicURL, nil
+	return id, nil
 }
 
 func (s *recordService) GetHistory(ctx context.Context, botID string, telegramID int64) ([]ports.Record, error) {
@@ -105,11 +92,7 @@ func (s *recordService) RecalcHistoryState(ctx context.Context, botID string, te
 		lastN++
 	}
 
-	if err := s.repo.UpsertHistoryState(ctx, botID, telegramID, lastN, totalTokens); err != nil {
-		return fmt.Errorf("update history state fail: %w", err)
-	}
-
-	return nil
+	return s.repo.UpsertHistoryState(ctx, botID, telegramID, lastN, totalTokens)
 }
 
 func countTokens(r ports.Record, enc *tiktoken.Tiktoken) int {
