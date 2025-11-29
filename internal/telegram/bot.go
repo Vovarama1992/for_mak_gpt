@@ -53,12 +53,13 @@ func (app *BotApp) handleMessage(
 ) {
 	chatID := msg.Chat.ID
 
-	log.Printf("[handleMessage] botID=%s tgID=%d status=%s text=%q",
-		botID, tgID, status, msg.Text)
+	// ключевой лог: какой бот, какой юзер, какой статус
+	log.Printf("[sub-check] botID=%s tgID=%d → status=%s", botID, tgID, status)
 
 	switch status {
 
 	case "none":
+		log.Printf("[none] botID=%s tgID=%d → show Start", botID, tgID)
 
 		if msg.Text == "▶️ Старт" {
 			menu := app.BuildSubscriptionMenu(ctx)
@@ -83,10 +84,13 @@ func (app *BotApp) handleMessage(
 		return
 
 	case "pending":
+		log.Printf("[pending] botID=%s tgID=%d → MsgPending", botID, tgID)
 		bot.Send(tgbotapi.NewMessage(chatID, MsgPending))
 		return
 
 	case "expired":
+		log.Printf("[expired] botID=%s tgID=%d → ask renew", botID, tgID)
+
 		menu := app.BuildSubscriptionMenu(ctx)
 		text := "⏳ Срок подписки истёк. Продли, чтобы снова пользоваться ботом!"
 		out := tgbotapi.NewMessage(chatID, text)
@@ -100,6 +104,9 @@ func (app *BotApp) handleMessage(
 			app.shownKeyboard[botID] = make(map[int64]bool)
 		}
 
+		log.Printf("[active] botID=%s tgID=%d shownKeyboard=%v",
+			botID, tgID, app.shownKeyboard[botID][tgID])
+
 		if !app.shownKeyboard[botID][tgID] {
 			msgOut := tgbotapi.NewMessage(chatID, "")
 			msgOut.ReplyMarkup = buildVoiceKeyboard()
@@ -108,18 +115,22 @@ func (app *BotApp) handleMessage(
 		}
 
 		if msg.Text == "🕒 Остаток минут" {
+			log.Printf("[active] botID=%s tgID=%d → ShowVoiceMinutes", botID, tgID)
 			app.ShowVoiceMinutesScreen(ctx, botID, bot, tgID, chatID)
 			return
 		}
 
 		switch {
 		case msg.Voice != nil:
+			log.Printf("[active] botID=%s tgID=%d → voice", botID, tgID)
 			app.handleVoice(ctx, botID, bot, msg, tgID)
 
 		case len(msg.Photo) > 0:
+			log.Printf("[active] botID=%s tgID=%d → photo", botID, tgID)
 			app.handlePhoto(ctx, botID, bot, msg, tgID)
 
 		case msg.Text != "":
+			log.Printf("[active] botID=%s tgID=%d → text(%q)", botID, tgID, msg.Text)
 			app.handleText(ctx, botID, bot, msg, tgID)
 
 		default:
@@ -129,6 +140,7 @@ func (app *BotApp) handleMessage(
 		return
 
 	default:
+		log.Printf("[unknown] botID=%s tgID=%d → status=%s", botID, tgID, status)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Неизвестный статус подписки."))
 		return
 	}
