@@ -53,7 +53,6 @@ func (app *BotApp) handleMessage(
 ) {
 	chatID := msg.Chat.ID
 
-	// ключевой лог: какой бот, какой юзер, какой статус
 	log.Printf("[sub-check] botID=%s tgID=%d → status=%s", botID, tgID, status)
 
 	switch status {
@@ -61,25 +60,29 @@ func (app *BotApp) handleMessage(
 	case "none":
 		log.Printf("[none] botID=%s tgID=%d → show Start", botID, tgID)
 
+		// Клавиатура "Старт"
+		startKB := tgbotapi.NewReplyKeyboard(
+			tgbotapi.NewKeyboardButtonRow(
+				tgbotapi.NewKeyboardButton("▶️ Старт"),
+			),
+		)
+		startKB.ResizeKeyboard = true
+
+		// Если нажали "Старт" → показать тарифы
 		if msg.Text == "▶️ Старт" {
 			menu := app.BuildSubscriptionMenu(ctx)
 			text := app.BuildSubscriptionText()
+
 			out := tgbotapi.NewMessage(chatID, text)
 			out.ReplyMarkup = menu
 			bot.Send(out)
 			return
 		}
 
-		startBtn := tgbotapi.NewReplyKeyboard(
-			tgbotapi.NewKeyboardButtonRow(
-				tgbotapi.NewKeyboardButton("▶️ Старт"),
-			),
-		)
-		startBtn.ResizeKeyboard = true
-
+		// Приветственный текст
 		welcome := tgbotapi.NewMessage(chatID,
 			"Добро пожаловать! Нажми «Старт», чтобы выбрать тариф.")
-		welcome.ReplyMarkup = startBtn
+		welcome.ReplyMarkup = startKB
 		bot.Send(welcome)
 		return
 
@@ -93,33 +96,36 @@ func (app *BotApp) handleMessage(
 
 		menu := app.BuildSubscriptionMenu(ctx)
 		text := "⏳ Срок подписки истёк. Продли, чтобы снова пользоваться ботом!"
+
 		out := tgbotapi.NewMessage(chatID, text)
 		out.ReplyMarkup = menu
 		bot.Send(out)
 		return
 
 	case "active":
+		log.Printf("[active] botID=%s tgID=%d → show main menu", botID, tgID)
 
-		if _, ok := app.shownKeyboard[botID]; !ok {
-			app.shownKeyboard[botID] = make(map[int64]bool)
-		}
+		// Клавиатура "Остаток минут"
+		mainKB := tgbotapi.NewReplyKeyboard(
+			tgbotapi.NewKeyboardButtonRow(
+				tgbotapi.NewKeyboardButton("🕒 Остаток минут"),
+			),
+		)
+		mainKB.ResizeKeyboard = true
 
-		log.Printf("[active] botID=%s tgID=%d shownKeyboard=%v",
-			botID, tgID, app.shownKeyboard[botID][tgID])
+		// ВСЕГДА присылаем клаву — это фиксирует UI Telegram
+		header := tgbotapi.NewMessage(chatID, "Выберите действие:")
+		header.ReplyMarkup = mainKB
+		bot.Send(header)
 
-		if !app.shownKeyboard[botID][tgID] {
-			msgOut := tgbotapi.NewMessage(chatID, "")
-			msgOut.ReplyMarkup = buildVoiceKeyboard()
-			bot.Send(msgOut)
-			app.shownKeyboard[botID][tgID] = true
-		}
-
+		// Обработка кнопок
 		if msg.Text == "🕒 Остаток минут" {
 			log.Printf("[active] botID=%s tgID=%d → ShowVoiceMinutes", botID, tgID)
 			app.ShowVoiceMinutesScreen(ctx, botID, bot, tgID, chatID)
 			return
 		}
 
+		// Обработка типов сообщений
 		switch {
 		case msg.Voice != nil:
 			log.Printf("[active] botID=%s tgID=%d → voice", botID, tgID)
