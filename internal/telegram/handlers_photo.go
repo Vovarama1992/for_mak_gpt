@@ -69,15 +69,15 @@ func (app *BotApp) handlePhoto(
 	}
 	log.Printf("[photo] s3_url=%s", publicURL)
 
-	// === 4. История: user ===
-	app.RecordService.AddText(ctx, botID, tgID, "user", publicURL)
+	// === 4. История: user (IMAGE) ===
+	app.RecordService.AddImage(ctx, botID, tgID, "user", publicURL)
 
 	// === 5. Показываем индикатор ===
 	thinking := tgbotapi.NewMessage(chatID, "🤖 AI думает…")
 	sentThinking, _ := bot.Send(thinking)
 
 	// === 6. GPT ===
-	gptInput := fmt.Sprintf("📷 Пользователь прислал изображение: %s", publicURL)
+	gptInput := "📷 Пользователь прислал изображение."
 	reply, err := app.AiService.GetReply(ctx, botID, tgID, gptInput, &publicURL)
 
 	if err != nil {
@@ -86,7 +86,7 @@ func (app *BotApp) handlePhoto(
 			fmt.Sprintf("❗ Ошибка GPT\nБот: %s\nПользователь: %d\nФото: %s",
 				botID, tgID, publicURL))
 
-		// удаляем индикатор перед выходом
+		// удаляем индикатор
 		del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
 		bot.Request(del)
 
@@ -99,10 +99,10 @@ func (app *BotApp) handlePhoto(
 	// === 7. Отправляем ответ ===
 	bot.Send(tgbotapi.NewMessage(chatID, reply))
 
-	// === 8. История: tutor ===
+	// === 8. История: tutor (TEXT) ===
 	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
 
-	// === 9. Удаляем индикатор в самом конце ===
+	// === 9. Удаляем индикатор ===
 	del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
 	bot.Request(del)
 
