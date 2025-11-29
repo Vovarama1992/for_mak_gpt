@@ -79,7 +79,7 @@ func (app *BotApp) handleMessage(
 			return
 		}
 
-		// Приветственный текст
+		// Показываем кнопку старта
 		welcome := tgbotapi.NewMessage(chatID,
 			"Добро пожаловать! Нажми «Старт», чтобы выбрать тариф.")
 		welcome.ReplyMarkup = startKB
@@ -113,12 +113,12 @@ func (app *BotApp) handleMessage(
 		)
 		mainKB.ResizeKeyboard = true
 
-		// ВСЕГДА присылаем клаву — это фиксирует UI Telegram
-		header := tgbotapi.NewMessage(chatID, "Выберите действие:")
-		header.ReplyMarkup = mainKB
-		bot.Send(header)
+		// Отправляем клаву без текста
+		msgOut := tgbotapi.NewMessage(chatID, " ") // пробел = телега обновляет клаву
+		msgOut.ReplyMarkup = mainKB
+		bot.Send(msgOut)
 
-		// Обработка кнопок
+		// Если нажали кнопку
 		if msg.Text == "🕒 Остаток минут" {
 			log.Printf("[active] botID=%s tgID=%d → ShowVoiceMinutes", botID, tgID)
 			app.ShowVoiceMinutesScreen(ctx, botID, bot, tgID, chatID)
@@ -142,7 +142,6 @@ func (app *BotApp) handleMessage(
 		default:
 			bot.Send(tgbotapi.NewMessage(chatID, "📎 Отправь текст, голос или фото."))
 		}
-
 		return
 
 	default:
