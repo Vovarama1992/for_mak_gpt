@@ -32,10 +32,16 @@ func (r *repo) CreateClass(ctx context.Context, grade int) (*Class, error) {
 }
 
 func (r *repo) ListClasses(ctx context.Context) ([]*Class, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, grade
-		 FROM classes
-		 ORDER BY grade ASC`)
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT 
+			c.id,
+			c.grade,
+			p.id   AS prompt_id,
+			p.prompt
+		FROM classes c
+		LEFT JOIN class_prompts p ON p.class_id = c.id
+		ORDER BY c.grade ASC
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -43,10 +49,25 @@ func (r *repo) ListClasses(ctx context.Context) ([]*Class, error) {
 
 	var out []*Class
 	for rows.Next() {
-		var c Class
-		if err := rows.Scan(&c.ID, &c.Grade); err != nil {
+		var (
+			c   Class
+			pid sql.NullInt64
+			pp  sql.NullString
+		)
+
+		if err := rows.Scan(&c.ID, &c.Grade, &pid, &pp); err != nil {
 			return nil, err
 		}
+
+		// если промпт есть
+		if pid.Valid {
+			c.Prompt = &ClassPrompt{
+				ID:      int(pid.Int64),
+				ClassID: c.ID,
+				Prompt:  pp.String,
+			}
+		}
+
 		out = append(out, &c)
 	}
 	return out, rows.Err()

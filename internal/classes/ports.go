@@ -4,8 +4,9 @@ import "context"
 
 // --- базовая сущность класса ---
 type Class struct {
-	ID    int `json:"id"`
-	Grade int `json:"grade"` // 1..11
+	ID     int          `json:"id"`
+	Grade  int          `json:"grade"`
+	Prompt *ClassPrompt `json:"prompt,omitempty"`
 }
 
 // --- промпт для класса ---
