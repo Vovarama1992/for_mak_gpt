@@ -62,8 +62,12 @@ func RegisterRoutes(
 	r.With(httputil.RecoverMiddleware).Delete("/minute-packages/{id}", hPkg.Delete)
 
 	// --- class prompts ---
-	r.With(httputil.RecoverMiddleware).Get("/class-prompts", hClass.List)
-	r.With(httputil.RecoverMiddleware).Post("/class-prompts", hClass.Create)
-	r.With(httputil.RecoverMiddleware).Patch("/class-prompts/{class}", hClass.Update)
-	r.With(httputil.RecoverMiddleware).Delete("/class-prompts/{class}", hClass.Delete)
+	r.Get("/classes", hClass.ListClasses)
+	r.Post("/classes", hClass.CreateClass)
+
+	r.Get("/classes/{class_id}/prompts", hClass.GetPrompt)
+	r.Post("/classes/{class_id}/prompts", hClass.CreatePrompt)
+
+	r.Patch("/prompts/{prompt_id}", hClass.UpdatePrompt)
+	r.Delete("/prompts/{prompt_id}", hClass.DeletePrompt)
 }

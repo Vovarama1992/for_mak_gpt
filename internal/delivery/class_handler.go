@@ -1,7 +1,6 @@
 package delivery
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -18,81 +17,116 @@ func NewClassHandler(svc cl.ClassService) *ClassHandler {
 	return &ClassHandler{svc: svc}
 }
 
-// GET /class-prompts
-func (h *ClassHandler) List(w http.ResponseWriter, r *http.Request) {
-	out, err := h.svc.ListPrompts(r.Context())
+//
+// ----------------------
+//   КЛАССЫ
+// ----------------------
+//
+
+// GET /classes
+func (h *ClassHandler) ListClasses(w http.ResponseWriter, r *http.Request) {
+	classes, err := h.svc.ListClasses(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	json.NewEncoder(w).Encode(classes)
+}
+
+// POST /classes
+// body: { "grade": 1 }
+func (h *ClassHandler) CreateClass(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Grade int `json:"grade"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	out, err := h.svc.CreateClass(r.Context(), body.Grade)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
 	json.NewEncoder(w).Encode(out)
 }
 
-// POST /class-prompts
-func (h *ClassHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var p cl.ClassPrompt
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		http.Error(w, err.Error(), 400)
+//
+// ----------------------
+//   ПРОМПТЫ ДЛЯ КЛАССА
+// ----------------------
+//
+
+func (h *ClassHandler) GetPrompt(w http.ResponseWriter, r *http.Request) {
+	cidStr := chi.URLParam(r, "class_id")
+	cid, _ := strconv.Atoi(cidStr)
+
+	p, err := h.svc.GetPromptByClassID(r.Context(), cid)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
 		return
 	}
-
-	if err := h.svc.CreatePrompt(context.Background(), &p); err != nil {
-		http.Error(w, err.Error(), 500)
+	if p == nil {
+		http.Error(w, "not found", 404)
 		return
 	}
 
 	json.NewEncoder(w).Encode(p)
 }
 
-// PATCH /class-prompts/{class}
-func (h *ClassHandler) Update(w http.ResponseWriter, r *http.Request) {
-	classStr := chi.URLParam(r, "class")
-	class, _ := strconv.Atoi(classStr)
+// POST /classes/{class_id}/prompts
+// body: { "prompt": "..." }
+func (h *ClassHandler) CreatePrompt(w http.ResponseWriter, r *http.Request) {
+	cidStr := chi.URLParam(r, "class_id")
+	classID, _ := strconv.Atoi(cidStr)
 
-	var p cl.ClassPrompt
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+	var body struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, err.Error(), 400)
 		return
 	}
 
-	// находим ID по class
-	existing, err := h.svc.GetPromptByClass(r.Context(), class)
+	out, err := h.svc.CreatePrompt(r.Context(), classID, body.Prompt)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	if existing == nil {
-		http.Error(w, "not found", 404)
-		return
-	}
 
-	p.ID = existing.ID
-	p.Class = class
-
-	if err := h.svc.UpdatePrompt(r.Context(), &p); err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	json.NewEncoder(w).Encode(p)
+	json.NewEncoder(w).Encode(out)
 }
 
-// DELETE /class-prompts/{class}
-func (h *ClassHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	classStr := chi.URLParam(r, "class")
-	class, _ := strconv.Atoi(classStr)
+// PATCH /prompts/{prompt_id}
+// body: { "prompt": "..." }
+func (h *ClassHandler) UpdatePrompt(w http.ResponseWriter, r *http.Request) {
+	pidStr := chi.URLParam(r, "prompt_id")
+	pid, _ := strconv.Atoi(pidStr)
 
-	existing, err := h.svc.GetPromptByClass(r.Context(), class)
-	if err != nil {
+	var body struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	if err := h.svc.UpdatePrompt(r.Context(), pid, body.Prompt); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	if existing == nil {
-		http.Error(w, "not found", 404)
-		return
-	}
 
-	if err := h.svc.DeletePrompt(r.Context(), existing.ID); err != nil {
+	w.WriteHeader(204)
+}
+
+// DELETE /prompts/{prompt_id}
+func (h *ClassHandler) DeletePrompt(w http.ResponseWriter, r *http.Request) {
+	pidStr := chi.URLParam(r, "prompt_id")
+	pid, _ := strconv.Atoi(pidStr)
+
+	if err := h.svc.DeletePrompt(r.Context(), pid); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}

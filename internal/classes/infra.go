@@ -14,24 +14,87 @@ func NewClassRepo(db *sql.DB) ClassRepo {
 }
 
 //
+// classes
+//
+
+func (r *repo) CreateClass(ctx context.Context, grade int) (*Class, error) {
+	row := r.db.QueryRowContext(ctx,
+		`INSERT INTO classes (grade)
+		 VALUES ($1)
+		 RETURNING id, grade`,
+		grade,
+	)
+	var c Class
+	if err := row.Scan(&c.ID, &c.Grade); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (r *repo) ListClasses(ctx context.Context) ([]*Class, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, grade
+		 FROM classes
+		 ORDER BY grade ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*Class
+	for rows.Next() {
+		var c Class
+		if err := rows.Scan(&c.ID, &c.Grade); err != nil {
+			return nil, err
+		}
+		out = append(out, &c)
+	}
+	return out, rows.Err()
+}
+
+func (r *repo) GetClassByID(ctx context.Context, id int) (*Class, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, grade
+		 FROM classes
+		 WHERE id=$1`,
+		id,
+	)
+
+	var c Class
+	if err := row.Scan(&c.ID, &c.Grade); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+//
 // class_prompts
 //
 
-func (r *repo) CreatePrompt(ctx context.Context, p *ClassPrompt) error {
-	return r.db.QueryRowContext(ctx,
-		`INSERT INTO class_prompts (class, prompt)
+func (r *repo) CreatePrompt(ctx context.Context, classID int, prompt string) (*ClassPrompt, error) {
+	row := r.db.QueryRowContext(ctx,
+		`INSERT INTO class_prompts (class_id, prompt)
 		 VALUES ($1, $2)
-		 RETURNING id`,
-		p.Class, p.Prompt,
-	).Scan(&p.ID)
+		 RETURNING id, class_id, prompt`,
+		classID, prompt,
+	)
+
+	var p ClassPrompt
+	if err := row.Scan(&p.ID, &p.ClassID, &p.Prompt); err != nil {
+		return nil, err
+	}
+	return &p, nil
 }
 
-func (r *repo) UpdatePrompt(ctx context.Context, p *ClassPrompt) error {
+func (r *repo) UpdatePrompt(ctx context.Context, id int, prompt string) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE class_prompts
-		 SET class=$1, prompt=$2
-		 WHERE id=$3`,
-		p.Class, p.Prompt, p.ID,
+		 SET prompt=$1
+		 WHERE id=$2`,
+		prompt, id,
 	)
 	return err
 }
@@ -44,64 +107,23 @@ func (r *repo) DeletePrompt(ctx context.Context, id int) error {
 	return err
 }
 
-func (r *repo) GetPromptByID(ctx context.Context, id int) (*ClassPrompt, error) {
+func (r *repo) GetPromptByClassID(ctx context.Context, classID int) (*ClassPrompt, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, class, prompt
+		`SELECT id, class_id, prompt
 		 FROM class_prompts
-		 WHERE id=$1`,
-		id,
+		 WHERE class_id=$1`,
+		classID,
 	)
 
 	var p ClassPrompt
-	err := row.Scan(&p.ID, &p.Class, &p.Prompt)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &p, nil
-}
-
-func (r *repo) GetPromptByClass(ctx context.Context, class int) (*ClassPrompt, error) {
-	row := r.db.QueryRowContext(ctx,
-		`SELECT id, class, prompt
-		 FROM class_prompts
-		 WHERE class=$1`,
-		class,
-	)
-
-	var p ClassPrompt
-	err := row.Scan(&p.ID, &p.Class, &p.Prompt)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &p, nil
-}
-
-func (r *repo) ListPrompts(ctx context.Context) ([]*ClassPrompt, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, class, prompt
-		 FROM class_prompts
-		 ORDER BY class ASC`,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []*ClassPrompt
-	for rows.Next() {
-		var p ClassPrompt
-		if err := rows.Scan(&p.ID, &p.Class, &p.Prompt); err != nil {
-			return nil, err
+	if err := row.Scan(&p.ID, &p.ClassID, &p.Prompt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
 		}
-		out = append(out, &p)
+		return nil, err
 	}
-	return out, rows.Err()
+
+	return &p, nil
 }
 
 //
@@ -128,11 +150,10 @@ func (r *repo) GetUserClass(ctx context.Context, botID string, telegramID int64)
 	)
 
 	var uc UserClass
-	err := row.Scan(&uc.BotID, &uc.TelegramID, &uc.ClassID)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
+	if err := row.Scan(&uc.BotID, &uc.TelegramID, &uc.ClassID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &uc, nil

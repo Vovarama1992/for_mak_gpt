@@ -112,11 +112,12 @@ func (s *AiService) GetReply(
 
 	// 3) классовый промпт
 	finalClassPrompt := ""
+
 	uc, err := s.classService.GetUserClass(ctx, botID, telegramID)
 	if err == nil && uc != nil {
-		cp, err := s.classService.GetPromptByClass(ctx, uc.ClassID)
-		if err == nil && cp != nil {
-			finalClassPrompt = strings.TrimSpace(cp.Prompt)
+		p, err := s.classService.GetPromptByClassID(ctx, uc.ClassID)
+		if err == nil && p != nil {
+			finalClassPrompt = strings.TrimSpace(p.Prompt)
 		}
 	}
 
