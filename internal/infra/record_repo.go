@@ -188,3 +188,8 @@ func (r *recordRepo) GetLastNRecords(ctx context.Context, botID string, telegram
 	}
 	return records, nil
 }
+
+func (r *recordRepo) DeleteAll(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM records`)
+	return err
+}

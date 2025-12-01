@@ -15,16 +15,18 @@ type Service interface {
 }
 
 type BotConfig struct {
-	BotID       string `json:"bot_id"`
-	Token       string `json:"token"`
-	Model       string `json:"model"`
-	StylePrompt string `json:"style_prompt"`
-	VoiceID     string `json:"voice_id"`
+	BotID            string `json:"bot_id"`
+	Token            string `json:"token"`
+	Model            string `json:"model"`
+	TextStylePrompt  string `json:"text_style_prompt"`
+	VoiceStylePrompt string `json:"voice_style_prompt"`
+	VoiceID          string `json:"voice_id"`
 }
 
 type UpdateInput struct {
-	BotID       string
-	Model       *string
-	StylePrompt *string
-	VoiceID     *string
+	BotID            string
+	Model            *string
+	TextStylePrompt  *string
+	VoiceStylePrompt *string
+	VoiceID          *string
 }

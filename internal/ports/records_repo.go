@@ -44,4 +44,5 @@ type RecordRepo interface {
 	UpsertHistoryState(ctx context.Context, botID string, telegramID int64, lastN, totalTokens int) error
 	GetHistoryState(ctx context.Context, botID string, telegramID int64) (lastN, totalTokens int, err error)
 	GetLastNRecords(ctx context.Context, botID string, telegramID int64, n int) ([]Record, error)
+	DeleteAll(ctx context.Context) error
 }

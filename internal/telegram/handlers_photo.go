@@ -78,7 +78,14 @@ func (app *BotApp) handlePhoto(
 
 	// === 6. GPT ===
 	gptInput := "📷 Пользователь прислал изображение."
-	reply, err := app.AiService.GetReply(ctx, botID, tgID, gptInput, &publicURL)
+	reply, err := app.AiService.GetReply(
+		ctx,
+		botID,
+		tgID,
+		"text",
+		gptInput,
+		&publicURL,
+	)
 
 	if err != nil {
 		log.Printf("[photo] ai fail: %v", err)

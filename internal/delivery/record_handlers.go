@@ -151,3 +151,12 @@ func (h *RecordHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to encode response: "+err.Error(), http.StatusInternalServerError)
 	}
 }
+
+func (h *RecordHandler) DeleteAll(w http.ResponseWriter, r *http.Request) {
+	err := h.recordService.DeleteAll(r.Context())
+	if err != nil {
+		http.Error(w, "failed to delete: "+err.Error(), 500)
+		return
+	}
+	w.WriteHeader(204)
+}

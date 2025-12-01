@@ -14,10 +14,12 @@ func NewRepo(db *sql.DB) Repo {
 	return &repo{db: db}
 }
 
-// ListAll — получить все конфиги
+// ListAll
 func (r *repo) ListAll(ctx context.Context) ([]*BotConfig, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT bot_id, token, model, style_prompt, voice_id
+		SELECT bot_id, token, model,
+		       text_style_prompt, voice_style_prompt,
+		       voice_id
 		FROM bot_configs
 		ORDER BY bot_id
 	`)
@@ -29,7 +31,14 @@ func (r *repo) ListAll(ctx context.Context) ([]*BotConfig, error) {
 	var out []*BotConfig
 	for rows.Next() {
 		var b BotConfig
-		if err := rows.Scan(&b.BotID, &b.Token, &b.Model, &b.StylePrompt, &b.VoiceID); err != nil {
+		if err := rows.Scan(
+			&b.BotID,
+			&b.Token,
+			&b.Model,
+			&b.TextStylePrompt,
+			&b.VoiceStylePrompt,
+			&b.VoiceID,
+		); err != nil {
 			return nil, err
 		}
 		out = append(out, &b)
@@ -37,69 +46,81 @@ func (r *repo) ListAll(ctx context.Context) ([]*BotConfig, error) {
 	return out, rows.Err()
 }
 
-// Get — получить один конфиг
+// Get
 func (r *repo) Get(ctx context.Context, botID string) (*BotConfig, error) {
 	var b BotConfig
 	err := r.db.QueryRowContext(ctx, `
-		SELECT bot_id, token, model, style_prompt, voice_id
+		SELECT bot_id, token, model,
+		       text_style_prompt, voice_style_prompt,
+		       voice_id
 		FROM bot_configs
 		WHERE bot_id = $1
-	`, botID).
-		Scan(&b.BotID, &b.Token, &b.Model, &b.StylePrompt, &b.VoiceID)
-
+	`, botID).Scan(
+		&b.BotID,
+		&b.Token,
+		&b.Model,
+		&b.TextStylePrompt,
+		&b.VoiceStylePrompt,
+		&b.VoiceID,
+	)
 	if err != nil {
 		return nil, err
 	}
-
 	return &b, nil
 }
 
-// Update — обновить модель/стиль/voice
-// обновляются только нениловые поля
+// Update
 func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) {
-	// простая тактика: строим динамический SQL
 	q := "UPDATE bot_configs SET "
 	args := []any{}
 	idx := 1
 
 	if in.Model != nil {
-		q += "model = $" + itoa(idx) + ","
+		q += "model=$" + itoa(idx) + ","
 		args = append(args, *in.Model)
 		idx++
 	}
-	if in.StylePrompt != nil {
-		q += "style_prompt = $" + itoa(idx) + ","
-		args = append(args, *in.StylePrompt)
+	if in.TextStylePrompt != nil {
+		q += "text_style_prompt=$" + itoa(idx) + ","
+		args = append(args, *in.TextStylePrompt)
+		idx++
+	}
+	if in.VoiceStylePrompt != nil {
+		q += "voice_style_prompt=$" + itoa(idx) + ","
+		args = append(args, *in.VoiceStylePrompt)
 		idx++
 	}
 	if in.VoiceID != nil {
-		q += "voice_id = $" + itoa(idx) + ","
+		q += "voice_id=$" + itoa(idx) + ","
 		args = append(args, *in.VoiceID)
 		idx++
 	}
 
-	// если нет обновляемых полей — возвращаем текущую запись
 	if len(args) == 0 {
 		return r.Get(ctx, in.BotID)
 	}
 
-	// убираем лишнюю запятую
-	q = q[:len(q)-1]
+	q = q[:len(q)-1] // убрать последнюю запятую
+	q += " WHERE bot_id=$" + itoa(idx) +
+		" RETURNING bot_id, token, model, text_style_prompt, voice_style_prompt, voice_id"
 
-	q += " WHERE bot_id = $" + itoa(idx) + " RETURNING bot_id, token, model, style_prompt, voice_id"
 	args = append(args, in.BotID)
 
 	var b BotConfig
-	err := r.db.QueryRowContext(ctx, q, args...).
-		Scan(&b.BotID, &b.Token, &b.Model, &b.StylePrompt, &b.VoiceID)
-
+	err := r.db.QueryRowContext(ctx, q, args...).Scan(
+		&b.BotID,
+		&b.Token,
+		&b.Model,
+		&b.TextStylePrompt,
+		&b.VoiceStylePrompt,
+		&b.VoiceID,
+	)
 	if err != nil {
 		return nil, err
 	}
 	return &b, nil
 }
 
-// маленький util потому что strconv.Itoa тянуть не хочется
 func itoa(i int) string {
 	return fmt.Sprintf("%d", i)
 }

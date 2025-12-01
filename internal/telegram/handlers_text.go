@@ -25,7 +25,14 @@ func (app *BotApp) handleText(
 	sentThinking, _ := bot.Send(thinkingMsg)
 
 	// === 1. GPT ===
-	reply, err := app.AiService.GetReply(ctx, botID, tgID, userText, nil)
+	reply, err := app.AiService.GetReply(
+		ctx,
+		botID,
+		tgID,
+		"text",
+		userText,
+		nil,
+	)
 
 	if err != nil {
 		log.Printf("[text] ai reply fail botID=%s tgID=%d: %v", botID, tgID, err)

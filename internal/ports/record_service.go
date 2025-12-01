@@ -11,4 +11,5 @@ type RecordService interface {
 	RecalcHistoryState(ctx context.Context, botID string, telegramID int64) error
 
 	ListUsers(ctx context.Context) ([]UserBots, error)
+	DeleteAll(ctx context.Context) error
 }

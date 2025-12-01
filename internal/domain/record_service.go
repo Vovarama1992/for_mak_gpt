@@ -118,3 +118,7 @@ func (s *recordService) GetFittingHistory(
 
 	return s.repo.GetLastNRecords(ctx, botID, telegramID, lastN)
 }
+
+func (s *recordService) DeleteAll(ctx context.Context) error {
+	return s.repo.DeleteAll(ctx)
+}

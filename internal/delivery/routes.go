@@ -14,7 +14,8 @@ func RegisterRoutes(
 	hSubs *SubscriptionHandler,
 	hTariff *TariffHandler,
 	hBots *bots.Handler,
-	hPkg *MinutePackageHandler, // ← добавили
+	hPkg *MinutePackageHandler,
+	hClass *ClassHandler,
 ) {
 	// --- записи ---
 	r.With(
@@ -26,6 +27,8 @@ func RegisterRoutes(
 		httputil.RecoverMiddleware,
 		httputil.NewRateLimiter(100, time.Minute),
 	).Post("/record/text/tutor", h.AddTextRecordForm)
+
+	r.With(httputil.RecoverMiddleware).Delete("/records", h.DeleteAll)
 
 	r.With(
 		httputil.RecoverMiddleware,
@@ -57,4 +60,10 @@ func RegisterRoutes(
 	r.With(httputil.RecoverMiddleware).Get("/minute-packages/{id}", hPkg.Get)
 	r.With(httputil.RecoverMiddleware).Patch("/minute-packages/{id}", hPkg.Update)
 	r.With(httputil.RecoverMiddleware).Delete("/minute-packages/{id}", hPkg.Delete)
+
+	// --- class prompts ---
+	r.With(httputil.RecoverMiddleware).Get("/class-prompts", hClass.List)
+	r.With(httputil.RecoverMiddleware).Post("/class-prompts", hClass.Create)
+	r.With(httputil.RecoverMiddleware).Patch("/class-prompts/{class}", hClass.Update)
+	r.With(httputil.RecoverMiddleware).Delete("/class-prompts/{class}", hClass.Delete)
 }

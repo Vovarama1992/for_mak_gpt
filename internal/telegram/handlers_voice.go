@@ -89,14 +89,14 @@ func (app *BotApp) handleVoice(ctx context.Context, botID string, bot *tgbotapi.
 	sentThinking, _ := bot.Send(thinkingMsg)
 
 	// === GPT ===
-	reply, err := app.AiService.GetReply(ctx, botID, tgID, text, nil)
-	if err != nil {
-		del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
-		bot.Request(del)
-
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при ответе."))
-		return
-	}
+	reply, err := app.AiService.GetReply(
+		ctx,
+		botID,
+		tgID,
+		"voice",
+		text,
+		nil,
+	)
 
 	// === синтез ответа ===
 	outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
