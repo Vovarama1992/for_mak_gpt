@@ -15,6 +15,7 @@ func (app *BotApp) handlePhoto(
 	bot *tgbotapi.BotAPI,
 	msg *tgbotapi.Message,
 	tgID int64,
+	mainKB tgbotapi.ReplyKeyboardMarkup, // ← ДОБАВИЛИ
 ) {
 	chatID := msg.Chat.ID
 
@@ -22,96 +23,75 @@ func (app *BotApp) handlePhoto(
 	log.Printf("[photo] start bot=%s tg=%d fileID=%s size=%dx%d",
 		botID, tgID, photo.FileID, photo.Width, photo.Height)
 
+	// тариф не позволяет
 	if !app.checkImageAllowed(ctx, botID, tgID) {
-		bot.Send(tgbotapi.NewMessage(chatID,
-			"🖼 В этом тарифе разбор по фото недоступен."))
+		m := tgbotapi.NewMessage(chatID, "🖼 В этом тарифе разбор по фото недоступен.")
+		m.ReplyMarkup = mainKB
+		bot.Send(m)
 		return
 	}
 
-	// === 1. Получаем файл у Telegram ===
+	// === 1. Получаем файл TG ===
 	fileInfo, err := bot.GetFile(tgbotapi.FileConfig{FileID: photo.FileID})
 	if err != nil {
-		log.Printf("[photo] get fail: %v", err)
-		app.ErrorNotify.Notify(ctx, botID, err,
-			fmt.Sprintf("❗ Ошибка получения фото\nБот: %s\nПользователь: %d\nFileID: %s",
-				botID, tgID, photo.FileID))
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось получить фото."))
+		bot.Send(withKB(chatID, "⚠️ Не удалось получить фото.", mainKB))
 		return
 	}
 
 	downloadURL := fileInfo.Link(bot.Token)
-	log.Printf("[photo] telegram_url=%s", downloadURL)
 
 	// === 2. Скачиваем ===
 	resp, err := http.Get(downloadURL)
 	if err != nil {
-		log.Printf("[photo] download fail: %v", err)
-		app.ErrorNotify.Notify(ctx, botID, err,
-			fmt.Sprintf("❗ Ошибка загрузки фото\nБот: %s\nПользователь: %d\nURL: %s",
-				botID, tgID, downloadURL))
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка загрузки фото."))
+		bot.Send(withKB(chatID, "⚠️ Ошибка загрузки фото.", mainKB))
 		return
 	}
 	defer resp.Body.Close()
 
 	filename := fmt.Sprintf("%s.jpg", photo.FileID)
-	log.Printf("[photo] saving as %s", filename)
 
 	// === 3. Сохраняем в S3 ===
 	publicURL, err := app.S3Service.SaveImage(ctx, botID, tgID, resp.Body, filename, "image/jpeg")
 	if err != nil {
-		log.Printf("[photo] s3 save fail: %v", err)
-		app.ErrorNotify.Notify(ctx, botID, err,
-			fmt.Sprintf("❗ Ошибка сохранения в S3\nБот: %s\nПользователь: %d\nФайл: %s",
-				botID, tgID, filename))
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка хранения фото."))
+		bot.Send(withKB(chatID, "⚠️ Ошибка хранения фото.", mainKB))
 		return
 	}
-	log.Printf("[photo] s3_url=%s", publicURL)
 
-	// === 4. История: user (IMAGE) ===
+	// === 4. История ===
 	app.RecordService.AddImage(ctx, botID, tgID, "user", publicURL)
 
-	// === 5. Показываем индикатор ===
+	// === 5. Индикатор «думает» ===
 	thinking := tgbotapi.NewMessage(chatID, "🤖 AI думает…")
+	thinking.ReplyMarkup = mainKB
 	sentThinking, _ := bot.Send(thinking)
 
 	// === 6. GPT ===
 	gptInput := "📷 Пользователь прислал изображение."
-	reply, err := app.AiService.GetReply(
-		ctx,
-		botID,
-		tgID,
-		"text",
-		gptInput,
-		&publicURL,
-	)
-
+	reply, err := app.AiService.GetReply(ctx, botID, tgID, "text", gptInput, &publicURL)
 	if err != nil {
-		log.Printf("[photo] ai fail: %v", err)
-		app.ErrorNotify.Notify(ctx, botID, err,
-			fmt.Sprintf("❗ Ошибка GPT\nБот: %s\nПользователь: %d\nФото: %s",
-				botID, tgID, publicURL))
-
-		// удаляем индикатор
-		del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
-		bot.Request(del)
-
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки фото."))
+		// убрать индикатор
+		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
+		bot.Send(withKB(chatID, "⚠️ Ошибка обработки фото.", mainKB))
 		return
 	}
 
-	log.Printf("[photo] ai_reply=%q", reply)
+	// === 7. Ответ GPT (С ОБЯЗАТЕЛЬНОЙ клавиатурой) ===
+	out := tgbotapi.NewMessage(chatID, reply)
+	out.ReplyMarkup = mainKB
+	bot.Send(out)
 
-	// === 7. Отправляем ответ ===
-	bot.Send(tgbotapi.NewMessage(chatID, reply))
-
-	// === 8. История: tutor (TEXT) ===
+	// === 8. История ===
 	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
 
 	// === 9. Удаляем индикатор ===
-	del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
-	bot.Request(del)
+	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 
 	log.Printf("[photo] done botID=%s tgID=%d", botID, tgID)
+}
+
+// вспомогательная функция
+func withKB(chatID int64, text string, kb tgbotapi.ReplyKeyboardMarkup) tgbotapi.MessageConfig {
+	m := tgbotapi.NewMessage(chatID, text)
+	m.ReplyMarkup = kb
+	return m
 }

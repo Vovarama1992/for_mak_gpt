@@ -2,7 +2,6 @@ package telegram
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -14,6 +13,7 @@ func (app *BotApp) handleText(
 	bot *tgbotapi.BotAPI,
 	msg *tgbotapi.Message,
 	tgID int64,
+	mainKB tgbotapi.ReplyKeyboardMarkup, // ← добавили
 ) {
 	chatID := msg.Chat.ID
 	userText := msg.Text
@@ -22,6 +22,7 @@ func (app *BotApp) handleText(
 
 	// === 0. показываем 'AI думает…' ===
 	thinkingMsg := tgbotapi.NewMessage(chatID, "🤖 AI думает…")
+	thinkingMsg.ReplyMarkup = mainKB // ← держим меню
 	sentThinking, _ := bot.Send(thinkingMsg)
 
 	// === 1. GPT ===
@@ -37,30 +38,25 @@ func (app *BotApp) handleText(
 	if err != nil {
 		log.Printf("[text] ai reply fail botID=%s tgID=%d: %v", botID, tgID, err)
 
-		app.ErrorNotify.Notify(
-			ctx,
-			botID,
-			err,
-			fmt.Sprintf("❗ Ошибка GPT ответа\n\nБот: %s\nПользователь: %d\nТекст: %q",
-				botID, tgID, userText),
-		)
+		out := tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке запроса.")
+		out.ReplyMarkup = mainKB // ← держим меню
+		bot.Send(out)
 
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка при обработке запроса."))
-
-		// === удаляем индикатор ===
 		del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
 		bot.Request(del)
 		return
 	}
 
-	// === 2. отправляем ответ ===
-	bot.Send(tgbotapi.NewMessage(chatID, reply))
+	// === 2. GPT ответ ===
+	out := tgbotapi.NewMessage(chatID, reply)
+	out.ReplyMarkup = mainKB // ← КРИТИЧЕСКОЕ МЕСТО
+	bot.Send(out)
 
-	// === 3. пишем историю ===
+	// === 3. история ===
 	app.RecordService.AddText(ctx, botID, tgID, "user", userText)
 	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
 
-	// === 4. удаляем 'AI думает…' ===
+	// === 4. удаляем индикатор "думает" ===
 	del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
 	bot.Request(del)
 

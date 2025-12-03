@@ -58,9 +58,6 @@ func (app *BotApp) handleMessage(
 	switch status {
 
 	case "none":
-		log.Printf("[none] botID=%s tgID=%d → show Start", botID, tgID)
-
-		// Клавиатура "Старт"
 		startKB := tgbotapi.NewReplyKeyboard(
 			tgbotapi.NewKeyboardButtonRow(
 				tgbotapi.NewKeyboardButton("▶️ Старт"),
@@ -68,18 +65,15 @@ func (app *BotApp) handleMessage(
 		)
 		startKB.ResizeKeyboard = true
 
-		// Если нажали "Старт" → показать тарифы
 		if msg.Text == "▶️ Старт" {
 			menu := app.BuildSubscriptionMenu(ctx)
 			text := app.BuildSubscriptionText()
-
 			out := tgbotapi.NewMessage(chatID, text)
 			out.ReplyMarkup = menu
 			bot.Send(out)
 			return
 		}
 
-		// Показываем кнопку старта
 		welcome := tgbotapi.NewMessage(chatID,
 			"Добро пожаловать! Нажми «Старт», чтобы выбрать тариф.")
 		welcome.ReplyMarkup = startKB
@@ -87,25 +81,23 @@ func (app *BotApp) handleMessage(
 		return
 
 	case "pending":
-		log.Printf("[pending] botID=%s tgID=%d → MsgPending", botID, tgID)
 		bot.Send(tgbotapi.NewMessage(chatID, MsgPending))
 		return
 
 	case "expired":
-		log.Printf("[expired] botID=%s tgID=%d → ask renew", botID, tgID)
-
 		menu := app.BuildSubscriptionMenu(ctx)
 		text := "⏳ Срок подписки истёк. Продли, чтобы снова пользоваться ботом!"
-
 		out := tgbotapi.NewMessage(chatID, text)
 		out.ReplyMarkup = menu
 		bot.Send(out)
 		return
 
+	//------------------------------------------------------
+	//     ACTIVE
+	//------------------------------------------------------
 	case "active":
-		log.Printf("[active] botID=%s tgID=%d → show main menu", botID, tgID)
 
-		// Клавиатура "Остаток минут"
+		// постоянная клавиатура
 		mainKB := tgbotapi.NewReplyKeyboard(
 			tgbotapi.NewKeyboardButtonRow(
 				tgbotapi.NewKeyboardButton("🕒 Остаток минут"),
@@ -114,44 +106,45 @@ func (app *BotApp) handleMessage(
 		)
 		mainKB.ResizeKeyboard = true
 
-		// Отправляем клаву без текста
-		msgOut := tgbotapi.NewMessage(chatID, " ") // пробел = телега обновляет клаву
+		// обновляем клавиатуру пустым сообщением
+		msgOut := tgbotapi.NewMessage(chatID, " ")
 		msgOut.ReplyMarkup = mainKB
 		bot.Send(msgOut)
 
-		// Если нажали кнопку
+		// кнопка 1: минуты
 		if msg.Text == "🕒 Остаток минут" {
-			log.Printf("[active] botID=%s tgID=%d → ShowVoiceMinutes", botID, tgID)
 			app.ShowVoiceMinutesScreen(ctx, botID, bot, tgID, chatID)
 			return
 		}
 
+		// кнопка 2: выбор классов
 		if msg.Text == "📚 Выбрать класс" {
 			app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
 			return
 		}
 
-		// Обработка типов сообщений
+		// обработка типов, ВАЖНО: передаём клавиатуру внутрь
 		switch {
 		case msg.Voice != nil:
-			log.Printf("[active] botID=%s tgID=%d → voice", botID, tgID)
-			app.handleVoice(ctx, botID, bot, msg, tgID)
+			app.handleVoice(ctx, botID, bot, msg, tgID, mainKB)
+			return
 
 		case len(msg.Photo) > 0:
-			log.Printf("[active] botID=%s tgID=%d → photo", botID, tgID)
-			app.handlePhoto(ctx, botID, bot, msg, tgID)
+			app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
+			return
 
 		case msg.Text != "":
-			log.Printf("[active] botID=%s tgID=%d → text(%q)", botID, tgID, msg.Text)
-			app.handleText(ctx, botID, bot, msg, tgID)
+			app.handleText(ctx, botID, bot, msg, tgID, mainKB)
+			return
 
 		default:
-			bot.Send(tgbotapi.NewMessage(chatID, "📎 Отправь текст, голос или фото."))
+			m := tgbotapi.NewMessage(chatID, "📎 Отправь текст, голос или фото.")
+			m.ReplyMarkup = mainKB
+			bot.Send(m)
+			return
 		}
-		return
 
 	default:
-		log.Printf("[unknown] botID=%s tgID=%d → status=%s", botID, tgID, status)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Неизвестный статус подписки."))
 		return
 	}
