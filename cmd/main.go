@@ -119,6 +119,7 @@ func main() {
 		s3Service,
 		botService,
 		errService,
+		classService,
 	)
 
 	if err := botApp.InitBots(); err != nil {

@@ -109,6 +109,7 @@ func (app *BotApp) handleMessage(
 		mainKB := tgbotapi.NewReplyKeyboard(
 			tgbotapi.NewKeyboardButtonRow(
 				tgbotapi.NewKeyboardButton("🕒 Остаток минут"),
+				tgbotapi.NewKeyboardButton("📚 Выбрать класс"),
 			),
 		)
 		mainKB.ResizeKeyboard = true
@@ -122,6 +123,11 @@ func (app *BotApp) handleMessage(
 		if msg.Text == "🕒 Остаток минут" {
 			log.Printf("[active] botID=%s tgID=%d → ShowVoiceMinutes", botID, tgID)
 			app.ShowVoiceMinutesScreen(ctx, botID, bot, tgID, chatID)
+			return
+		}
+
+		if msg.Text == "📚 Выбрать класс" {
+			app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
 			return
 		}
 

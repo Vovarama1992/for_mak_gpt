@@ -34,6 +34,20 @@ func (app *BotApp) handleCallback(
 		return
 	}
 
+	if strings.HasPrefix(cb.Data, "set_class_") {
+		idStr := strings.TrimPrefix(cb.Data, "set_class_")
+		classID, _ := strconv.Atoi(idStr)
+
+		err := app.ClassService.SetUserClass(ctx, botID, cb.From.ID, classID)
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(cb.Message.Chat.ID, "Не удалось установить класс"))
+			return
+		}
+
+		bot.Send(tgbotapi.NewMessage(cb.Message.Chat.ID, "Класс обновлён"))
+		return
+	}
+
 	// ---------------------------
 	// 2) Пользователь выбрал конкретный пакет минут: pkg_{id}
 	// ---------------------------
