@@ -17,7 +17,7 @@ func NewClassRepo(db *sql.DB) ClassRepo {
 // classes
 //
 
-func (r *repo) CreateClass(ctx context.Context, grade int) (*Class, error) {
+func (r *repo) CreateClass(ctx context.Context, grade string) (*Class, error) {
 	row := r.db.QueryRowContext(ctx,
 		`INSERT INTO classes (grade)
 		 VALUES ($1)

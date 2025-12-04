@@ -15,7 +15,6 @@ func (app *BotApp) ShowClassPicker(
 	chatID int64,
 ) {
 	// текущий
-	cur, _ := app.ClassService.GetUserClass(ctx, botID, tgID)
 
 	// список классов
 	list, err := app.ClassService.ListClasses(ctx)
@@ -25,14 +24,6 @@ func (app *BotApp) ShowClassPicker(
 	}
 
 	text := "📚 Выбор класса\n\n"
-
-	if cur != nil {
-		text += fmt.Sprintf("Текущий класс: %d\n\n", cur.ClassID)
-	} else {
-		text += "Класс ещё не выбран\n\n"
-	}
-
-	text += "Выбери уровень:"
 
 	// inline-кнопки
 	rows := [][]tgbotapi.InlineKeyboardButton{}

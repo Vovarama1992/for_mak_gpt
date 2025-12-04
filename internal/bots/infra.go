@@ -19,6 +19,7 @@ func (r *repo) ListAll(ctx context.Context) ([]*BotConfig, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT bot_id, token, model,
 		       text_style_prompt, voice_style_prompt,
+		       photo_style_prompt,
 		       voice_id
 		FROM bot_configs
 		ORDER BY bot_id
@@ -37,6 +38,7 @@ func (r *repo) ListAll(ctx context.Context) ([]*BotConfig, error) {
 			&b.Model,
 			&b.TextStylePrompt,
 			&b.VoiceStylePrompt,
+			&b.PhotoStylePrompt,
 			&b.VoiceID,
 		); err != nil {
 			return nil, err
@@ -52,6 +54,7 @@ func (r *repo) Get(ctx context.Context, botID string) (*BotConfig, error) {
 	err := r.db.QueryRowContext(ctx, `
 		SELECT bot_id, token, model,
 		       text_style_prompt, voice_style_prompt,
+		       photo_style_prompt,
 		       voice_id
 		FROM bot_configs
 		WHERE bot_id = $1
@@ -61,6 +64,7 @@ func (r *repo) Get(ctx context.Context, botID string) (*BotConfig, error) {
 		&b.Model,
 		&b.TextStylePrompt,
 		&b.VoiceStylePrompt,
+		&b.PhotoStylePrompt,
 		&b.VoiceID,
 	)
 	if err != nil {
@@ -90,6 +94,11 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 		args = append(args, *in.VoiceStylePrompt)
 		idx++
 	}
+	if in.PhotoStylePrompt != nil {
+		q += "photo_style_prompt=$" + itoa(idx) + ","
+		args = append(args, *in.PhotoStylePrompt)
+		idx++
+	}
 	if in.VoiceID != nil {
 		q += "voice_id=$" + itoa(idx) + ","
 		args = append(args, *in.VoiceID)
@@ -100,9 +109,12 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 		return r.Get(ctx, in.BotID)
 	}
 
-	q = q[:len(q)-1] // убрать последнюю запятую
-	q += " WHERE bot_id=$" + itoa(idx) +
-		" RETURNING bot_id, token, model, text_style_prompt, voice_style_prompt, voice_id"
+	q = q[:len(q)-1]
+	q += " WHERE bot_id=$" + itoa(idx) + ` 
+		RETURNING bot_id, token, model,
+		          text_style_prompt, voice_style_prompt,
+		          photo_style_prompt,
+		          voice_id`
 
 	args = append(args, in.BotID)
 
@@ -113,6 +125,7 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 		&b.Model,
 		&b.TextStylePrompt,
 		&b.VoiceStylePrompt,
+		&b.PhotoStylePrompt,
 		&b.VoiceID,
 	)
 	if err != nil {

@@ -133,12 +133,16 @@ func (app *BotApp) handleMessage(
 			app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
 			return
 
+		case msg.Document != nil: // ← НОВЫЙ КАНАЛ
+			app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
+			return
+
 		case msg.Text != "":
 			app.handleText(ctx, botID, bot, msg, tgID, mainKB)
 			return
 
 		default:
-			m := tgbotapi.NewMessage(chatID, "📎 Отправь текст, голос или фото.")
+			m := tgbotapi.NewMessage(chatID, "📎 Отправь текст, голос, фото или документ.")
 			m.ReplyMarkup = mainKB
 			bot.Send(m)
 			return

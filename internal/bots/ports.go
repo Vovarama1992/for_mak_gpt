@@ -20,6 +20,7 @@ type BotConfig struct {
 	Model            string `json:"model"`
 	TextStylePrompt  string `json:"text_style_prompt"`
 	VoiceStylePrompt string `json:"voice_style_prompt"`
+	PhotoStylePrompt string `json:"photo_style_prompt"`
 	VoiceID          string `json:"voice_id"`
 }
 
@@ -28,5 +29,6 @@ type UpdateInput struct {
 	Model            *string
 	TextStylePrompt  *string
 	VoiceStylePrompt *string
+	PhotoStylePrompt *string
 	VoiceID          *string
 }

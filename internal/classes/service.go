@@ -14,7 +14,7 @@ func NewClassService(repo ClassRepo) ClassService {
 // classes
 //
 
-func (s *service) CreateClass(ctx context.Context, grade int) (*Class, error) {
+func (s *service) CreateClass(ctx context.Context, grade string) (*Class, error) {
 	return s.repo.CreateClass(ctx, grade)
 }
 

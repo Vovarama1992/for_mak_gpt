@@ -54,6 +54,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		Model            *string `json:"model"`
 		TextStylePrompt  *string `json:"text_style_prompt"`
 		VoiceStylePrompt *string `json:"voice_style_prompt"`
+		PhotoStylePrompt *string `json:"photo_style_prompt"` // ← новое
 		VoiceID          *string `json:"voice_id"`
 	}
 
@@ -67,6 +68,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		Model:            body.Model,
 		TextStylePrompt:  body.TextStylePrompt,
 		VoiceStylePrompt: body.VoiceStylePrompt,
+		PhotoStylePrompt: body.PhotoStylePrompt, // ← новое
 		VoiceID:          body.VoiceID,
 	}
 

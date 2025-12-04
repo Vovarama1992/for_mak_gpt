@@ -5,7 +5,7 @@ import "context"
 // --- базовая сущность класса ---
 type Class struct {
 	ID     int          `json:"id"`
-	Grade  int          `json:"grade"`
+	Grade  string       `json:"grade"`
 	Prompt *ClassPrompt `json:"prompt,omitempty"`
 }
 
@@ -26,7 +26,7 @@ type UserClass struct {
 // --- интерфейс репозитория ---
 type ClassRepo interface {
 	// classes
-	CreateClass(ctx context.Context, grade int) (*Class, error)
+	CreateClass(ctx context.Context, grade string) (*Class, error)
 	ListClasses(ctx context.Context) ([]*Class, error)
 	GetClassByID(ctx context.Context, id int) (*Class, error)
 
@@ -44,7 +44,7 @@ type ClassRepo interface {
 
 type ClassService interface {
 	// classes
-	CreateClass(ctx context.Context, grade int) (*Class, error)
+	CreateClass(ctx context.Context, grade string) (*Class, error)
 	ListClasses(ctx context.Context) ([]*Class, error)
 	GetClassByID(ctx context.Context, id int) (*Class, error)
 

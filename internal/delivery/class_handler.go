@@ -37,7 +37,7 @@ func (h *ClassHandler) ListClasses(w http.ResponseWriter, r *http.Request) {
 // body: { "grade": 1 }
 func (h *ClassHandler) CreateClass(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Grade int `json:"grade"`
+		Grade string `json:"grade"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, err.Error(), 400)
