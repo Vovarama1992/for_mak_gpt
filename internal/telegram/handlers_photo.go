@@ -23,17 +23,16 @@ func (app *BotApp) handlePhoto(
 	// ОПРЕДЕЛЯЕМ ФАЙЛ
 	//--------------------------------------------------------
 	var fileID, filename, contentType string
-	var isDocument bool
 
 	if msg.Document != nil {
 		d := msg.Document
-		isDocument = true
 		fileID = d.FileID
 		filename = d.FileName
 		contentType = d.MimeType
 
-		log.Printf("[document] bot=%s tg=%d file=%s mime=%s",
+		log.Printf("[document->image] bot=%s tg=%d file=%s mime=%s",
 			botID, tgID, fileID, contentType)
+
 	} else {
 		p := msg.Photo[len(msg.Photo)-1]
 		fileID = p.FileID
@@ -48,14 +47,14 @@ func (app *BotApp) handlePhoto(
 	// тариф
 	//--------------------------------------------------------
 	if !app.checkImageAllowed(ctx, botID, tgID) {
-		m := tgbotapi.NewMessage(chatID, "🖼 В этом тарифе разбор изображений недоступен.")
+		m := tgbotapi.NewMessage(chatID, "🖼 В этом тарифе разбор файлов недоступен.")
 		m.ReplyMarkup = mainKB
 		bot.Send(m)
 		return
 	}
 
 	//--------------------------------------------------------
-	// 1. Получаем файл
+	// 1. Получаем файл из Telegram
 	//--------------------------------------------------------
 	fileInfo, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
@@ -91,13 +90,9 @@ func (app *BotApp) handlePhoto(
 	}
 
 	//--------------------------------------------------------
-	// 4. История
+	// 4. История (ВСЕГДА как ImageURL)
 	//--------------------------------------------------------
-	if isDocument {
-		app.RecordService.AddText(ctx, botID, tgID, "user", "📄 Документ: "+publicURL)
-	} else {
-		app.RecordService.AddImage(ctx, botID, tgID, "user", publicURL)
-	}
+	app.RecordService.AddImage(ctx, botID, tgID, "user", publicURL)
 
 	//--------------------------------------------------------
 	// 5. Индикатор «думает»
@@ -107,32 +102,16 @@ func (app *BotApp) handlePhoto(
 	sentThinking, _ := bot.Send(thinking)
 
 	//--------------------------------------------------------
-	// 6. GPT
+	// 6. GPT — ВСЕГДА через image_url
 	//--------------------------------------------------------
-	var reply string
+	gptInput := "📄 Пользователь прислал файл."
 
-	if isDocument {
-		// документ → обычный текстовый URL
-		gptInput := "📄 Пользователь прислал документ: " + publicURL
-
-		reply, err = app.AiService.GetReply(
-			ctx, botID, tgID,
-			"text", // документ идёт как текст
-			gptInput,
-			nil, // без image_url
-		)
-
-	} else {
-		// фото → как раньше
-		gptInput := "📷 Пользователь прислал изображение."
-
-		reply, err = app.AiService.GetReply(
-			ctx, botID, tgID,
-			"photo",
-			gptInput,
-			&publicURL, // image_url
-		)
-	}
+	reply, err := app.AiService.GetReply(
+		ctx, botID, tgID,
+		"photo", // используем фото-ветку (теперь универсальная)
+		gptInput,
+		&publicURL, // КЛЮЧЕВОЕ — документ идёт как image_url
+	)
 
 	if err != nil {
 		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
@@ -160,5 +139,5 @@ func (app *BotApp) handlePhoto(
 	//--------------------------------------------------------
 	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 
-	log.Printf("[photo/document] done botID=%s tgID=%d", botID, tgID)
+	log.Printf("[file/photo] done botID=%s tgID=%d", botID, tgID)
 }
