@@ -20,43 +20,42 @@ func (app *BotApp) handlePhoto(
 	chatID := msg.Chat.ID
 
 	//--------------------------------------------------------
-	// ОПРЕДЕЛЯЕМ ФАЙЛ: фото или документ
+	// ОПРЕДЕЛЯЕМ ФАЙЛ
 	//--------------------------------------------------------
 	var fileID, filename, contentType string
+	var isDocument bool
 
 	if msg.Document != nil {
-		// документ → как фото
 		d := msg.Document
+		isDocument = true
 		fileID = d.FileID
 		filename = d.FileName
 		contentType = d.MimeType
 
-		log.Printf("[document->photo] bot=%s tg=%d file=%s mime=%s",
+		log.Printf("[document] bot=%s tg=%d file=%s mime=%s",
 			botID, tgID, fileID, contentType)
-
 	} else {
-		// обычное фото
-		photo := msg.Photo[len(msg.Photo)-1]
-		fileID = photo.FileID
-		filename = fmt.Sprintf("%s.jpg", photo.FileID)
+		p := msg.Photo[len(msg.Photo)-1]
+		fileID = p.FileID
+		filename = fmt.Sprintf("%s.jpg", p.FileID)
 		contentType = "image/jpeg"
 
 		log.Printf("[photo] bot=%s tg=%d file=%s size=%dx%d",
-			botID, tgID, photo.FileID, photo.Width, photo.Height)
+			botID, tgID, p.FileID, p.Width, p.Height)
 	}
 
 	//--------------------------------------------------------
 	// тариф
 	//--------------------------------------------------------
 	if !app.checkImageAllowed(ctx, botID, tgID) {
-		m := tgbotapi.NewMessage(chatID, "🖼 В этом тарифе разбор изображения недоступен.")
+		m := tgbotapi.NewMessage(chatID, "🖼 В этом тарифе разбор изображений недоступен.")
 		m.ReplyMarkup = mainKB
 		bot.Send(m)
 		return
 	}
 
 	//--------------------------------------------------------
-	// 1. Получаем файл из Telegram
+	// 1. Получаем файл
 	//--------------------------------------------------------
 	fileInfo, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
@@ -92,9 +91,13 @@ func (app *BotApp) handlePhoto(
 	}
 
 	//--------------------------------------------------------
-	// 4. История (как фото)
+	// 4. История
 	//--------------------------------------------------------
-	app.RecordService.AddImage(ctx, botID, tgID, "user", publicURL)
+	if isDocument {
+		app.RecordService.AddText(ctx, botID, tgID, "user", "📄 Документ: "+publicURL)
+	} else {
+		app.RecordService.AddImage(ctx, botID, tgID, "user", publicURL)
+	}
 
 	//--------------------------------------------------------
 	// 5. Индикатор «думает»
@@ -106,14 +109,30 @@ func (app *BotApp) handlePhoto(
 	//--------------------------------------------------------
 	// 6. GPT
 	//--------------------------------------------------------
-	gptInput := "📷 Пользователь прислал изображение."
+	var reply string
 
-	reply, err := app.AiService.GetReply(
-		ctx, botID, tgID,
-		"photo",
-		gptInput,
-		&publicURL,
-	)
+	if isDocument {
+		// документ → обычный текстовый URL
+		gptInput := "📄 Пользователь прислал документ: " + publicURL
+
+		reply, err = app.AiService.GetReply(
+			ctx, botID, tgID,
+			"text", // документ идёт как текст
+			gptInput,
+			nil, // без image_url
+		)
+
+	} else {
+		// фото → как раньше
+		gptInput := "📷 Пользователь прислал изображение."
+
+		reply, err = app.AiService.GetReply(
+			ctx, botID, tgID,
+			"photo",
+			gptInput,
+			&publicURL, // image_url
+		)
+	}
 
 	if err != nil {
 		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
