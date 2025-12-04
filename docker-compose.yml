@@ -44,4 +44,5 @@ networks:
   makeziper_net:
 
 volumes:
-  back_makeziper_pgdata:
+  back_back_makeziper_pgdata:
+    external: true
