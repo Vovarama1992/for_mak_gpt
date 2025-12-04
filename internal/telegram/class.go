@@ -30,7 +30,7 @@ func (app *BotApp) ShowClassPicker(
 	for _, c := range list {
 		rows = append(rows, []tgbotapi.InlineKeyboardButton{
 			tgbotapi.NewInlineKeyboardButtonData(
-				fmt.Sprintf("%d класс", c.Grade),
+				fmt.Sprintf("%s класс", c.Grade), // тут %s
 				fmt.Sprintf("set_class_%d", c.ID),
 			),
 		})
