@@ -175,23 +175,10 @@ func (s *AiService) GetReply(
 	}
 
 	// 8) последнее сообщение
-	if imageURL == nil {
-		// текст или документ
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:    "user",
-			Content: userText,
-		})
-	} else {
-		// фото
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role: "user",
-			MultiContent: []openai.ChatMessagePart{
-				{Type: openai.ChatMessagePartTypeText, Text: userText},
-				{Type: openai.ChatMessagePartTypeImageURL,
-					ImageURL: &openai.ChatMessageImageURL{URL: *imageURL}},
-			},
-		})
-	}
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    "user",
+		Content: userText,
+	})
 
 	// 9) GPT
 	reply, err := s.openaiClient.GetCompletion(ctx, messages, cfg.Model)

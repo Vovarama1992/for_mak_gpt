@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"log"
+	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -133,10 +134,13 @@ func (app *BotApp) handleMessage(
 			app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
 			return
 
-		case msg.Document != nil: // ← НОВЫЙ КАНАЛ
-			app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
+		case msg.Document != nil:
+			if isPDF(msg.Document) {
+				app.handlePDF(ctx, botID, bot, msg, tgID, mainKB)
+			} else {
+				app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
+			}
 			return
-
 		case msg.Text != "":
 			app.handleText(ctx, botID, bot, msg, tgID, mainKB)
 			return
@@ -195,4 +199,9 @@ func (app *BotApp) checkVoiceAllowed(ctx context.Context, botID string, tgID int
 
 func (app *BotApp) checkImageAllowed(ctx context.Context, botID string, tgID int64) bool {
 	return true
+}
+
+func isPDF(doc *tgbotapi.Document) bool {
+	name := strings.ToLower(doc.FileName)
+	return strings.HasSuffix(name, ".pdf")
 }
