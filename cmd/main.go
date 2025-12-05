@@ -14,6 +14,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/bots"
 	"github.com/Vovarama1992/make_ziper/internal/classes"
 	"github.com/Vovarama1992/make_ziper/internal/delivery"
+	"github.com/Vovarama1992/make_ziper/internal/doc"
 	"github.com/Vovarama1992/make_ziper/internal/domain"
 	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
 	"github.com/Vovarama1992/make_ziper/internal/infra"
@@ -65,6 +66,7 @@ func main() {
 	minutePackageRepo := minutes_packages.NewMinutePackageRepo(db)
 	classRepo := classes.NewClassRepo(db)
 	pdfConverter := pdf.NewPopplerPDFConverter()
+	docConverter := doc.NewLibreOfficeConverter()
 
 	// === S3 ===
 	s3Client, err := infra.NewS3Client()
@@ -78,6 +80,7 @@ func main() {
 	aiClient := ai.NewOpenAIClient()
 	botService := bots.NewService(botRepo)
 	pdfService := pdf.NewPDFService(pdfConverter)
+	docService := doc.NewService(docConverter)
 
 	// === services ===
 	tariffService := domain.NewTariffService(tariffRepo)
@@ -124,6 +127,7 @@ func main() {
 		errService,
 		classService,
 		*pdfService,
+		*docService,
 	)
 
 	if err := botApp.InitBots(); err != nil {

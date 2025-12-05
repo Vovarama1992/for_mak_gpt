@@ -137,7 +137,10 @@ func (app *BotApp) handleMessage(
 		case msg.Document != nil:
 			if isPDF(msg.Document) {
 				app.handlePDF(ctx, botID, bot, msg, tgID, mainKB)
+			} else if isWord(msg.Document) {
+				app.handleDoc(ctx, botID, bot, msg, tgID, mainKB)
 			} else {
+				// любые png/jpg/documents не pdf/doc
 				app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
 			}
 			return
@@ -204,4 +207,9 @@ func (app *BotApp) checkImageAllowed(ctx context.Context, botID string, tgID int
 func isPDF(doc *tgbotapi.Document) bool {
 	name := strings.ToLower(doc.FileName)
 	return strings.HasSuffix(name, ".pdf")
+}
+
+func isWord(doc *tgbotapi.Document) bool {
+	name := strings.ToLower(doc.FileName)
+	return strings.HasSuffix(name, ".doc") || strings.HasSuffix(name, ".docx")
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/ai"
 	"github.com/Vovarama1992/make_ziper/internal/bots"
 	"github.com/Vovarama1992/make_ziper/internal/classes"
+	"github.com/Vovarama1992/make_ziper/internal/doc"
 	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
 	mpkg "github.com/Vovarama1992/make_ziper/internal/minutes_packages"
 	"github.com/Vovarama1992/make_ziper/internal/pdf"
@@ -23,7 +24,8 @@ type BotApp struct {
 	SpeechService        *speech.Service
 	RecordService        ports.RecordService
 	S3Service            ports.S3Service
-	PDFService           pdf.PDFService // ← ДОБАВИТЬ
+	PDFService           pdf.PDFService
+	DocService           doc.Service
 
 	BotsService   bots.Service
 	ErrorNotify   error_notificator.Notificator
@@ -44,7 +46,8 @@ func NewBotApp(
 	bots bots.Service,
 	errNotify error_notificator.Notificator,
 	classes classes.ClassService,
-	pdf pdf.PDFService, // ← ДОБАВИТЬ
+	pdf pdf.PDFService,
+	doc doc.Service, // ← добавили
 ) *BotApp {
 	if minutePkg == nil {
 		panic("MinutePackageService is nil")
@@ -58,7 +61,8 @@ func NewBotApp(
 		SpeechService:        speech,
 		RecordService:        record,
 		S3Service:            s3,
-		PDFService:           pdf, // ← ДОБАВИТЬ
+		PDFService:           pdf,
+		DocService:           doc,
 
 		BotsService:  bots,
 		ErrorNotify:  errNotify,

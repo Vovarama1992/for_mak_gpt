@@ -10,11 +10,12 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/main.go
 
+
 # --- Runtime stage ---
 FROM alpine:3.20
 
-# УСТАНАВЛИВАЕМ POPPLER
-RUN apk update && apk add --no-cache poppler-utils
+# УСТАНАВЛИВАЕМ POPPLER + LIBREOFFICE
+RUN apk update && apk add --no-cache poppler-utils libreoffice
 
 WORKDIR /app
 

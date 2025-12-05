@@ -101,6 +101,10 @@ func (s *AiService) GetReply(
 	switch branch {
 	case "voice":
 		stylePrompt = cfg.VoiceStylePrompt
+
+	case "image", "photo":
+		stylePrompt = cfg.PhotoStylePrompt
+
 	default:
 		stylePrompt = cfg.TextStylePrompt
 	}
