@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,39 +21,34 @@ func (c *PopplerPDFConverter) ConvertToImages(
 	pdf io.Reader,
 ) ([]PDFPage, error) {
 
-	// 1. читаем PDF в память
+	log.Println("[pdf.conv] reading PDF...")
+
 	buf, err := io.ReadAll(pdf)
 	if err != nil {
+		log.Printf("[pdf.conv] read ERROR: %v", err)
 		return nil, err
 	}
 
-	// 2. создаём уникальный temp-dir
 	tmpDir, err := os.MkdirTemp("", "pdfconv-*")
 	if err != nil {
+		log.Printf("[pdf.conv] mktemp ERROR: %v", err)
 		return nil, err
 	}
-	// подчистим потом
 	defer os.RemoveAll(tmpDir)
 
-	// путь ввода
 	input := filepath.Join(tmpDir, "input.pdf")
 	if err := os.WriteFile(input, buf, 0644); err != nil {
+		log.Printf("[pdf.conv] write ERROR: %v", err)
 		return nil, err
 	}
 
-	// базовый путь вывода
 	outBase := filepath.Join(tmpDir, "page")
+	log.Printf("[pdf.conv] running pdftoppm input=%s", input)
 
-	// 3. запускаем poppler
-	cmd := exec.CommandContext(
-		ctx,
-		"pdftoppm",
-		input,
-		outBase,
-		"-jpeg",
-	)
-
-	if err := cmd.Run(); err != nil {
+	cmd := exec.CommandContext(ctx, "pdftoppm", input, outBase, "-jpeg")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("[pdf.conv] poppler ERROR: %v, output=%s", err, string(out))
 		return nil, fmt.Errorf("pdftoppm: %w", err)
 	}
 

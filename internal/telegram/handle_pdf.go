@@ -3,6 +3,7 @@ package telegram
 import (
 	"bytes"
 	"context"
+	"log"
 	"net/http"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -19,39 +20,44 @@ func (app *BotApp) handlePDF(
 	chatID := msg.Chat.ID
 	d := msg.Document
 
-	// тариф
+	log.Printf("[pdf] START bot=%s tg=%d filename=%s mime=%s",
+		botID, tgID, d.FileName, d.MimeType)
+
 	if !app.checkImageAllowed(ctx, botID, tgID) {
-		m := tgbotapi.NewMessage(chatID, "📄 В этом тарифе разбор PDF недоступен.")
-		m.ReplyMarkup = mainKB
-		bot.Send(m)
+		bot.Send(tgbotapi.NewMessage(chatID, "📄 В этом тарифе разбор PDF недоступен."))
 		return
 	}
 
-	// 1. получить файл TG
+	// 1. TG FILE
 	fileInfo, err := bot.GetFile(tgbotapi.FileConfig{FileID: d.FileID})
 	if err != nil {
+		log.Printf("[pdf] TG GetFile ERROR: %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось получить PDF."))
 		return
 	}
 	downloadURL := fileInfo.Link(bot.Token)
+	log.Printf("[pdf] downloadURL=%s", downloadURL)
 
 	resp, err := http.Get(downloadURL)
 	if err != nil {
+		log.Printf("[pdf] HTTP GET ERROR: %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка загрузки PDF."))
 		return
 	}
 	defer resp.Body.Close()
 
-	// 2. конвертация в картинки
+	// 2. PDF → IMAGES
+	log.Printf("[pdf] converting via PDFService...")
 	pages, err := app.PDFService.Convert(ctx, resp.Body)
 	if err != nil {
+		log.Printf("[pdf] CONVERT ERROR: %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки PDF."))
 		return
 	}
+	log.Printf("[pdf] pages generated: %d", len(pages))
 
-	// 3. сохраняем страницы в S3 + пишем историю
-	var lastImageURL *string
-	for _, p := range pages {
+	// 3. SAVE EACH PAGE
+	for i, p := range pages {
 		url, err := app.S3Service.SaveImage(
 			ctx, botID, tgID,
 			bytes.NewReader(p.Bytes),
@@ -59,36 +65,35 @@ func (app *BotApp) handlePDF(
 			p.MimeType,
 		)
 		if err != nil {
-			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка хранения изображения."))
+			log.Printf("[pdf] S3 ERROR page=%d: %v", i+1, err)
+			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка хранения страницы."))
 			return
 		}
+		log.Printf("[pdf] saved page=%d url=%s", i+1, url)
 
 		app.RecordService.AddImage(ctx, botID, tgID, "user", url)
-		lastImageURL = &url // последняя страница для GPT
 	}
 
-	// 4. индикатор
+	// 4. GPT CALL
 	thinking := tgbotapi.NewMessage(chatID, "🤖 AI читает PDF…")
 	thinking.ReplyMarkup = mainKB
 	sentThinking, _ := bot.Send(thinking)
 
-	// 5. GPT (как фото)
 	reply, err := app.AiService.GetReply(
 		ctx, botID, tgID,
-		"image", // ветка фото
-		"Пользователь прислал PDF-файл.", // текстовая часть
-		lastImageURL, // последняя страница как image_url
+		"image",
+		"Пользователь прислал PDF-файл.",
+		nil,
 	)
 	if err != nil {
+		log.Printf("[pdf] GPT ERROR: %v", err)
 		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки PDF."))
 		return
 	}
 
-	// 6. ответ пользователю
-	out := tgbotapi.NewMessage(chatID, reply)
-	out.ReplyMarkup = mainKB
-	bot.Send(out)
-
+	bot.Send(tgbotapi.NewMessage(chatID, reply))
 	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
+
+	log.Printf("[pdf] DONE bot=%s tg=%d", botID, tgID)
 }
