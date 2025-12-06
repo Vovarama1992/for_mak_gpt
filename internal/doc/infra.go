@@ -52,7 +52,7 @@ func (c *LibreOfficeConverter) ConvertToImages(
 	}
 	log.Printf("[doc.conv] produced PDF: %s", pdfFile)
 
-	// 4. PDF → JPG через pdftoppm с повышенным DPI
+	// 4. PDF → JPEG (максимальное качество)
 	outBase := filepath.Join(dir, "page")
 	log.Printf("[doc.conv] running pdftoppm: pdf=%s base=%s", pdfFile, outBase)
 
@@ -60,10 +60,12 @@ func (c *LibreOfficeConverter) ConvertToImages(
 		ctx,
 		"pdftoppm",
 		"-jpeg",
-		"-r", "200", // повышаем DPI для читаемости текста
+		"-r", "300", // повышенный DPI → читаемый OCR
+		"-jpegopt", "quality=100", // максимальное качество JPEG
 		pdfFile,
 		outBase,
 	)
+
 	if out, err := cmd2.CombinedOutput(); err != nil {
 		log.Printf("[doc.conv] pdftoppm ERROR output=%s", out)
 		return nil, fmt.Errorf("pdftoppm: %v output=%s", err, out)
