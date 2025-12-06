@@ -28,14 +28,28 @@ services:
     networks:
       - makeziper_net
 
+  python_doc: # ← НОВЫЙ СЕРВИС
+    build:
+      context: ./internal/doc/python # ← папка где Dockerfile Python
+    container_name: makeziper_doc_service
+    networks:
+      - makeziper_net
+    expose:
+      - "8000"
+    restart: unless-stopped
+
   app:
     build: .
     container_name: makeziper_app
     env_file:
       - .env
+    environment:
+      DOC_SERVICE_URL: "http://python_doc:8000/convert" # ← НОВОЕ!
     depends_on:
       db:
         condition: service_healthy
+      python_doc:
+        condition: service_started
     ports:
       - "${PORT:-8080}:8080"
     restart: unless-stopped

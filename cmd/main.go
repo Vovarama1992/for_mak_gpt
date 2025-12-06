@@ -66,7 +66,7 @@ func main() {
 	minutePackageRepo := minutes_packages.NewMinutePackageRepo(db)
 	classRepo := classes.NewClassRepo(db)
 	pdfConverter := pdf.NewPopplerPDFConverter()
-	docConverter := doc.NewLibreOfficeConverter()
+	docConverter := doc.NewPythonDocConverter()
 
 	// === S3 ===
 	s3Client, err := infra.NewS3Client()

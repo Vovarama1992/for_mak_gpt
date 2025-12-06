@@ -1,99 +1,104 @@
 package doc
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
-	"os/exec"
-	"path/filepath"
 )
 
-type LibreOfficeConverter struct{}
-
-func NewLibreOfficeConverter() *LibreOfficeConverter {
-	return &LibreOfficeConverter{}
+type pythonResp struct {
+	Pages []struct {
+		FileName string `json:"file_name"`
+		Mime     string `json:"mime"`
+		Base64   string `json:"base64"`
+	} `json:"pages"`
 }
 
-func (c *LibreOfficeConverter) ConvertToImages(
+type PythonDocConverter struct {
+	URL string
+}
+
+func NewPythonDocConverter() *PythonDocConverter {
+	url := os.Getenv("DOC_SERVICE_URL")
+	if url == "" {
+		// Фолбек — но не галюна, мы точно знаем имя сервиса из docker-compose
+		url = "http://python_doc:8000/convert"
+	}
+	return &PythonDocConverter{URL: url}
+}
+
+func (c *PythonDocConverter) ConvertToImages(
 	ctx context.Context,
 	data []byte,
 ) ([]Page, error) {
 
-	// 1. временная директория
-	dir, err := os.MkdirTemp("", "docconv-*")
+	log.Printf("[doc.conv] sending %d bytes to %s", len(data), c.URL)
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		c.URL,
+		bytes.NewReader(data),
+	)
 	if err != nil {
+		log.Printf("[doc.conv] NEW REQUEST ERROR: %v", err)
 		return nil, err
 	}
-	log.Printf("[doc.conv] temp dir: %s", dir)
+	req.Header.Set("Content-Type", "application/octet-stream")
 
-	inputFile := filepath.Join(dir, "input.docx")
-	pdfFile := filepath.Join(dir, "input.pdf")
+	// ---- REQUEST START ----
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("[doc.conv] HTTP ERROR: %v", err)
+		return nil, fmt.Errorf("python service error: %w", err)
+	}
+	defer resp.Body.Close()
 
-	// 2. пишем DOC/DOCX
-	if err := os.WriteFile(inputFile, data, 0644); err != nil {
+	log.Printf("[doc.conv] python status: %d", resp.StatusCode)
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != 200 {
+		log.Printf("[doc.conv] BAD STATUS BODY: %s", string(body))
+		return nil, fmt.Errorf("python service bad status %d", resp.StatusCode)
+	}
+
+	// ---- JSON PARSE ----
+	var out pythonResp
+	if err := json.Unmarshal(body, &out); err != nil {
+		log.Printf("[doc.conv] JSON ERROR: %v", err)
 		return nil, err
 	}
-	log.Printf("[doc.conv] wrote DOCX: %s", inputFile)
 
-	// 3. LibreOffice → PDF
-	log.Printf("[doc.conv] running libreoffice to PDF...")
-	cmd := exec.CommandContext(
-		ctx,
-		"libreoffice",
-		"--headless",
-		"--convert-to", "pdf",
-		"--outdir", dir,
-		inputFile,
-	)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("[doc.conv] libreoffice ERROR output=%s", out)
-		return nil, fmt.Errorf("libreoffice: %v output=%s", err, out)
-	}
-	log.Printf("[doc.conv] produced PDF: %s", pdfFile)
+	log.Printf("[doc.conv] pages received: %d", len(out.Pages))
 
-	// 4. PDF → JPEG (максимальное качество)
-	outBase := filepath.Join(dir, "page")
-	log.Printf("[doc.conv] running pdftoppm: pdf=%s base=%s", pdfFile, outBase)
-
-	cmd2 := exec.CommandContext(
-		ctx,
-		"pdftoppm",
-		"-jpeg",
-		"-r", "300", // повышенный DPI → читаемый OCR
-		"-jpegopt", "quality=100", // максимальное качество JPEG
-		pdfFile,
-		outBase,
-	)
-
-	if out, err := cmd2.CombinedOutput(); err != nil {
-		log.Printf("[doc.conv] pdftoppm ERROR output=%s", out)
-		return nil, fmt.Errorf("pdftoppm: %v output=%s", err, out)
-	}
-
-	// 5. собираем страницы
+	// ---- BASE64 DECODE ----
 	var pages []Page
-	for i := 1; ; i++ {
-		fn := filepath.Join(dir, fmt.Sprintf("page-%d.jpg", i))
-		b, err := os.ReadFile(fn)
+	for i, p := range out.Pages {
+		raw, err := decodeBase64(p.Base64)
 		if err != nil {
-			break
+			log.Printf("[doc.conv] BASE64 DECODE ERROR (page %d): %v", i+1, err)
+			return nil, err
 		}
-
-		log.Printf("[doc.conv] produced JPEG page=%d file=%s", i, fn)
+		log.Printf("[doc.conv] decoded page=%s bytes=%d", p.FileName, len(raw))
 
 		pages = append(pages, Page{
-			Bytes:    b,
-			FileName: fmt.Sprintf("page-%d.jpg", i),
-			MimeType: "image/jpeg",
+			Bytes:    raw,
+			FileName: p.FileName,
+			MimeType: p.Mime,
 		})
 	}
 
-	if len(pages) == 0 {
-		return nil, fmt.Errorf("no pages produced from doc")
-	}
-
-	log.Printf("[doc.conv] total pages: %d (pdf=%s)", len(pages), pdfFile)
-
+	log.Printf("[doc.conv] DONE total_pages=%d", len(pages))
 	return pages, nil
+}
+
+func decodeBase64(s string) ([]byte, error) {
+	return io.ReadAll(base64.NewDecoder(base64.StdEncoding, bytes.NewBufferString(s)))
 }
