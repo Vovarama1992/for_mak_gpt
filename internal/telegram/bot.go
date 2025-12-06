@@ -130,20 +130,20 @@ func (app *BotApp) handleMessage(
 			app.handleVoice(ctx, botID, bot, msg, tgID, mainKB)
 			return
 
-		case len(msg.Photo) > 0:
-			app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
-			return
-
 		case msg.Document != nil:
 			if isPDF(msg.Document) {
 				app.handlePDF(ctx, botID, bot, msg, tgID, mainKB)
 			} else if isWord(msg.Document) {
 				app.handleDoc(ctx, botID, bot, msg, tgID, mainKB)
 			} else {
-				// любые png/jpg/documents не pdf/doc
 				app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
 			}
 			return
+
+		case len(msg.Photo) > 0:
+			app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
+			return
+
 		case msg.Text != "":
 			app.handleText(ctx, botID, bot, msg, tgID, mainKB)
 			return
