@@ -105,7 +105,7 @@ func (app *BotApp) handleDoc(
 	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
 
 	// === 7. убираем индикатор ===
-	log.Printf("[doc] delete thinking msg=%d", sentThinking.MessageID)
+	//log.Printf("[doc] delete thinking msg=%d", sentThinking.MessageID)
 	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 
 	log.Printf("[doc] done bot=%s tg=%d", botID, tgID)
