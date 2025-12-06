@@ -44,22 +44,20 @@ func (app *BotApp) handleDoc(
 	}
 	defer resp.Body.Close()
 
-	// читаем документ в память
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка чтения документа."))
 		return
 	}
 
-	// 2. Конвертация DOC → PDF → JPEG
+	// 2. DOC → PDF → JPEG
 	pages, err := app.DocService.Convert(ctx, raw)
 	if err != nil {
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки документа."))
 		return
 	}
 
-	// 3. Сохраняем страницы в S3 + история
-	var lastImageURL *string
+	// 3. Сохраняем ВСЕ страницы в S3 + историю (как в PDF-ветке)
 	for _, p := range pages {
 		url, err := app.S3Service.SaveImage(
 			ctx, botID, tgID,
@@ -73,7 +71,6 @@ func (app *BotApp) handleDoc(
 		}
 
 		app.RecordService.AddImage(ctx, botID, tgID, "user", url)
-		lastImageURL = &url
 	}
 
 	// 4. Индикатор
@@ -81,12 +78,12 @@ func (app *BotApp) handleDoc(
 	thinking.ReplyMarkup = mainKB
 	sentThinking, _ := bot.Send(thinking)
 
-	// 5. GPT → ветка image
+	// 5. GPT → ветка image (БЕЗ передачи lastImageURL — история уже содержит всё)
 	reply, err := app.AiService.GetReply(
 		ctx, botID, tgID,
 		"image",
-		"Пользователь прислал документ (DOC/DOCX).",
-		lastImageURL,
+		" ",
+		nil,
 	)
 	if err != nil {
 		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
@@ -94,7 +91,7 @@ func (app *BotApp) handleDoc(
 		return
 	}
 
-	// 6. Ответ пользователю
+	// 6. Ответ
 	out := tgbotapi.NewMessage(chatID, reply)
 	out.ReplyMarkup = mainKB
 	bot.Send(out)
