@@ -73,7 +73,10 @@ func (app *BotApp) handleDoc(
 	log.Printf("[doc] show thinking")
 	thinking := tgbotapi.NewMessage(chatID, "🤖 AI читает документ…")
 	thinking.ReplyMarkup = mainKB
-	sentThinking, _ := bot.Send(thinking)
+	sentThinking, err := bot.Send(thinking)
+	if err != nil {
+		log.Printf("[doc] ERROR sending thinking: %v", err)
+	}
 
 	// === 4. GPT ===
 	log.Printf("[doc] GPT request…")
@@ -89,7 +92,13 @@ func (app *BotApp) handleDoc(
 
 	if err != nil {
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки документа AI."))
-		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
+
+		// delete indicator
+		_, derr := bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
+		if derr != nil {
+			log.Printf("[doc] ERROR deleting thinking: %v", derr)
+		}
+
 		return
 	}
 
@@ -97,7 +106,13 @@ func (app *BotApp) handleDoc(
 	log.Printf("[doc] send reply len=%d", len(reply))
 	out := tgbotapi.NewMessage(chatID, reply)
 	out.ReplyMarkup = mainKB
-	bot.Send(out)
+
+	sendRes, sendErr := bot.Send(out)
+	if sendErr != nil {
+		log.Printf("[doc] ERROR sending reply: %v", sendErr)
+	} else {
+		log.Printf("[doc] reply sent OK: msgID=%d", sendRes.MessageID)
+	}
 
 	// === 6. сохраняем историю ===
 	log.Printf("[doc] save history")
@@ -105,8 +120,13 @@ func (app *BotApp) handleDoc(
 	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
 
 	// === 7. убираем индикатор ===
-	//log.Printf("[doc] delete thinking msg=%d", sentThinking.MessageID)
-	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
+	delReq := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
+	_, delErr := bot.Request(delReq)
+	if delErr != nil {
+		log.Printf("[doc] ERROR deleting thinking: %v", delErr)
+	} else {
+		log.Printf("[doc] thinking deleted")
+	}
 
 	log.Printf("[doc] done bot=%s tg=%d", botID, tgID)
 }
