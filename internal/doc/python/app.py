@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from docx import Document
 from PIL import Image, ImageDraw
 import io, base64
+import uvicorn
 
 app = FastAPI()
 
@@ -14,7 +15,6 @@ async def convert(request: Request):
 
     pages = []
 
-    # Простейший рендер: текст в картинку (дальше сделаем красиво)
     for i, para in enumerate(doc.paragraphs, start=1):
         img = Image.new("RGB", (1600, 2200), "white")
         d = ImageDraw.Draw(img)
@@ -31,3 +31,7 @@ async def convert(request: Request):
         })
 
     return JSONResponse({"pages": pages})
+
+# ← ВОТ ЭТО ТЫ ЗАБЫЛ
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
