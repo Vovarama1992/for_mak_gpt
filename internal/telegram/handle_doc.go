@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"io"
+	"log"
 	"net/http"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -19,23 +20,28 @@ func (app *BotApp) handleDoc(
 	chatID := msg.Chat.ID
 	doc := msg.Document
 
-	// тариф
-	if !app.checkImageAllowed(ctx, botID, tgID) {
-		m := tgbotapi.NewMessage(chatID, "📄 В этом тарифе разбор документов недоступен.")
-		m.ReplyMarkup = mainKB
-		bot.Send(m)
-		return
-	}
+	log.Printf("[doc] start bot=%s tg=%d file=%s", botID, tgID, doc.FileName)
 
-	// ==== 1. скачиваем файл ====
+	// === 1. СКАЧИВАЕМ ===
+	log.Printf("[doc] GetFile fileID=%s", doc.FileID)
 	fileInfo, err := bot.GetFile(tgbotapi.FileConfig{FileID: doc.FileID})
 	if err != nil {
+		log.Printf("[doc] GetFile ERROR: %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось получить документ."))
 		return
 	}
 
-	resp, err := http.Get(fileInfo.Link(bot.Token))
-	if err != nil || resp.StatusCode != 200 {
+	url := fileInfo.Link(bot.Token)
+	log.Printf("[doc] downloading from=%s", url)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Printf("[doc] download ERROR: %v", err)
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка загрузки документа."))
+		return
+	}
+	if resp.StatusCode != 200 {
+		log.Printf("[doc] download BAD_STATUS=%d", resp.StatusCode)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка загрузки документа."))
 		return
 	}
@@ -43,53 +49,64 @@ func (app *BotApp) handleDoc(
 
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
+		log.Printf("[doc] read ERROR: %v", err)
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка чтения документа."))
 		return
 	}
 
-	// ==== 2. DOC → TEXT ====
-	text, err := app.DocService.Convert(ctx, raw) // ← ровно string, как у тебя в интерфейсе
-	if err != nil {
+	log.Printf("[doc] downloaded bytes=%d", len(raw))
+
+	// === 2. КОНВЕРТИРУЕМ DOC → TEXT ===
+	log.Printf("[doc] converting…")
+	text, err := app.DocService.Convert(ctx, raw)
+	log.Printf("[doc] convert result len=%d err=%v", len(text), err)
+
+	if err != nil || len(text) == 0 {
+		log.Printf("[doc] convert FAIL (text empty or error)")
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки документа."))
 		return
 	}
 
-	if len(text) == 0 {
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось извлечь текст из документа."))
-		return
-	}
+	// === ДАЛЬШЕ — ТОЧНО handleText ===
 
-	// ==== 3. сохраняем текст пользователя ====
-	app.RecordService.AddText(ctx, botID, tgID, "user", text)
-
-	// ==== 4. индикатор ====
+	// === 3. показываем 'AI думает…' ===
+	log.Printf("[doc] show thinking")
 	thinking := tgbotapi.NewMessage(chatID, "🤖 AI читает документ…")
 	thinking.ReplyMarkup = mainKB
 	sentThinking, _ := bot.Send(thinking)
 
-	// ==== 5. GPT как текст ====
+	// === 4. GPT ===
+	log.Printf("[doc] GPT request…")
 	reply, err := app.AiService.GetReply(
 		ctx,
 		botID,
 		tgID,
-		"text", // ← ОЧЕНЬ ВАЖНО: это текстовая ветка
+		"text",
 		text,
 		nil,
 	)
+	log.Printf("[doc] GPT done err=%v", err)
+
 	if err != nil {
-		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки документа AI."))
+		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 		return
 	}
 
-	// ==== 6. отправляем ответ ====
+	// === 5. отправляем ответ ===
+	log.Printf("[doc] send reply len=%d", len(reply))
 	out := tgbotapi.NewMessage(chatID, reply)
 	out.ReplyMarkup = mainKB
 	bot.Send(out)
 
-	// ==== 7. сохраняем ответ в историю ====
+	// === 6. сохраняем историю ===
+	log.Printf("[doc] save history")
+	app.RecordService.AddText(ctx, botID, tgID, "user", text)
 	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
 
-	// ==== 8. убираем индикатор ====
+	// === 7. убираем индикатор ===
+	log.Printf("[doc] delete thinking msg=%d", sentThinking.MessageID)
 	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
+
+	log.Printf("[doc] done bot=%s tg=%d", botID, tgID)
 }
