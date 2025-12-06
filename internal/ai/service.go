@@ -186,7 +186,7 @@ func (s *AiService) GetReply(
 
 	// 9) GPT
 
-	ctxGPT, cancel := context.WithTimeout(ctx, 25*time.Second)
+	ctxGPT, cancel := context.WithTimeout(ctx, 77*time.Second)
 	defer cancel()
 
 	reply, err := s.openaiClient.GetCompletion(ctxGPT, messages, cfg.Model)
