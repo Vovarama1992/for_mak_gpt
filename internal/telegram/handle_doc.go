@@ -1,7 +1,6 @@
 package telegram
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -28,16 +27,14 @@ func (app *BotApp) handleDoc(
 		return
 	}
 
-	// 1. Получаем файл из Telegram
+	// ==== 1. скачиваем файл ====
 	fileInfo, err := bot.GetFile(tgbotapi.FileConfig{FileID: doc.FileID})
 	if err != nil {
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось получить документ."))
 		return
 	}
 
-	downloadURL := fileInfo.Link(bot.Token)
-
-	resp, err := http.Get(downloadURL)
+	resp, err := http.Get(fileInfo.Link(bot.Token))
 	if err != nil || resp.StatusCode != 200 {
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка загрузки документа."))
 		return
@@ -50,39 +47,33 @@ func (app *BotApp) handleDoc(
 		return
 	}
 
-	// 2. DOC → PDF → JPEG
-	pages, err := app.DocService.Convert(ctx, raw)
+	// ==== 2. DOC → TEXT ====
+	text, err := app.DocService.Convert(ctx, raw) // ← ровно string, как у тебя в интерфейсе
 	if err != nil {
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки документа."))
 		return
 	}
 
-	// 3. Сохраняем ВСЕ страницы в S3 + историю (как в PDF-ветке)
-	for _, p := range pages {
-		url, err := app.S3Service.SaveImage(
-			ctx, botID, tgID,
-			bytes.NewReader(p.Bytes),
-			p.FileName,
-			p.MimeType,
-		)
-		if err != nil {
-			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка сохранения изображения."))
-			return
-		}
-
-		app.RecordService.AddImage(ctx, botID, tgID, "user", url)
+	if len(text) == 0 {
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось извлечь текст из документа."))
+		return
 	}
 
-	// 4. Индикатор
+	// ==== 3. сохраняем текст пользователя ====
+	app.RecordService.AddText(ctx, botID, tgID, "user", text)
+
+	// ==== 4. индикатор ====
 	thinking := tgbotapi.NewMessage(chatID, "🤖 AI читает документ…")
 	thinking.ReplyMarkup = mainKB
 	sentThinking, _ := bot.Send(thinking)
 
-	// 5. GPT → ветка image (БЕЗ передачи lastImageURL — история уже содержит всё)
+	// ==== 5. GPT как текст ====
 	reply, err := app.AiService.GetReply(
-		ctx, botID, tgID,
-		"image",
-		" ",
+		ctx,
+		botID,
+		tgID,
+		"text", // ← ОЧЕНЬ ВАЖНО: это текстовая ветка
+		text,
 		nil,
 	)
 	if err != nil {
@@ -91,11 +82,14 @@ func (app *BotApp) handleDoc(
 		return
 	}
 
-	// 6. Ответ
+	// ==== 6. отправляем ответ ====
 	out := tgbotapi.NewMessage(chatID, reply)
 	out.ReplyMarkup = mainKB
 	bot.Send(out)
 
-	// 7. Удаляем индикатор
+	// ==== 7. сохраняем ответ в историю ====
+	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
+
+	// ==== 8. убираем индикатор ====
 	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 }
