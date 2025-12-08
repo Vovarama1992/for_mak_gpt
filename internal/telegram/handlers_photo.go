@@ -109,7 +109,7 @@ func (app *BotApp) handlePhoto(
 
 	reply, err := app.AiService.GetReply(
 		ctx, botID, tgID,
-		"text", // ← документ идёт как текстовая ветка
+		"image", // ← документ идёт как текстовая ветка
 		gptInput,
 		nil, // ← НИКОГДА не передавать PDF как image_url
 	)
