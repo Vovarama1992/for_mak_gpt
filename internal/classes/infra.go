@@ -73,6 +73,26 @@ func (r *repo) ListClasses(ctx context.Context) ([]*Class, error) {
 	return out, rows.Err()
 }
 
+func (r *repo) UpdateClass(ctx context.Context, id int, grade string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE classes
+	     SET grade=$1
+	     WHERE id=$2`,
+		grade, id,
+	)
+	return err
+}
+
+// удалить класс
+func (r *repo) DeleteClass(ctx context.Context, id int) error {
+	_, err := r.db.ExecContext(ctx,
+		`DELETE FROM classes
+	     WHERE id=$1`,
+		id,
+	)
+	return err
+}
+
 func (r *repo) GetClassByID(ctx context.Context, id int) (*Class, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, grade

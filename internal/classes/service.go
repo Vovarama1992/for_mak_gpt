@@ -26,6 +26,14 @@ func (s *service) GetClassByID(ctx context.Context, id int) (*Class, error) {
 	return s.repo.GetClassByID(ctx, id)
 }
 
+func (s *service) UpdateClass(ctx context.Context, id int, grade string) error {
+	return s.repo.UpdateClass(ctx, id, grade)
+}
+
+func (s *service) DeleteClass(ctx context.Context, id int) error {
+	return s.repo.DeleteClass(ctx, id)
+}
+
 //
 // prompts
 //

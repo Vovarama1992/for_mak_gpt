@@ -53,6 +53,39 @@ func (h *ClassHandler) CreateClass(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(out)
 }
 
+func (h *ClassHandler) UpdateClass(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "class_id")
+	id, _ := strconv.Atoi(idStr)
+
+	var body struct {
+		Grade string `json:"grade"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	if err := h.svc.UpdateClass(r.Context(), id, body.Grade); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	w.WriteHeader(204)
+}
+
+// DELETE /classes/{class_id}
+func (h *ClassHandler) DeleteClass(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "class_id")
+	id, _ := strconv.Atoi(idStr)
+
+	if err := h.svc.DeleteClass(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	w.WriteHeader(204)
+}
+
 //
 // ----------------------
 //   ПРОМПТЫ ДЛЯ КЛАССА

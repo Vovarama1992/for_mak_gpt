@@ -29,6 +29,8 @@ type ClassRepo interface {
 	CreateClass(ctx context.Context, grade string) (*Class, error)
 	ListClasses(ctx context.Context) ([]*Class, error)
 	GetClassByID(ctx context.Context, id int) (*Class, error)
+	UpdateClass(ctx context.Context, id int, grade string) error
+	DeleteClass(ctx context.Context, id int) error
 
 	// class_prompts
 	CreatePrompt(ctx context.Context, classID int, prompt string) (*ClassPrompt, error)
@@ -47,6 +49,8 @@ type ClassService interface {
 	CreateClass(ctx context.Context, grade string) (*Class, error)
 	ListClasses(ctx context.Context) ([]*Class, error)
 	GetClassByID(ctx context.Context, id int) (*Class, error)
+	UpdateClass(ctx context.Context, id int, grade string) error
+	DeleteClass(ctx context.Context, id int) error
 
 	// prompts
 	CreatePrompt(ctx context.Context, classID int, prompt string) (*ClassPrompt, error)
