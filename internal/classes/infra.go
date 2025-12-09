@@ -85,9 +85,18 @@ func (r *repo) UpdateClass(ctx context.Context, id int, grade string) error {
 
 // удалить класс
 func (r *repo) DeleteClass(ctx context.Context, id int) error {
+	// 1) удалить всех юзеров, у которых этот класс
 	_, err := r.db.ExecContext(ctx,
-		`DELETE FROM classes
-	     WHERE id=$1`,
+		`DELETE FROM user_classes WHERE class_id=$1`,
+		id,
+	)
+	if err != nil {
+		return err
+	}
+
+	// 2) удалить сам класс
+	_, err = r.db.ExecContext(ctx,
+		`DELETE FROM classes WHERE id=$1`,
 		id,
 	)
 	return err
