@@ -56,35 +56,62 @@ func (app *BotApp) handleMessage(
 
 	log.Printf("[sub-check] botID=%s tgID=%d → status=%s", botID, tgID, status)
 
+	mainKB := app.BuildMainKeyboard(status)
+
 	switch status {
 
+	// ======================================================
+	// NONE → нет подписки, ждём нажатия “Начать урок”
+	// ======================================================
 	case "none":
-		startKB := tgbotapi.NewReplyKeyboard(
-			tgbotapi.NewKeyboardButtonRow(
-				tgbotapi.NewKeyboardButton("▶️ Старт"),
-			),
-		)
-		startKB.ResizeKeyboard = true
+		if msg.Text == "🟢 Начать урок" {
 
-		if msg.Text == "▶️ Старт" {
-			menu := app.BuildSubscriptionMenu(ctx)
-			text := app.BuildSubscriptionText()
-			out := tgbotapi.NewMessage(chatID, text)
-			out.ReplyMarkup = menu
-			bot.Send(out)
+			// 1. создаём демо-подписку
+			if err := app.SubscriptionService.StartDemo(ctx, botID, tgID); err != nil {
+				bot.Send(tgbotapi.NewMessage(chatID, "Ошибка при создании демо-подписки. Попробуй ещё раз."))
+				return
+			}
+
+			// 2. грузим конфиг бота
+			cfg, _ := app.BotsService.Get(ctx, botID)
+
+			// 3. приветственный текст
+			welcomeText := strings.TrimSpace(cfg.WelcomeText)
+			if welcomeText == "" {
+				welcomeText = "Привет! Я — твой AI-репетитор 🤖📚\nВыбери класс, чтобы начать."
+			}
+			bot.Send(tgbotapi.NewMessage(chatID, welcomeText))
+
+			// 4. приветственное видео (если задано)
+			if cfg.WelcomeVideo != "" {
+				video := tgbotapi.NewVideo(chatID, tgbotapi.FilePath(cfg.WelcomeVideo))
+				bot.Send(video)
+			}
+
+			// 5. меню выбора класса
+			app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
 			return
 		}
 
+		// любое другое сообщение — мягкое приглашение начать
 		welcome := tgbotapi.NewMessage(chatID,
-			"Добро пожаловать! Нажми «Старт», чтобы выбрать тариф.")
-		welcome.ReplyMarkup = startKB
+			"Добро пожаловать! Нажми «🟢 Начать урок», чтобы начать обучение.")
+		welcome.ReplyMarkup = mainKB
 		bot.Send(welcome)
 		return
 
+	// ======================================================
+	// PENDING → ждём оплаты
+	// ======================================================
 	case "pending":
-		bot.Send(tgbotapi.NewMessage(chatID, MsgPending))
+		m := tgbotapi.NewMessage(chatID, MsgPending)
+		m.ReplyMarkup = mainKB
+		bot.Send(m)
 		return
 
+	// ======================================================
+	// EXPIRED → срок вышел
+	// ======================================================
 	case "expired":
 		menu := app.BuildSubscriptionMenu(ctx)
 		text := "⏳ Срок подписки истёк. Продли, чтобы снова пользоваться ботом!"
@@ -93,38 +120,52 @@ func (app *BotApp) handleMessage(
 		bot.Send(out)
 		return
 
-	//------------------------------------------------------
-	//     ACTIVE
-	//------------------------------------------------------
+	// ======================================================
+	// ACTIVE → основная логика
+	// ======================================================
 	case "active":
 
-		// постоянная клавиатура
-		mainKB := tgbotapi.NewReplyKeyboard(
-			tgbotapi.NewKeyboardButtonRow(
-				tgbotapi.NewKeyboardButton("🕒 Остаток минут"),
-				tgbotapi.NewKeyboardButton("📚 Выбрать класс"),
-			),
-		)
-		mainKB.ResizeKeyboard = true
-
-		// обновляем клавиатуру пустым сообщением
+		// обновляем клавиатуру
 		msgOut := tgbotapi.NewMessage(chatID, " ")
 		msgOut.ReplyMarkup = mainKB
 		bot.Send(msgOut)
 
-		// кнопка 1: минуты
-		if msg.Text == "🕒 Остаток минут" {
-			app.ShowVoiceMinutesScreen(ctx, botID, bot, tgID, chatID)
+		// обработка кнопок
+		switch msg.Text {
+
+		case "🟢 Продолжить урок":
+			bot.Send(tgbotapi.NewMessage(chatID, "Отправь текст, голос, фото или документ для урока."))
+			return
+
+		case "💳 Тарифы":
+			menu := app.BuildSubscriptionMenu(ctx)
+			t := app.BuildSubscriptionText()
+			out := tgbotapi.NewMessage(chatID, t)
+			out.ReplyMarkup = menu
+			bot.Send(out)
+			return
+
+		case "❓ Помощь":
+			m := tgbotapi.NewMessage(chatID, "Это репетитор по математике. Отправь задание текстом, голосом, фото или файлом.")
+			m.ReplyMarkup = mainKB
+			bot.Send(m)
+			return
+
+		case "🗑 Очистить историю":
+			err := app.RecordService.DeleteUserHistory(ctx, botID, tgID)
+			if err != nil {
+				m := tgbotapi.NewMessage(chatID, "Не удалось очистить историю.")
+				m.ReplyMarkup = mainKB
+				bot.Send(m)
+				return
+			}
+			m := tgbotapi.NewMessage(chatID, "История очищена.")
+			m.ReplyMarkup = mainKB
+			bot.Send(m)
 			return
 		}
 
-		// кнопка 2: выбор классов
-		if msg.Text == "📚 Выбрать класс" {
-			app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
-			return
-		}
-
-		// обработка типов, ВАЖНО: передаём клавиатуру внутрь
+		// обработка типов
 		switch {
 		case msg.Voice != nil:
 			app.handleVoice(ctx, botID, bot, msg, tgID, mainKB)
@@ -155,6 +196,9 @@ func (app *BotApp) handleMessage(
 			return
 		}
 
+	// ======================================================
+	// UNKNOWN
+	// ======================================================
 	default:
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Неизвестный статус подписки."))
 		return

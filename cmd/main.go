@@ -10,6 +10,7 @@ import (
 
 	"github.com/Vovarama1992/go-utils/httputil"
 	"github.com/Vovarama1992/go-utils/logger"
+
 	"github.com/Vovarama1992/make_ziper/internal/ai"
 	"github.com/Vovarama1992/make_ziper/internal/bots"
 	"github.com/Vovarama1992/make_ziper/internal/classes"
@@ -31,6 +32,11 @@ import (
 )
 
 func main() {
+
+	// =========================================================================
+	// ENV / DB INIT
+	// =========================================================================
+
 	_ = godotenv.Load()
 
 	port := os.Getenv("PORT")
@@ -47,8 +53,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect to postgres: %v", err)
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	if err := db.PingContext(ctx); err != nil {
 		log.Fatalf("db ping failed: %v", err)
 	}
@@ -58,55 +66,74 @@ func main() {
 	defer baseLogger.Sync()
 	zl := logger.NewZapLogger(baseLogger.Sugar())
 
-	// === repos ===
+	// =========================================================================
+	// INFRASTRUCTURE
+	// =========================================================================
+
+	s3Client, err := infra.NewS3Client()
+	if err != nil {
+		log.Fatalf("failed to init s3: %v", err)
+	}
+
+	pdfConverter := pdf.NewPopplerPDFConverter()
+	docConverter := doc.NewPythonDocConverter()
+
+	// =========================================================================
+	// REPOSITORIES
+	// =========================================================================
+
 	recordRepo := infra.NewRecordRepo(db)
 	subscriptionRepo := infra.NewSubscriptionRepo(db)
 	tariffRepo := infra.NewTariffRepo(db)
 	botRepo := bots.NewRepo(db)
 	minutePackageRepo := minutes_packages.NewMinutePackageRepo(db)
 	classRepo := classes.NewClassRepo(db)
-	pdfConverter := pdf.NewPopplerPDFConverter()
-	docConverter := doc.NewPythonDocConverter()
 
-	// === S3 ===
-	s3Client, err := infra.NewS3Client()
-	if err != nil {
-		log.Fatalf("failed to init s3: %v", err)
-	}
+	// =========================================================================
+	// ERROR NOTIFICATION
+	// =========================================================================
 
-	// === clients ===
-	from_speech := ai.NewOpenAIClient()
-	to_speech := speech.NewElevenLabsClient()
-	aiClient := ai.NewOpenAIClient()
-	botService := bots.NewService(botRepo)
+	errInfra := error_notificator.NewInfra(nil)
+	errService := error_notificator.NewService(errInfra)
+
+	// =========================================================================
+	// CLIENTS (AI / TTS / OCR etc.)
+	// =========================================================================
+
+	openAIClient := ai.NewOpenAIClient()
+	ttsClient := speech.NewElevenLabsClient()
+
+	// =========================================================================
+	// DOMAIN SERVICES
+	// =========================================================================
+
+	s3Service := domain.NewS3Service(s3Client, errService)
+	botService := bots.NewService(botRepo, s3Service)
+
 	pdfService := pdf.NewPDFService(pdfConverter)
 	docService := doc.NewService(docConverter)
 
-	// === services ===
 	tariffService := domain.NewTariffService(tariffRepo)
 	minutePackageService := minutes_packages.NewService(minutePackageRepo)
 	classService := classes.NewClassService(classRepo)
 
-	// === error notificator ===
-	errInfra := error_notificator.NewInfra(nil)
-	errService := error_notificator.NewService(errInfra)
+	recordService := domain.NewRecordService(recordRepo, errService)
 
-	// === speech ===
 	speechService := speech.NewService(
-		from_speech,
-		to_speech,
+		openAIClient, // Whisper
+		ttsClient,    // ElevenLabs
 		botService,
 		errService,
 	)
 
-	// === S3 + record ===
-	s3Service := domain.NewS3Service(s3Client, errService)
-	recordService := domain.NewRecordService(recordRepo, errService)
+	aiService := ai.NewAiService(
+		openAIClient,
+		recordService,
+		botRepo,
+		classService,
+		errService,
+	)
 
-	// === AI ===
-	aiService := ai.NewAiService(aiClient, recordService, botRepo, classService, errService)
-
-	// === subscriptions ===
 	subscriptionService := domain.NewSubscriptionService(
 		subscriptionRepo,
 		tariffRepo,
@@ -114,7 +141,10 @@ func main() {
 		errService,
 	)
 
-	// === telegram bots ===
+	// =========================================================================
+	// TELEGRAM BOTS
+	// =========================================================================
+
 	botApp := telegram.NewBotApp(
 		subscriptionService,
 		tariffService,
@@ -136,7 +166,10 @@ func main() {
 
 	errInfra.SetBots(botApp.GetBots())
 
-	// === HTTP setup ===
+	// =========================================================================
+	// HTTP ROUTER
+	// =========================================================================
+
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -144,7 +177,7 @@ func main() {
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
 
-	// handlers
+	// HANDLERS
 	recordHandler := delivery.NewRecordHandler(recordService, zl)
 	subHandler := delivery.NewSubscriptionHandler(subscriptionService)
 	tariffHandler := delivery.NewTariffHandler(tariffService)
@@ -152,7 +185,7 @@ func main() {
 	minPkgHandler := delivery.NewMinutePackageHandler(minutePackageService)
 	classHandler := delivery.NewClassHandler(classService)
 
-	// === register ===
+	// ROUTES
 	delivery.RegisterRoutes(
 		r,
 		recordHandler,
@@ -167,6 +200,28 @@ func main() {
 		w.WriteHeader(200)
 		w.Write([]byte("pong"))
 	})
+
+	// =========================================================================
+	// BACKGROUND JOBS
+	// =========================================================================
+
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			ctx := context.Background()
+			if err := subscriptionService.CleanupPending(ctx, 5*time.Minute); err != nil {
+				log.Printf("[cleanup-pending] error: %v", err)
+			} else {
+				log.Printf("[cleanup-pending] removed old pending subscriptions")
+			}
+		}
+	}()
+
+	// =========================================================================
+	// START SERVER
+	// =========================================================================
 
 	addr := ":" + port
 	zl.Log(logger.LogEntry{

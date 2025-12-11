@@ -1,6 +1,9 @@
 package bots
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 type Repo interface {
 	ListAll(ctx context.Context) ([]*BotConfig, error)
@@ -12,6 +15,9 @@ type Service interface {
 	ListAll(ctx context.Context) ([]*BotConfig, error)
 	Get(ctx context.Context, botID string) (*BotConfig, error)
 	Update(ctx context.Context, cfg *UpdateInput) (*BotConfig, error)
+
+	// загрузка приветственного видео → S3 → запись в bot_configs
+	UploadWelcomeVideo(ctx context.Context, botID string, file io.Reader, filename string) (string, error)
 }
 
 type BotConfig struct {
@@ -22,6 +28,9 @@ type BotConfig struct {
 	VoiceStylePrompt string `json:"voice_style_prompt"`
 	PhotoStylePrompt string `json:"photo_style_prompt"`
 	VoiceID          string `json:"voice_id"`
+
+	WelcomeText  string `json:"welcome_text"`      // текст приветствия
+	WelcomeVideo string `json:"welcome_video_url"` // URL в S3
 }
 
 type UpdateInput struct {
@@ -31,4 +40,7 @@ type UpdateInput struct {
 	VoiceStylePrompt *string
 	PhotoStylePrompt *string
 	VoiceID          *string
+
+	WelcomeText  *string // обновляем приветственный текст
+	WelcomeVideo *string // обновляем URL видео
 }

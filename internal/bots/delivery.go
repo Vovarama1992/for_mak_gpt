@@ -80,3 +80,29 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	_ = json.NewEncoder(w).Encode(out)
 }
+
+// POST /bots/{bot_id}/welcome-video
+func (h *Handler) UploadWelcomeVideo(w http.ResponseWriter, r *http.Request) {
+	botID := chi.URLParam(r, "bot_id")
+	if botID == "" {
+		http.Error(w, "missing bot_id", 400)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "file is required", 400)
+		return
+	}
+	defer file.Close()
+
+	url, err := h.svc.UploadWelcomeVideo(r.Context(), botID, file, header.Filename)
+	if err != nil {
+		http.Error(w, "upload failed", 500)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"url": url,
+	})
+}

@@ -53,6 +53,8 @@ func RegisterRoutes(
 	r.With(httputil.RecoverMiddleware).Get("/bots", hBots.List)
 	r.With(httputil.RecoverMiddleware).Get("/bots/{bot_id}", hBots.Get)
 	r.With(httputil.RecoverMiddleware).Patch("/bots/{bot_id}", hBots.Update)
+	r.With(httputil.RecoverMiddleware).
+		Post("/bots/{bot_id}/welcome-video", hBots.UploadWelcomeVideo)
 
 	// --- пакеты минут ---
 	r.With(httputil.RecoverMiddleware).Get("/minute-packages", hPkg.List)

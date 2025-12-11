@@ -28,6 +28,7 @@ type SubscriptionRepo interface {
 	UseVoiceMinutes(ctx context.Context, botID string, tgID int64, used float64) (bool, error)
 	AddVoiceMinutes(ctx context.Context, botID string, tgID int64, minutes float64) error
 
-	// добавили voiceMinutes
+	CleanupPending(ctx context.Context, olderThan time.Duration) error
 	Activate(ctx context.Context, id int64, startedAt, expiresAt time.Time, voiceMinutes float64) error
+	CreateDemo(ctx context.Context, botID string, telegramID int64, startedAt, expiresAt time.Time, voiceMinutes float64) error
 }

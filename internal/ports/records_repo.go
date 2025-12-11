@@ -45,4 +45,6 @@ type RecordRepo interface {
 	GetHistoryState(ctx context.Context, botID string, telegramID int64) (lastN, totalTokens int, err error)
 	GetLastNRecords(ctx context.Context, botID string, telegramID int64, n int) ([]Record, error)
 	DeleteAll(ctx context.Context) error
+
+	DeleteByUser(ctx context.Context, botID string, telegramID int64) error
 }

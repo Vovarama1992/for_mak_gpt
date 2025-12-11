@@ -193,3 +193,11 @@ func (r *recordRepo) DeleteAll(ctx context.Context) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM records`)
 	return err
 }
+
+func (r *recordRepo) DeleteByUser(ctx context.Context, botID string, telegramID int64) error {
+	_, err := r.db.ExecContext(ctx,
+		`DELETE FROM records WHERE bot_id = $1 AND telegram_id = $2`,
+		botID, telegramID,
+	)
+	return err
+}

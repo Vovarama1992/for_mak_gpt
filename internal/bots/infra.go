@@ -79,42 +79,34 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 	args := []any{}
 	idx := 1
 
-	if in.Model != nil {
-		q += "model=$" + itoa(idx) + ","
-		args = append(args, *in.Model)
-		idx++
+	appendField := func(field string, value *string) {
+		if value != nil {
+			q += field + "=$" + itoa(idx) + ","
+			args = append(args, *value)
+			idx++
+		}
 	}
-	if in.TextStylePrompt != nil {
-		q += "text_style_prompt=$" + itoa(idx) + ","
-		args = append(args, *in.TextStylePrompt)
-		idx++
-	}
-	if in.VoiceStylePrompt != nil {
-		q += "voice_style_prompt=$" + itoa(idx) + ","
-		args = append(args, *in.VoiceStylePrompt)
-		idx++
-	}
-	if in.PhotoStylePrompt != nil {
-		q += "photo_style_prompt=$" + itoa(idx) + ","
-		args = append(args, *in.PhotoStylePrompt)
-		idx++
-	}
-	if in.VoiceID != nil {
-		q += "voice_id=$" + itoa(idx) + ","
-		args = append(args, *in.VoiceID)
-		idx++
-	}
+
+	appendField("model", in.Model)
+	appendField("text_style_prompt", in.TextStylePrompt)
+	appendField("voice_style_prompt", in.VoiceStylePrompt)
+	appendField("photo_style_prompt", in.PhotoStylePrompt)
+	appendField("voice_id", in.VoiceID)
+	appendField("welcome_text", in.WelcomeText)
+	appendField("welcome_video", in.WelcomeVideo)
 
 	if len(args) == 0 {
 		return r.Get(ctx, in.BotID)
 	}
 
+	// убираем последнюю запятую
 	q = q[:len(q)-1]
-	q += " WHERE bot_id=$" + itoa(idx) + ` 
+
+	q += " WHERE bot_id=$" + itoa(idx) + `
 		RETURNING bot_id, token, model,
 		          text_style_prompt, voice_style_prompt,
-		          photo_style_prompt,
-		          voice_id`
+		          photo_style_prompt, voice_id,
+		          welcome_text, welcome_video`
 
 	args = append(args, in.BotID)
 
@@ -127,6 +119,8 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 		&b.VoiceStylePrompt,
 		&b.PhotoStylePrompt,
 		&b.VoiceID,
+		&b.WelcomeText,
+		&b.WelcomeVideo,
 	)
 	if err != nil {
 		return nil, err

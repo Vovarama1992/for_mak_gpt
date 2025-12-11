@@ -12,4 +12,7 @@ type RecordService interface {
 
 	ListUsers(ctx context.Context) ([]UserBots, error)
 	DeleteAll(ctx context.Context) error
+
+	// НОВОЕ — очистка истории конкретного юзера в конкретном боте
+	DeleteUserHistory(ctx context.Context, botID string, telegramID int64) error
 }

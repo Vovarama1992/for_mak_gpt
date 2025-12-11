@@ -1,6 +1,9 @@
 package ports
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type SubscriptionService interface {
 	// создание подписки (создаёт запись и создаёт платёж в Юкассе)
@@ -12,8 +15,10 @@ type SubscriptionService interface {
 	// получение текущего статуса подписки пользователя
 	GetStatus(ctx context.Context, botID string, telegramID int64) (string, error)
 
+	// получение подписки целиком
 	Get(ctx context.Context, botID string, telegramID int64) (*Subscription, error)
 
+	// начисление минут по пакету
 	AddMinutesFromPackage(
 		ctx context.Context,
 		botID string,
@@ -21,9 +26,13 @@ type SubscriptionService interface {
 		packageID int64,
 	) error
 
-	// списание голосовых минут. ok=false, если не хватило
+	// списание голосовых минут. ok=false — если не хватило
 	UseVoiceMinutes(ctx context.Context, botID string, telegramID int64, used float64) (ok bool, err error)
 
-	// список всех подписок (для админки)
+	// список всех подписок (например, для админки)
 	ListAll(ctx context.Context) ([]*Subscription, error)
+
+	// очистка всех pending старше olderThan
+	CleanupPending(ctx context.Context, olderThan time.Duration) error
+	StartDemo(ctx context.Context, botID string, telegramID int64) error
 }

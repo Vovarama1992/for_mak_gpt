@@ -122,3 +122,15 @@ func (s *recordService) GetFittingHistory(
 func (s *recordService) DeleteAll(ctx context.Context) error {
 	return s.repo.DeleteAll(ctx)
 }
+
+func (s *recordService) DeleteUserHistory(ctx context.Context, botID string, telegramID int64) error {
+	err := s.repo.DeleteByUser(ctx, botID, telegramID)
+	if err != nil {
+		s.notifier.Notify(ctx, botID, err,
+			fmt.Sprintf("Ошибка очистки истории: tg=%d", telegramID))
+		return err
+	}
+
+	// сбрасываем state
+	return s.repo.UpsertHistoryState(ctx, botID, telegramID, 0, 0)
+}

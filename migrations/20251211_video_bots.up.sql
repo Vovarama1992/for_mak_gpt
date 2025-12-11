@@ -1,0 +1,3 @@
+ALTER TABLE bot_configs
+ADD COLUMN IF NOT EXISTS welcome_text TEXT,
+ADD COLUMN IF NOT EXISTS welcome_video TEXT;

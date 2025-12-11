@@ -297,3 +297,36 @@ func (s *SubscriptionService) AddMinutesFromPackage(
 	// теперь используем repo только для изменения подписки:
 	return s.repo.AddVoiceMinutes(ctx, botID, telegramID, float64(pkg.Minutes))
 }
+
+func (s *SubscriptionService) CleanupPending(ctx context.Context, olderThan time.Duration) error {
+	return s.repo.CleanupPending(ctx, olderThan)
+}
+
+func (s *SubscriptionService) StartDemo(
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+) error {
+
+	// если уже есть подписка — не создаём демо
+	sub, err := s.repo.Get(ctx, botID, telegramID)
+	if err != nil {
+		s.notifier.Notify(ctx, botID, err, "Ошибка Get при StartDemo")
+		return err
+	}
+	if sub != nil {
+		// подписка уже существует — демо не создаём
+		return nil
+	}
+
+	now := time.Now()
+	expires := now.Add(3 * 24 * time.Hour) // 3 дня
+
+	err = s.repo.CreateDemo(ctx, botID, telegramID, now, expires, 1 /* voiceMinutes */)
+	if err != nil {
+		s.notifier.Notify(ctx, botID, err, "Ошибка CreateDemo в StartDemo")
+		return err
+	}
+
+	return nil
+}

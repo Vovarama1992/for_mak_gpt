@@ -206,3 +206,49 @@ func (r *subscriptionRepo) AddVoiceMinutes(
 
 	return err
 }
+
+func (r *subscriptionRepo) CleanupPending(ctx context.Context, olderThan time.Duration) error {
+	_, err := r.db.ExecContext(ctx, `
+        DELETE FROM subscriptions
+        WHERE status = 'pending'
+        AND updated_at < NOW() - $1::interval
+    `, olderThan.String())
+	return err
+}
+
+func (r *subscriptionRepo) CreateDemo(
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+	startedAt, expiresAt time.Time,
+	voiceMinutes float64,
+) error {
+
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO subscriptions (
+			bot_id,
+			telegram_id,
+			plan_id,
+			status,
+			started_at,
+			expires_at,
+			updated_at,
+			yookassa_payment_id,
+			voice_minutes
+		)
+		VALUES (
+			$1, $2, NULL, 'active', $3, $4, NOW(), NULL, $5
+		)
+		ON CONFLICT (bot_id, telegram_id)
+		DO UPDATE SET
+			status = 'active',
+			plan_id = NULL,
+			started_at = EXCLUDED.started_at,
+			expires_at = EXCLUDED.expires_at,
+			updated_at = NOW(),
+			yookassa_payment_id = NULL,
+			voice_minutes = EXCLUDED.voice_minutes;
+	`, botID, telegramID, startedAt, expiresAt, voiceMinutes)
+
+	return err
+}
