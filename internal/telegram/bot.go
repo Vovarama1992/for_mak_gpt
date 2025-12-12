@@ -73,7 +73,10 @@ func (app *BotApp) handleMessage(
 			}
 
 			// 2. грузим конфиг бота
-			cfg, _ := app.BotsService.Get(ctx, botID)
+			cfg, err := app.BotsService.Get(ctx, botID)
+			if err != nil {
+				log.Printf("[welcome] failed to load bot config: %v", err)
+			}
 
 			// 3. приветственный текст
 			welcomeText := strings.TrimSpace(cfg.WelcomeText)
@@ -82,9 +85,9 @@ func (app *BotApp) handleMessage(
 			}
 			bot.Send(tgbotapi.NewMessage(chatID, welcomeText))
 
-			// 4. приветственное видео (если задано)
+			// 4. приветственное видео (URL из S3)
 			if cfg.WelcomeVideo != "" {
-				video := tgbotapi.NewVideo(chatID, tgbotapi.FilePath(cfg.WelcomeVideo))
+				video := tgbotapi.NewVideo(chatID, tgbotapi.FileURL(cfg.WelcomeVideo))
 				bot.Send(video)
 			}
 
@@ -94,8 +97,10 @@ func (app *BotApp) handleMessage(
 		}
 
 		// любое другое сообщение — мягкое приглашение начать
-		welcome := tgbotapi.NewMessage(chatID,
-			"Добро пожаловать! Нажми «🟢 Начать урок», чтобы начать обучение.")
+		welcome := tgbotapi.NewMessage(
+			chatID,
+			"Добро пожаловать! Нажми «🟢 Начать урок», чтобы начать обучение.",
+		)
 		welcome.ReplyMarkup = mainKB
 		bot.Send(welcome)
 		return
