@@ -51,11 +51,12 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Model            *string `json:"model"`
-		TextStylePrompt  *string `json:"text_style_prompt"`
-		VoiceStylePrompt *string `json:"voice_style_prompt"`
-		PhotoStylePrompt *string `json:"photo_style_prompt"` // ← новое
-		VoiceID          *string `json:"voice_id"`
+		Model            *string
+		TextStylePrompt  *string
+		VoiceStylePrompt *string
+		PhotoStylePrompt *string
+		VoiceID          *string
+		WelcomeText      *string
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -68,7 +69,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		Model:            body.Model,
 		TextStylePrompt:  body.TextStylePrompt,
 		VoiceStylePrompt: body.VoiceStylePrompt,
-		PhotoStylePrompt: body.PhotoStylePrompt, // ← новое
+		PhotoStylePrompt: body.PhotoStylePrompt,
+		WelcomeText:      body.WelcomeText,
 		VoiceID:          body.VoiceID,
 	}
 

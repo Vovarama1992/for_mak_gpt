@@ -40,7 +40,8 @@ type UpdateInput struct {
 	VoiceStylePrompt *string
 	PhotoStylePrompt *string
 	VoiceID          *string
+	WelcomeText      *string
 
-	WelcomeText  *string // обновляем приветственный текст
-	WelcomeVideo *string // обновляем URL видео
+	// INTERNAL USE ONLY
+	WelcomeVideo *string
 }

@@ -20,7 +20,9 @@ func (r *repo) ListAll(ctx context.Context) ([]*BotConfig, error) {
 		SELECT bot_id, token, model,
 		       text_style_prompt, voice_style_prompt,
 		       photo_style_prompt,
-		       voice_id
+		       voice_id,
+		       welcome_text,
+		       welcome_video
 		FROM bot_configs
 		ORDER BY bot_id
 	`)
@@ -40,11 +42,14 @@ func (r *repo) ListAll(ctx context.Context) ([]*BotConfig, error) {
 			&b.VoiceStylePrompt,
 			&b.PhotoStylePrompt,
 			&b.VoiceID,
+			&b.WelcomeText,
+			&b.WelcomeVideo,
 		); err != nil {
 			return nil, err
 		}
 		out = append(out, &b)
 	}
+
 	return out, rows.Err()
 }
 
@@ -55,7 +60,9 @@ func (r *repo) Get(ctx context.Context, botID string) (*BotConfig, error) {
 		SELECT bot_id, token, model,
 		       text_style_prompt, voice_style_prompt,
 		       photo_style_prompt,
-		       voice_id
+		       voice_id,
+		       welcome_text,
+		       welcome_video
 		FROM bot_configs
 		WHERE bot_id = $1
 	`, botID).Scan(
@@ -66,10 +73,13 @@ func (r *repo) Get(ctx context.Context, botID string) (*BotConfig, error) {
 		&b.VoiceStylePrompt,
 		&b.PhotoStylePrompt,
 		&b.VoiceID,
+		&b.WelcomeText,
+		&b.WelcomeVideo,
 	)
 	if err != nil {
 		return nil, err
 	}
+
 	return &b, nil
 }
 
