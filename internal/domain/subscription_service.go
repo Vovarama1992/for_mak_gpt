@@ -172,10 +172,12 @@ func (s *SubscriptionService) Create(
 
 	// 6. Сохраняем
 	now := time.Now()
+	planID := int64(plan.ID)
+
 	sub := &ports.Subscription{
 		BotID:             botID,
 		TelegramID:        telegramID,
-		PlanID:            int64(plan.ID),
+		PlanID:            &planID, // ← FIX
 		Status:            "pending",
 		StartedAt:         &now,
 		ExpiresAt:         nil,
@@ -217,14 +219,22 @@ func (s *SubscriptionService) Activate(ctx context.Context, paymentID string) er
 		return err
 	}
 
-	plan, err := s.tariffRepo.GetByID(ctx, int(sub.PlanID))
+	if sub.PlanID == nil {
+		err := fmt.Errorf("subscription %d has nil plan_id", sub.ID)
+		s.notifier.Notify(ctx, sub.BotID, err,
+			"Webhook YooKassa: plan_id is NULL")
+		return err
+	}
+
+	plan, err := s.tariffRepo.GetByID(ctx, int(*sub.PlanID))
 	if err != nil {
 		s.notifier.Notify(ctx, sub.BotID, err,
 			"Ошибка загрузки тарифного плана при активации")
 		return fmt.Errorf("load plan: %w", err)
 	}
+
 	if plan == nil {
-		err := fmt.Errorf("plan not found id=%d", sub.PlanID)
+		err := fmt.Errorf("plan not found id=%d", *sub.PlanID)
 		s.notifier.Notify(ctx, sub.BotID, err,
 			"Webhook YooKassa: тариф не найден!")
 		return err

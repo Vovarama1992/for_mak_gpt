@@ -9,7 +9,7 @@ type Subscription struct {
 	ID                int64      `json:"id"`
 	BotID             string     `json:"bot_id"`
 	TelegramID        int64      `json:"telegram_id"`
-	PlanID            int64      `json:"plan_id"`
+	PlanID            *int64     `json:"plan_id"`
 	PlanName          string     `json:"plan_name,omitempty"`
 	Status            string     `json:"status"`
 	StartedAt         *time.Time `json:"started_at"`
