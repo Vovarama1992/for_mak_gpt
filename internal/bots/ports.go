@@ -29,8 +29,8 @@ type BotConfig struct {
 	PhotoStylePrompt string `json:"photo_style_prompt"`
 	VoiceID          string `json:"voice_id"`
 
-	WelcomeText  string `json:"welcome_text"`      // текст приветствия
-	WelcomeVideo string `json:"welcome_video_url"` // URL в S3
+	WelcomeText  *string `json:"welcome_text"`
+	WelcomeVideo *string `json:"welcome_video_url"`
 }
 
 type UpdateInput struct {

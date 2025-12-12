@@ -61,14 +61,17 @@ func (app *BotApp) handleMessage(
 	switch status {
 
 	// ======================================================
-	// NONE → нет подписки, ждём нажатия “Начать урок”
+	// NONE → нет подписки, ждём “Начать урок”
 	// ======================================================
 	case "none":
 		if msg.Text == "🟢 Начать урок" {
 
-			// 1. создаём демо-подписку
+			// 1. создаём демо-подписку (один раз, дальше статус сменится)
 			if err := app.SubscriptionService.StartDemo(ctx, botID, tgID); err != nil {
-				bot.Send(tgbotapi.NewMessage(chatID, "Ошибка при создании демо-подписки. Попробуй ещё раз."))
+				bot.Send(tgbotapi.NewMessage(
+					chatID,
+					"Ошибка при создании демо-подписки. Попробуй ещё раз.",
+				))
 				return
 			}
 
@@ -78,16 +81,22 @@ func (app *BotApp) handleMessage(
 				log.Printf("[welcome] failed to load bot config: %v", err)
 			}
 
-			// 3. приветственный текст
-			welcomeText := strings.TrimSpace(cfg.WelcomeText)
+			// 3. приветственный текст (NULL-safe)
+			var welcomeText string
+			if cfg != nil && cfg.WelcomeText != nil {
+				welcomeText = strings.TrimSpace(*cfg.WelcomeText)
+			}
 			if welcomeText == "" {
 				welcomeText = "Привет! Я — твой AI-репетитор 🤖📚\nВыбери класс, чтобы начать."
 			}
 			bot.Send(tgbotapi.NewMessage(chatID, welcomeText))
 
-			// 4. приветственное видео (URL из S3)
-			if cfg.WelcomeVideo != "" {
-				video := tgbotapi.NewVideo(chatID, tgbotapi.FileURL(cfg.WelcomeVideo))
+			// 4. приветственное видео (NULL-safe, URL из S3)
+			if cfg != nil && cfg.WelcomeVideo != nil && *cfg.WelcomeVideo != "" {
+				video := tgbotapi.NewVideo(
+					chatID,
+					tgbotapi.FileURL(*cfg.WelcomeVideo),
+				)
 				bot.Send(video)
 			}
 
@@ -96,7 +105,7 @@ func (app *BotApp) handleMessage(
 			return
 		}
 
-		// любое другое сообщение — мягкое приглашение начать
+		// любое другое сообщение
 		welcome := tgbotapi.NewMessage(
 			chatID,
 			"Добро пожаловать! Нажми «🟢 Начать урок», чтобы начать обучение.",
@@ -130,35 +139,40 @@ func (app *BotApp) handleMessage(
 	// ======================================================
 	case "active":
 
-		// обновляем клавиатуру
+		// всегда обновляем клавиатуру
 		msgOut := tgbotapi.NewMessage(chatID, " ")
 		msgOut.ReplyMarkup = mainKB
 		bot.Send(msgOut)
 
-		// обработка кнопок
+		// кнопки
 		switch msg.Text {
 
 		case "🟢 Продолжить урок":
-			bot.Send(tgbotapi.NewMessage(chatID, "Отправь текст, голос, фото или документ для урока."))
+			bot.Send(tgbotapi.NewMessage(
+				chatID,
+				"Отправь текст, голос, фото или документ для урока.",
+			))
 			return
 
 		case "💳 Тарифы":
 			menu := app.BuildSubscriptionMenu(ctx)
-			t := app.BuildSubscriptionText()
-			out := tgbotapi.NewMessage(chatID, t)
+			text := app.BuildSubscriptionText()
+			out := tgbotapi.NewMessage(chatID, text)
 			out.ReplyMarkup = menu
 			bot.Send(out)
 			return
 
 		case "❓ Помощь":
-			m := tgbotapi.NewMessage(chatID, "Это репетитор по математике. Отправь задание текстом, голосом, фото или файлом.")
+			m := tgbotapi.NewMessage(
+				chatID,
+				"Это репетитор по математике. Отправь задание текстом, голосом, фото или файлом.",
+			)
 			m.ReplyMarkup = mainKB
 			bot.Send(m)
 			return
 
 		case "🗑 Очистить историю":
-			err := app.RecordService.DeleteUserHistory(ctx, botID, tgID)
-			if err != nil {
+			if err := app.RecordService.DeleteUserHistory(ctx, botID, tgID); err != nil {
 				m := tgbotapi.NewMessage(chatID, "Не удалось очистить историю.")
 				m.ReplyMarkup = mainKB
 				bot.Send(m)
@@ -170,7 +184,7 @@ func (app *BotApp) handleMessage(
 			return
 		}
 
-		// обработка типов
+		// обработка входящих типов
 		switch {
 		case msg.Voice != nil:
 			app.handleVoice(ctx, botID, bot, msg, tgID, mainKB)
@@ -205,7 +219,10 @@ func (app *BotApp) handleMessage(
 	// UNKNOWN
 	// ======================================================
 	default:
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Неизвестный статус подписки."))
+		bot.Send(tgbotapi.NewMessage(
+			chatID,
+			"⚠️ Неизвестный статус подписки.",
+		))
 		return
 	}
 }
