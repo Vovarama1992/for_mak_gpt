@@ -340,3 +340,23 @@ func (s *SubscriptionService) StartDemo(
 
 	return nil
 }
+
+func (s *SubscriptionService) Delete(
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+) error {
+
+	err := s.repo.Delete(ctx, botID, telegramID)
+	if err != nil {
+		s.notifier.Notify(
+			ctx,
+			botID,
+			err,
+			fmt.Sprintf("Ошибка удаления подписки (tg=%d)", telegramID),
+		)
+		return err
+	}
+
+	return nil
+}

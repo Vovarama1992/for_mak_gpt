@@ -62,6 +62,14 @@ func (r *subscriptionRepo) Create(ctx context.Context, s *ports.Subscription) er
 	).Scan(&s.ID)
 }
 
+func (r *subscriptionRepo) Delete(ctx context.Context, botID string, telegramID int64) error {
+	_, err := r.db.ExecContext(ctx, `
+        DELETE FROM subscriptions
+        WHERE bot_id = $1 AND telegram_id = $2
+    `, botID, telegramID)
+	return err
+}
+
 func (r *subscriptionRepo) GetByPaymentID(ctx context.Context, paymentID string) (*ports.Subscription, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT 

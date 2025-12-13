@@ -42,6 +42,8 @@ func RegisterRoutes(
 	r.With(httputil.RecoverMiddleware).Post("/subscribe/activate", hSubs.Activate)
 	r.With(httputil.RecoverMiddleware).Get("/subscribe/status/{telegram_id}", hSubs.GetStatus)
 	r.With(httputil.RecoverMiddleware).Get("/subscriptions", hSubs.ListAll)
+	r.With(httputil.RecoverMiddleware).
+		Delete("/subscribe/{bot_id}/{telegram_id}", hSubs.Delete)
 
 	// --- тарифные планы ---
 	r.With(httputil.RecoverMiddleware).Get("/tariffs", hTariff.List)

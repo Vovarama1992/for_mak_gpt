@@ -191,3 +191,26 @@ func (h *SubscriptionHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
 }
+
+func (h *SubscriptionHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	botID := chi.URLParam(r, "bot_id")
+	tidStr := chi.URLParam(r, "telegram_id")
+
+	if botID == "" {
+		http.Error(w, "missing bot_id", http.StatusBadRequest)
+		return
+	}
+
+	telegramID, err := strconv.ParseInt(tidStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid telegram_id", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.service.Delete(r.Context(), botID, telegramID); err != nil {
+		http.Error(w, "failed to delete subscription: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

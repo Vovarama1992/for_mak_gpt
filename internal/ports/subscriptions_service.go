@@ -35,4 +35,5 @@ type SubscriptionService interface {
 	// очистка всех pending старше olderThan
 	CleanupPending(ctx context.Context, olderThan time.Duration) error
 	StartDemo(ctx context.Context, botID string, telegramID int64) error
+	Delete(ctx context.Context, botID string, telegramID int64) error
 }
