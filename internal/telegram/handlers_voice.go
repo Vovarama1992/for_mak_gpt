@@ -77,7 +77,7 @@ func (app *BotApp) handleVoice(
 
 	app.RecordService.AddText(ctx, botID, tgID, "user", text)
 
-	// индикатор
+	// ЯКОРЬ: сообщение с клавиатурой
 	thinking := tgbotapi.NewMessage(chatID, "🤖 AI думает…")
 	thinking.ReplyMarkup = mainKB
 	sentThinking, _ := bot.Send(thinking)
@@ -85,44 +85,46 @@ func (app *BotApp) handleVoice(
 	// GPT
 	reply, err := app.AiService.GetReply(ctx, botID, tgID, "voice", text, nil)
 	if err != nil {
-		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
-		m := tgbotapi.NewMessage(chatID, "⚠️ Ошибка AI.")
-		m.ReplyMarkup = mainKB
-		bot.Send(m)
+		edit := tgbotapi.NewEditMessageText(
+			chatID,
+			sentThinking.MessageID,
+			"⚠️ Ошибка AI.",
+		)
+		bot.Send(edit)
 		return
 	}
 
 	// TTS
 	outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
 	if err := app.SpeechService.Synthesize(ctx, botID, reply, outVoice); err != nil {
-		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
-		m := tgbotapi.NewMessage(chatID, reply)
-		m.ReplyMarkup = mainKB
-		bot.Send(m)
+		edit := tgbotapi.NewEditMessageText(
+			chatID,
+			sentThinking.MessageID,
+			reply,
+		)
+		bot.Send(edit)
 		return
 	}
 	defer os.Remove(outVoice)
 
-	// списание TTS минут (если ffprobe есть)
+	// списание TTS минут
 	if durSec, err := speech.AudioDuration(outVoice); err == nil {
 		go app.SubscriptionService.UseVoiceMinutes(ctx, botID, tgID, durSec/60.0)
 	}
 
-	// === ФИНАЛЬНЫЙ БЛОК UI ===
-
-	// 1) убрать "AI думает"
-	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
-
-	// 2) отправить voice
+	// отправляем voice
 	bot.Send(tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice)))
 
-	// 3) сохранить историю
+	// история
 	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
 
-	// 4) финально восстановить клавиатуру
-	keep := tgbotapi.NewMessage(chatID, " ")
-	keep.ReplyMarkup = mainKB
-	bot.Send(keep)
+	// ФИНАЛ: редактируем якорь, клаву НЕ трогаем
+	edit := tgbotapi.NewEditMessageText(
+		chatID,
+		sentThinking.MessageID,
+		".", // или "Готово"
+	)
+	bot.Send(edit)
 
 	log.Printf("[voice] end botID=%s tgID=%d", botID, tgID)
 }
