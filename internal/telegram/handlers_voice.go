@@ -18,7 +18,7 @@ func (app *BotApp) handleVoice(
 	bot *tgbotapi.BotAPI,
 	msg *tgbotapi.Message,
 	tgID int64,
-	mainKB tgbotapi.ReplyKeyboardMarkup, // ← добавили
+	mainKB tgbotapi.ReplyKeyboardMarkup,
 ) {
 	chatID := msg.Chat.ID
 	fileID := msg.Voice.FileID
@@ -33,17 +33,7 @@ func (app *BotApp) handleVoice(
 	}
 
 	usedMinutes := float64(msg.Voice.Duration) / 60.0
-	go func() {
-		ok, err := app.SubscriptionService.UseVoiceMinutes(ctx, botID, tgID, usedMinutes)
-		if err != nil {
-			app.ErrorNotify.Notify(ctx, botID, err,
-				fmt.Sprintf("Ошибка списания голосовых минут: tg=%d", tgID))
-			return
-		}
-		if !ok {
-			log.Printf("[voice] async: no voice minutes left for tgID=%d", tgID)
-		}
-	}()
+	go app.SubscriptionService.UseVoiceMinutes(ctx, botID, tgID, usedMinutes)
 
 	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
@@ -53,8 +43,7 @@ func (app *BotApp) handleVoice(
 		return
 	}
 
-	url := file.Link(bot.Token)
-	resp, err := http.Get(url)
+	resp, err := http.Get(file.Link(bot.Token))
 	if err != nil {
 		m := tgbotapi.NewMessage(chatID, "⚠️ Ошибка при загрузке голосового.")
 		m.ReplyMarkup = mainKB
@@ -71,13 +60,7 @@ func (app *BotApp) handleVoice(
 		bot.Send(m)
 		return
 	}
-	if _, err := io.Copy(out, resp.Body); err != nil {
-		out.Close()
-		m := tgbotapi.NewMessage(chatID, "⚠️ Ошибка сохранения голосового.")
-		m.ReplyMarkup = mainKB
-		bot.Send(m)
-		return
-	}
+	io.Copy(out, resp.Body)
 	out.Close()
 	defer os.Remove(path)
 
@@ -91,29 +74,22 @@ func (app *BotApp) handleVoice(
 
 	app.RecordService.AddText(ctx, botID, tgID, "user", text)
 
-	// === индикатор ===
 	thinking := tgbotapi.NewMessage(chatID, "🤖 AI думает…")
 	thinking.ReplyMarkup = mainKB
 	sentThinking, _ := bot.Send(thinking)
 
-	// === GPT ===
 	reply, err := app.AiService.GetReply(ctx, botID, tgID, "voice", text, nil)
 	if err != nil {
-		del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
-		bot.Request(del)
-
-		m := tgbotapi.NewMessage(chatID, reply)
+		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
+		m := tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки запроса.")
 		m.ReplyMarkup = mainKB
 		bot.Send(m)
 		return
 	}
 
-	// === синтез ===
 	outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
 	if err := app.SpeechService.Synthesize(ctx, botID, reply, outVoice); err != nil {
-		del := tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID)
-		bot.Request(del)
-
+		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 		m := tgbotapi.NewMessage(chatID, reply)
 		m.ReplyMarkup = mainKB
 		bot.Send(m)
@@ -121,35 +97,24 @@ func (app *BotApp) handleVoice(
 	}
 	defer os.Remove(outVoice)
 
-	// === списание TTS ===
 	if durSec, err := speech.AudioDuration(outVoice); err == nil {
-		usedReplyMinutes := durSec / 60.0
-		go func() {
-			ok, err := app.SubscriptionService.UseVoiceMinutes(ctx, botID, tgID, usedReplyMinutes)
-			if err != nil {
-				app.ErrorNotify.Notify(ctx, botID, err,
-					fmt.Sprintf("Ошибка списания TTS минут: tg=%d", tgID))
-				return
-			}
-			if !ok {
-				log.Printf("[voice] async: no voice minutes left for TTS tgID=%d", tgID)
-			}
-		}()
+		go app.SubscriptionService.UseVoiceMinutes(ctx, botID, tgID, durSec/60.0)
 	}
 
-	// === отправляем аудио ===
-	voice := tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice))
-	// ReplyMarkup в Voice нельзя вставить, поэтому СРАЗУ после него отправляем пустое сообщение с клавой
-	bot.Send(voice)
+	// === ФИКС КЛАВИАТУРЫ ===
 
-	// сохраняем историю
-	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
-
-	// удаляем индикатор
+	// 1) удалить thinking
 	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 
-	// ← именно ЭТО фиксирует меню после voice → GPT → audio
-	keep := tgbotapi.NewMessage(chatID, " ")
+	// 2) отправить voice
+	voice := tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice))
+	bot.Send(voice)
+
+	// 3) сохранить историю
+	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
+
+	// 4) финальное сообщение с клавиатурой (последнее)
+	keep := tgbotapi.NewMessage(chatID, "\u200b")
 	keep.ReplyMarkup = mainKB
 	bot.Send(keep)
 }
