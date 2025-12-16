@@ -252,6 +252,75 @@ func (s *SubscriptionService) Activate(ctx context.Context, paymentID string) er
 	return nil
 }
 
+func (s *SubscriptionService) ActivateTrial(
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+	planCode string,
+) error {
+
+	// 1. Проверяем: нет ли уже подписки
+	existing, err := s.repo.Get(ctx, botID, telegramID)
+	if err != nil {
+		s.notifier.Notify(ctx, botID, err,
+			"Ошибка проверки существующей подписки (ActivateTrial)")
+		return err
+	}
+	if existing != nil && existing.Status == "active" {
+		return fmt.Errorf("subscription already active")
+	}
+
+	// 2. Ищем тариф (через GetTrial — инвариант БД)
+	plan, err := s.tariffRepo.GetTrial(ctx)
+	if err != nil {
+		s.notifier.Notify(ctx, botID, err,
+			"Ошибка загрузки trial-тарифа")
+		return err
+	}
+	if plan == nil {
+		return fmt.Errorf("trial tariff not configured")
+	}
+
+	// защита от дурака
+	if plan.Code != planCode || !plan.IsTrial {
+		return fmt.Errorf("tariff is not trial: %s", planCode)
+	}
+
+	// 3. Считаем даты
+	start := time.Now()
+	exp := start.Add(time.Duration(plan.DurationMinutes) * time.Minute)
+
+	planID := int64(plan.ID)
+
+	// 4. Создаём подписку СРАЗУ активной
+	sub := &ports.Subscription{
+		BotID:             botID,
+		TelegramID:        telegramID,
+		PlanID:            &planID,
+		Status:            "active",
+		StartedAt:         &start,
+		ExpiresAt:         &exp,
+		YookassaPaymentID: nil,
+	}
+
+	if err := s.repo.Create(ctx, sub); err != nil {
+		s.notifier.Notify(ctx, botID, err,
+			"Ошибка создания trial-подписки в БД")
+		return err
+	}
+
+	// 5. Начисляем голосовые минуты, если есть
+	if plan.VoiceMinutes > 0 {
+		if err := s.repo.AddVoiceMinutes(ctx, botID, telegramID, plan.VoiceMinutes); err != nil {
+			s.notifier.Notify(ctx, botID, err,
+				"Ошибка начисления голосовых минут для trial")
+			// подписка уже активна — не фейлим
+		}
+	}
+
+	return nil
+}
+
 // ==================================================
 // STATUS
 // ==================================================
@@ -310,35 +379,6 @@ func (s *SubscriptionService) AddMinutesFromPackage(
 
 func (s *SubscriptionService) CleanupPending(ctx context.Context, olderThan time.Duration) error {
 	return s.repo.CleanupPending(ctx, olderThan)
-}
-
-func (s *SubscriptionService) StartDemo(
-	ctx context.Context,
-	botID string,
-	telegramID int64,
-) error {
-
-	// если уже есть подписка — не создаём демо
-	sub, err := s.repo.Get(ctx, botID, telegramID)
-	if err != nil {
-		s.notifier.Notify(ctx, botID, err, "Ошибка Get при StartDemo")
-		return err
-	}
-	if sub != nil {
-		// подписка уже существует — демо не создаём
-		return nil
-	}
-
-	now := time.Now()
-	expires := now.Add(3 * 24 * time.Hour) // 3 дня
-
-	err = s.repo.CreateDemo(ctx, botID, telegramID, now, expires, 1 /* voiceMinutes */)
-	if err != nil {
-		s.notifier.Notify(ctx, botID, err, "Ошибка CreateDemo в StartDemo")
-		return err
-	}
-
-	return nil
 }
 
 func (s *SubscriptionService) Delete(

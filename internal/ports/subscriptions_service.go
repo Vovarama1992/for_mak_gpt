@@ -12,6 +12,8 @@ type SubscriptionService interface {
 	// активация по вебхуку (по payment_id)
 	Activate(ctx context.Context, paymentID string) error
 
+	ActivateTrial(ctx context.Context, botID string, telegramID int64, planCode string) error
+
 	// получение текущего статуса подписки пользователя
 	GetStatus(ctx context.Context, botID string, telegramID int64) (string, error)
 
@@ -34,6 +36,5 @@ type SubscriptionService interface {
 
 	// очистка всех pending старше olderThan
 	CleanupPending(ctx context.Context, olderThan time.Duration) error
-	StartDemo(ctx context.Context, botID string, telegramID int64) error
 	Delete(ctx context.Context, botID string, telegramID int64) error
 }

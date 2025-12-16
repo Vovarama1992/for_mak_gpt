@@ -23,6 +23,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/pdf"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
 	"github.com/Vovarama1992/make_ziper/internal/telegram"
+	"github.com/Vovarama1992/make_ziper/internal/user"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -88,6 +89,7 @@ func main() {
 	botRepo := bots.NewRepo(db)
 	minutePackageRepo := minutes_packages.NewMinutePackageRepo(db)
 	classRepo := classes.NewClassRepo(db)
+	userRepo := user.NewInfra(db)
 
 	// =========================================================================
 	// ERROR NOTIFICATION
@@ -116,6 +118,7 @@ func main() {
 	tariffService := domain.NewTariffService(tariffRepo)
 	minutePackageService := minutes_packages.NewService(minutePackageRepo)
 	classService := classes.NewClassService(classRepo)
+	userService := user.NewService(userRepo)
 
 	recordService := domain.NewRecordService(recordRepo, errService)
 
@@ -154,6 +157,7 @@ func main() {
 		recordService,
 		s3Service,
 		botService,
+		userService,
 		errService,
 		classService,
 		*pdfService,

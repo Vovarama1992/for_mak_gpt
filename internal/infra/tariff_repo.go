@@ -182,3 +182,39 @@ func (r *tariffRepo) Delete(ctx context.Context, id int) error {
 
 	return err
 }
+
+func (r *tariffRepo) GetTrial(ctx context.Context) (*ports.TariffPlan, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT
+			id,
+			code,
+			name,
+			price,
+			duration_minutes,
+			voice_minutes,
+			is_trial,
+			description
+		FROM tariff_plans
+		WHERE is_trial = true
+		LIMIT 1
+	`)
+
+	var t ports.TariffPlan
+	if err := row.Scan(
+		&t.ID,
+		&t.Code,
+		&t.Name,
+		&t.Price,
+		&t.DurationMinutes,
+		&t.VoiceMinutes,
+		&t.IsTrial,
+		&t.Description,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &t, nil
+}

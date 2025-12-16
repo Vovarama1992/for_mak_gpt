@@ -13,6 +13,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/pdf"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
+	"github.com/Vovarama1992/make_ziper/internal/user"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -28,6 +29,7 @@ type BotApp struct {
 	DocService           doc.Service
 
 	BotsService   bots.Service
+	UserService   user.Service
 	ErrorNotify   error_notificator.Notificator
 	bots          map[string]*tgbotapi.BotAPI
 	shownKeyboard map[string]map[int64]bool
@@ -44,10 +46,11 @@ func NewBotApp(
 	record ports.RecordService,
 	s3 ports.S3Service,
 	bots bots.Service,
+	userSvc user.Service, // ← НОВОЕ
 	errNotify error_notificator.Notificator,
 	classes classes.ClassService,
 	pdf pdf.PDFService,
-	doc doc.Service, // ← добавили
+	doc doc.Service,
 ) *BotApp {
 	if minutePkg == nil {
 		panic("MinutePackageService is nil")
@@ -64,7 +67,9 @@ func NewBotApp(
 		PDFService:           pdf,
 		DocService:           doc,
 
-		BotsService:  bots,
+		BotsService: bots,
+		UserService: userSvc, // ← ВОТ ТУТ
+
 		ErrorNotify:  errNotify,
 		ClassService: classes,
 	}

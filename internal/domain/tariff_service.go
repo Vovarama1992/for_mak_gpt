@@ -33,3 +33,7 @@ func (s *TariffService) Update(ctx context.Context, plan *ports.TariffPlan) (*po
 func (s *TariffService) Delete(ctx context.Context, id int) error {
 	return s.repo.Delete(ctx, id)
 }
+
+func (s *TariffService) GetTrial(ctx context.Context) (*ports.TariffPlan, error) {
+	return s.repo.GetTrial(ctx)
+}

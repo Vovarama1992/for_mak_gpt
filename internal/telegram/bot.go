@@ -67,10 +67,24 @@ func (app *BotApp) handleMessage(
 		if msg.Text == "🟢 Начать урок" {
 
 			// 1. создаём демо-подписку (один раз, дальше статус сменится)
-			if err := app.SubscriptionService.StartDemo(ctx, botID, tgID); err != nil {
+			trialTariff, err := app.TariffService.GetTrial(ctx)
+			if err != nil || trialTariff == nil {
 				bot.Send(tgbotapi.NewMessage(
 					chatID,
-					"Ошибка при создании демо-подписки. Попробуй ещё раз.",
+					"Пробный тариф не настроен. Обратись к администратору.",
+				))
+				return
+			}
+
+			if err := app.SubscriptionService.ActivateTrial(
+				ctx,
+				botID,
+				tgID,
+				trialTariff.Code,
+			); err != nil {
+				bot.Send(tgbotapi.NewMessage(
+					chatID,
+					"Ошибка при активации пробного периода.",
 				))
 				return
 			}
@@ -180,6 +194,22 @@ func (app *BotApp) handleMessage(
 			}
 			m := tgbotapi.NewMessage(chatID, "История очищена.")
 			m.ReplyMarkup = mainKB
+			bot.Send(m)
+			return
+
+		case "🧹 Сбросить настройки":
+			if err := app.UserService.ResetUserSettings(ctx, botID, tgID); err != nil {
+				m := tgbotapi.NewMessage(chatID, "Не удалось сбросить настройки.")
+				m.ReplyMarkup = mainKB
+				bot.Send(m)
+				return
+			}
+
+			m := tgbotapi.NewMessage(
+				chatID,
+				"Настройки сброшены. Можешь начать заново.",
+			)
+			m.ReplyMarkup = app.BuildMainKeyboard("none")
 			bot.Send(m)
 			return
 		}
