@@ -203,7 +203,6 @@ func main() {
 		minPkgHandler,
 		classHandler,
 		authHandler,
-		authService,
 	)
 
 	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
