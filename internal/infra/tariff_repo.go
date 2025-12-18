@@ -60,9 +60,10 @@ func (r *tariffRepo) Create(ctx context.Context, plan *ports.TariffPlan) (*ports
 			price,
 			duration_minutes,
 			voice_minutes,
-			description
+			description,
+			is_trial
 		)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING
 			id,
 			code,
@@ -70,6 +71,7 @@ func (r *tariffRepo) Create(ctx context.Context, plan *ports.TariffPlan) (*ports
 			price,
 			duration_minutes,
 			voice_minutes,
+			is_trial,
 			description
 	`,
 		plan.Code,
@@ -78,6 +80,7 @@ func (r *tariffRepo) Create(ctx context.Context, plan *ports.TariffPlan) (*ports
 		plan.DurationMinutes,
 		plan.VoiceMinutes,
 		plan.Description,
+		plan.IsTrial,
 	)
 
 	var t ports.TariffPlan
@@ -88,6 +91,7 @@ func (r *tariffRepo) Create(ctx context.Context, plan *ports.TariffPlan) (*ports
 		&t.Price,
 		&t.DurationMinutes,
 		&t.VoiceMinutes,
+		&t.IsTrial,
 		&t.Description,
 	); err != nil {
 		return nil, err
