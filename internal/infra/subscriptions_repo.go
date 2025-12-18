@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
@@ -83,17 +84,37 @@ func (r *subscriptionRepo) GetByPaymentID(ctx context.Context, paymentID string)
 	return r.scanRow(row)
 }
 
-func (r *subscriptionRepo) Get(ctx context.Context, botID string, telegramID int64) (*ports.Subscription, error) {
+func (r *subscriptionRepo) Get(
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+) (*ports.Subscription, error) {
+
 	row := r.db.QueryRowContext(ctx, `
 		SELECT 
 			id, bot_id, telegram_id, plan_id, status,
 			started_at, expires_at, updated_at, yookassa_payment_id,
 			voice_minutes
-		FROM subscriptions 
-		WHERE bot_id=$1 AND telegram_id=$2
+		FROM subscriptions
+		WHERE bot_id = $1 AND telegram_id = $2
+		ORDER BY
+			CASE
+				WHEN status = 'active' THEN 0
+				ELSE 1
+			END,
+			started_at DESC
+		LIMIT 1
 	`, botID, telegramID)
 
-	return r.scanRow(row)
+	sub, err := r.scanRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return sub, nil
 }
 
 func (r *subscriptionRepo) UpdateStatus(ctx context.Context, id int64, status string) error {

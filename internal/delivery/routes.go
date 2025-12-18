@@ -1,10 +1,9 @@
 package delivery
 
 import (
-	"time"
-
 	"github.com/Vovarama1992/go-utils/httputil"
 	"github.com/Vovarama1992/make_ziper/internal/bots"
+	"github.com/Vovarama1992/make_ziper/internal/ports"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -16,69 +15,61 @@ func RegisterRoutes(
 	hBots *bots.Handler,
 	hPkg *MinutePackageHandler,
 	hClass *ClassHandler,
+	hAuth *AuthHandler,
+	authSvc ports.AuthService,
 ) {
-	// --- записи ---
-	r.With(
-		httputil.RecoverMiddleware,
-		httputil.NewRateLimiter(100, time.Minute),
-	).Post("/record/text/user", h.AddTextRecordJSON)
-
-	r.With(
-		httputil.RecoverMiddleware,
-		httputil.NewRateLimiter(100, time.Minute),
-	).Post("/record/text/tutor", h.AddTextRecordForm)
-
-	r.With(httputil.RecoverMiddleware).Delete("/records", h.DeleteAll)
-
-	r.With(
-		httputil.RecoverMiddleware,
-		httputil.NewRateLimiter(60, time.Minute),
-	).Get("/history/{telegram_id}", h.GetHistory)
-
-	r.With(httputil.RecoverMiddleware).Get("/users", h.ListUsers)
-
-	// --- подписки ---
-	r.With(httputil.RecoverMiddleware).Post("/subscribe/create", hSubs.Create)
-	r.With(httputil.RecoverMiddleware).Post("/subscribe/activate", hSubs.Activate)
-	r.With(httputil.RecoverMiddleware).Get("/subscribe/status/{telegram_id}", hSubs.GetStatus)
-	r.With(httputil.RecoverMiddleware).Get("/subscriptions", hSubs.ListAll)
+	// --- auth ---
 	r.With(httputil.RecoverMiddleware).
-		Delete("/subscribe/{bot_id}/{telegram_id}", hSubs.Delete)
+		Post("/auth/login", hAuth.Login)
 
-	// --- тарифные планы ---
-	r.With(httputil.RecoverMiddleware).Get("/tariffs", hTariff.List)
-	r.With(httputil.RecoverMiddleware).Post("/tariffs", hTariff.Create)
-	r.With(httputil.RecoverMiddleware).Put("/tariffs/{id}", hTariff.Update)
-	r.With(httputil.RecoverMiddleware).Delete("/tariffs/{id}", hTariff.Delete)
+	// --- protected ---
+	r.Route("/", func(pr chi.Router) {
+		pr.Use(
+			httputil.RecoverMiddleware,
+			AuthMiddleware(authSvc),
+		)
 
-	// --- бот-конфиги ---
-	r.With(httputil.RecoverMiddleware).Get("/bots", hBots.List)
-	r.With(httputil.RecoverMiddleware).Get("/bots/{bot_id}", hBots.Get)
-	r.With(httputil.RecoverMiddleware).Patch("/bots/{bot_id}", hBots.Update)
-	r.With(httputil.RecoverMiddleware).
-		Post("/bots/{bot_id}/welcome-video", hBots.UploadWelcomeVideo)
+		// --- записи ---
+		pr.Post("/record/text/user", h.AddTextRecordJSON)
+		pr.Post("/record/text/tutor", h.AddTextRecordForm)
+		pr.Delete("/records", h.DeleteAll)
+		pr.Get("/history/{telegram_id}", h.GetHistory)
+		pr.Get("/users", h.ListUsers)
 
-	// --- пакеты минут ---
-	r.With(httputil.RecoverMiddleware).Get("/minute-packages", hPkg.List)
-	r.With(httputil.RecoverMiddleware).Post("/minute-packages", hPkg.Create)
-	r.With(httputil.RecoverMiddleware).Get("/minute-packages/{id}", hPkg.Get)
-	r.With(httputil.RecoverMiddleware).Patch("/minute-packages/{id}", hPkg.Update)
-	r.With(httputil.RecoverMiddleware).Delete("/minute-packages/{id}", hPkg.Delete)
+		// --- подписки ---
+		pr.Post("/subscribe/create", hSubs.Create)
+		pr.Post("/subscribe/activate", hSubs.Activate)
+		pr.Get("/subscribe/status/{telegram_id}", hSubs.GetStatus)
+		pr.Get("/subscriptions", hSubs.ListAll)
+		pr.Delete("/subscribe/{bot_id}/{telegram_id}", hSubs.Delete)
 
-	// --- class prompts ---
-	// --- classes ---
-	r.Get("/classes", hClass.ListClasses)
-	r.Post("/classes", hClass.CreateClass)
+		// --- тарифы ---
+		pr.Get("/tariffs", hTariff.List)
+		pr.Post("/tariffs", hTariff.Create)
+		pr.Put("/tariffs/{id}", hTariff.Update)
+		pr.Delete("/tariffs/{id}", hTariff.Delete)
 
-	// PATCH /classes/{class_id}
-	r.Patch("/classes/{class_id}", hClass.UpdateClass)
+		// --- боты ---
+		pr.Get("/bots", hBots.List)
+		pr.Get("/bots/{bot_id}", hBots.Get)
+		pr.Patch("/bots/{bot_id}", hBots.Update)
+		pr.Post("/bots/{bot_id}/welcome-video", hBots.UploadWelcomeVideo)
 
-	// DELETE /classes/{class_id}
-	r.Delete("/classes/{class_id}", hClass.DeleteClass)
+		// --- пакеты минут ---
+		pr.Get("/minute-packages", hPkg.List)
+		pr.Post("/minute-packages", hPkg.Create)
+		pr.Get("/minute-packages/{id}", hPkg.Get)
+		pr.Patch("/minute-packages/{id}", hPkg.Update)
+		pr.Delete("/minute-packages/{id}", hPkg.Delete)
 
-	r.Get("/classes/{class_id}/prompts", hClass.GetPrompt)
-	r.Post("/classes/{class_id}/prompts", hClass.CreatePrompt)
-
-	r.Patch("/prompts/{prompt_id}", hClass.UpdatePrompt)
-	r.Delete("/prompts/{prompt_id}", hClass.DeletePrompt)
+		// --- классы ---
+		pr.Get("/classes", hClass.ListClasses)
+		pr.Post("/classes", hClass.CreateClass)
+		pr.Patch("/classes/{class_id}", hClass.UpdateClass)
+		pr.Delete("/classes/{class_id}", hClass.DeleteClass)
+		pr.Get("/classes/{class_id}/prompts", hClass.GetPrompt)
+		pr.Post("/classes/{class_id}/prompts", hClass.CreatePrompt)
+		pr.Patch("/prompts/{prompt_id}", hClass.UpdatePrompt)
+		pr.Delete("/prompts/{prompt_id}", hClass.DeletePrompt)
+	})
 }

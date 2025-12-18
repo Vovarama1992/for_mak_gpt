@@ -21,6 +21,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/infra"
 	"github.com/Vovarama1992/make_ziper/internal/minutes_packages"
 	"github.com/Vovarama1992/make_ziper/internal/pdf"
+	"github.com/Vovarama1992/make_ziper/internal/ports"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
 	"github.com/Vovarama1992/make_ziper/internal/telegram"
 	"github.com/Vovarama1992/make_ziper/internal/user"
@@ -90,6 +91,7 @@ func main() {
 	minutePackageRepo := minutes_packages.NewMinutePackageRepo(db)
 	classRepo := classes.NewClassRepo(db)
 	userRepo := user.NewInfra(db)
+	var authRepo ports.AuthRepo = infra.NewAuthRepo(db)
 
 	// =========================================================================
 	// ERROR NOTIFICATION
@@ -114,6 +116,7 @@ func main() {
 
 	pdfService := pdf.NewPDFService(pdfConverter)
 	docService := doc.NewService(docConverter)
+	authService := domain.NewAuthService(authRepo, os.Getenv("AUTH_SECRET"))
 
 	tariffService := domain.NewTariffService(tariffRepo)
 	minutePackageService := minutes_packages.NewService(minutePackageRepo)
@@ -188,6 +191,7 @@ func main() {
 	botHandler := bots.NewHandler(botService)
 	minPkgHandler := delivery.NewMinutePackageHandler(minutePackageService)
 	classHandler := delivery.NewClassHandler(classService)
+	authHandler := delivery.NewAuthHandler(authService)
 
 	// ROUTES
 	delivery.RegisterRoutes(
@@ -198,6 +202,8 @@ func main() {
 		botHandler,
 		minPkgHandler,
 		classHandler,
+		authHandler,
+		authService,
 	)
 
 	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, _ *http.Request) {

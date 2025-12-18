@@ -21,7 +21,7 @@ func (app *BotApp) handleCallback(
 	chatID := cb.Message.Chat.ID
 	data := cb.Data
 
-	// ВСЕГДА сразу отвечаем Telegram
+	// всегда отвечаем Telegram
 	bot.Request(tgbotapi.NewCallback(cb.ID, ""))
 
 	log.Printf("[callback] botID=%s tgID=%d data=%s", botID, tgID, data)
@@ -54,7 +54,6 @@ func (app *BotApp) handleCallback(
 			return
 		}
 
-		// УБИРАЕМ inline-меню корректно
 		edit := tgbotapi.NewEditMessageReplyMarkup(
 			chatID,
 			cb.Message.MessageID,
@@ -92,33 +91,38 @@ func (app *BotApp) handleCallback(
 	}
 
 	// ---------------------------
-	// 4) Подписки
+	// 4) Подписки (КАНОНИЧНО)
 	// ---------------------------
-	switch status {
+	if strings.HasPrefix(data, "sub:") {
+		planCode := strings.TrimPrefix(data, "sub:")
 
-	case "none":
-		paymentURL, err := app.SubscriptionService.Create(ctx, botID, tgID, data)
-		if err != nil {
-			app.ErrorNotify.Notify(ctx, botID, err, "Ошибка создания подписки")
-			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось создать оплату."))
+		switch status {
+		case "active":
+			bot.Send(tgbotapi.NewMessage(chatID, MsgAlreadySubscribed))
+			return
+
+		case "pending":
+			bot.Send(tgbotapi.NewMessage(chatID, "⏳ Ожидается подтверждение оплаты."))
+			return
+
+		case "none", "expired":
+			paymentURL, err := app.SubscriptionService.Create(ctx, botID, tgID, planCode)
+			if err != nil {
+				app.ErrorNotify.Notify(ctx, botID, err, "Ошибка создания подписки")
+				bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось создать оплату."))
+				return
+			}
+
+			bot.Send(tgbotapi.NewMessage(chatID,
+				fmt.Sprintf("✅ Заявка принята!\n%s", paymentURL)))
 			return
 		}
-		bot.Send(tgbotapi.NewMessage(chatID,
-			fmt.Sprintf("✅ Заявка принята!\n%s", paymentURL)))
-		return
-
-	case "pending":
-		bot.Send(tgbotapi.NewMessage(chatID, "⏳ Ожидается подтверждение оплаты."))
-		return
-
-	case "active":
-		bot.Send(tgbotapi.NewMessage(chatID, MsgAlreadySubscribed))
-		return
-
-	default:
-		err := fmt.Errorf("unexpected status '%s' for callback '%s'", status, data)
-		app.ErrorNotify.Notify(ctx, botID, err, "Неожиданный callback")
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Произошла ошибка."))
-		return
 	}
+
+	// ---------------------------
+	// неизвестный callback
+	// ---------------------------
+	err := fmt.Errorf("unknown callback data: %s", data)
+	app.ErrorNotify.Notify(ctx, botID, err, "Неизвестный callback")
+	bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Произошла ошибка."))
 }
