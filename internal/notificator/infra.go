@@ -1,4 +1,4 @@
-package error_notificator
+package notificator
 
 import (
 	"context"
@@ -51,4 +51,19 @@ func (i *Infra) Notify(ctx context.Context, botID string, err error, details str
 	}
 
 	return nil
+}
+
+func (i *Infra) UserNotify(
+	ctx context.Context,
+	botID string,
+	chatID int64,
+	text string,
+) error {
+	bot, ok := i.bots[botID]
+	if !ok || bot == nil {
+		return fmt.Errorf("bot not found: %s", botID)
+	}
+
+	_, err := bot.Send(tgbotapi.NewMessage(chatID, text))
+	return err
 }

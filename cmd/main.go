@@ -17,9 +17,9 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/delivery"
 	"github.com/Vovarama1992/make_ziper/internal/doc"
 	"github.com/Vovarama1992/make_ziper/internal/domain"
-	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
 	"github.com/Vovarama1992/make_ziper/internal/infra"
 	"github.com/Vovarama1992/make_ziper/internal/minutes_packages"
+	error_notificator "github.com/Vovarama1992/make_ziper/internal/notificator"
 	"github.com/Vovarama1992/make_ziper/internal/pdf"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
@@ -167,7 +167,7 @@ func main() {
 		*docService,
 	)
 
-	if err := botApp.InitBots(); err != nil {
+	if err := botApp.InitBots(ctx); err != nil {
 		log.Fatalf("failed to init telegram bots: %v", err)
 	}
 

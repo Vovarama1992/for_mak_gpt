@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 
@@ -57,6 +58,44 @@ func (app *BotApp) handleMessage(
 	log.Printf("[sub-check] botID=%s tgID=%d → status=%s", botID, tgID, status)
 
 	mainKB := app.BuildMainKeyboard(status)
+
+	if app.helpMode[botID] != nil && app.helpMode[botID][tgID] {
+
+		// выход из help
+		if msg.Text == "⬅️ Назад" {
+			delete(app.helpMode[botID], tgID)
+
+			m := tgbotapi.NewMessage(
+				chatID,
+				"Ты вышел из режима помощи.",
+			)
+			m.ReplyMarkup = app.BuildMainKeyboard(status)
+			bot.Send(m)
+			return
+		}
+
+		// форвард админу
+		text := "🆘 Помощь\n" +
+			"Bot: " + botID + "\n" +
+			"User: " + fmt.Sprintf("%d", tgID) + "\n\n" +
+			msg.Text
+
+		admins := []int64{
+			1139929360,
+			6789440333,
+		}
+
+		for _, adminID := range admins {
+			bot.Send(tgbotapi.NewMessage(adminID, text))
+		}
+
+		// подтверждение юзеру
+		bot.Send(tgbotapi.NewMessage(
+			chatID,
+			"Сообщение отправлено администратору. Ожидай ответа.",
+		))
+		return
+	}
 
 	switch status {
 
@@ -177,11 +216,16 @@ func (app *BotApp) handleMessage(
 			return
 
 		case "❓ Помощь":
+			if app.helpMode[botID] == nil {
+				app.helpMode[botID] = make(map[int64]bool)
+			}
+			app.helpMode[botID][tgID] = true
+
 			m := tgbotapi.NewMessage(
 				chatID,
-				"Это репетитор по математике. Отправь задание текстом, голосом, фото или файлом.",
+				"🆘 Напиши сообщение — его получит администратор.\nЧтобы выйти, нажми «Назад».",
 			)
-			m.ReplyMarkup = mainKB
+			m.ReplyMarkup = helpKeyboard() // отдельная клавиатура
 			bot.Send(m)
 			return
 

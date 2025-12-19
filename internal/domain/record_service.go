@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
+	error_notificator "github.com/Vovarama1992/make_ziper/internal/notificator"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	tiktoken "github.com/pkoukk/tiktoken-go"
 )

@@ -9,7 +9,7 @@ import (
 
 	"github.com/Vovarama1992/make_ziper/internal/bots"
 	"github.com/Vovarama1992/make_ziper/internal/classes"
-	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
+	notificator "github.com/Vovarama1992/make_ziper/internal/notificator"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -19,7 +19,7 @@ type AiService struct {
 	recordService ports.RecordService
 	botsRepo      bots.Repo
 	classService  classes.ClassService
-	Notifier      error_notificator.Notificator
+	Notifier      notificator.Notificator
 }
 
 func NewAiService(
@@ -27,7 +27,7 @@ func NewAiService(
 	recordSvc ports.RecordService,
 	botsRepo bots.Repo,
 	classSvc classes.ClassService,
-	notifier error_notificator.Notificator,
+	notifier notificator.Notificator,
 ) *AiService {
 	return &AiService{
 		openaiClient:  client,

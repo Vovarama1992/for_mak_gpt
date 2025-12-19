@@ -3,13 +3,14 @@ package telegram
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/Vovarama1992/make_ziper/internal/ai"
 	"github.com/Vovarama1992/make_ziper/internal/bots"
 	"github.com/Vovarama1992/make_ziper/internal/classes"
 	"github.com/Vovarama1992/make_ziper/internal/doc"
-	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
 	mpkg "github.com/Vovarama1992/make_ziper/internal/minutes_packages"
+	notificator "github.com/Vovarama1992/make_ziper/internal/notificator"
 	"github.com/Vovarama1992/make_ziper/internal/pdf"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
@@ -28,13 +29,16 @@ type BotApp struct {
 	PDFService           pdf.PDFService
 	DocService           doc.Service
 
-	BotsService   bots.Service
-	UserService   user.Service
-	ErrorNotify   error_notificator.Notificator
+	BotsService bots.Service
+	UserService user.Service
+
+	ErrorNotify notificator.Notificator
+
 	bots          map[string]*tgbotapi.BotAPI
 	shownKeyboard map[string]map[int64]bool
 
 	ClassService classes.ClassService
+	helpMode     map[string]map[int64]bool
 }
 
 func NewBotApp(
@@ -46,8 +50,8 @@ func NewBotApp(
 	record ports.RecordService,
 	s3 ports.S3Service,
 	bots bots.Service,
-	userSvc user.Service, // ← НОВОЕ
-	errNotify error_notificator.Notificator,
+	userSvc user.Service,
+	errNotify notificator.Notificator,
 	classes classes.ClassService,
 	pdf pdf.PDFService,
 	doc doc.Service,
@@ -68,18 +72,20 @@ func NewBotApp(
 		DocService:           doc,
 
 		BotsService: bots,
-		UserService: userSvc, // ← ВОТ ТУТ
+		UserService: userSvc,
 
 		ErrorNotify:  errNotify,
 		ClassService: classes,
+
+		helpMode: make(map[string]map[int64]bool),
 	}
 }
 
-func (app *BotApp) InitBots() error {
+func (app *BotApp) InitBots(ctx context.Context) error {
 	app.bots = make(map[string]*tgbotapi.BotAPI)
 	app.shownKeyboard = make(map[string]map[int64]bool)
 
-	cfgs, err := app.BotsService.ListAll(context.Background())
+	cfgs, err := app.BotsService.ListAll(ctx)
 	if err != nil {
 		return err
 	}
@@ -101,9 +107,44 @@ func (app *BotApp) InitBots() error {
 		go app.runBotLoop(cfg.BotID, bot)
 	}
 
+	app.startTrialCleanupTicker(ctx, 1*time.Minute)
+
 	return nil
 }
 
 func (app *BotApp) GetBots() map[string]*tgbotapi.BotAPI {
 	return app.bots
+}
+
+// ==================================================
+// TRIAL CLEANUP TICKER
+// ==================================================
+func (app *BotApp) startTrialCleanupTicker(
+	ctx context.Context,
+	interval time.Duration,
+) {
+	ticker := time.NewTicker(interval)
+
+	go func() {
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+
+			case <-ticker.C:
+				for botID := range app.bots {
+					if err := app.SubscriptionService.CleanupExpiredTrials(ctx, botID); err != nil {
+						app.ErrorNotify.Notify(
+							ctx,
+							botID,
+							err,
+							"Ошибка очистки истёкших trial-подписок",
+						)
+					}
+				}
+			}
+		}
+	}()
 }

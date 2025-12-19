@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
 	"github.com/Vovarama1992/make_ziper/internal/minutes_packages"
+	"github.com/Vovarama1992/make_ziper/internal/notificator"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 )
 
@@ -20,7 +20,7 @@ type SubscriptionService struct {
 	repo       ports.SubscriptionRepo
 	tariffRepo ports.TariffRepo
 	httpClient *http.Client
-	notifier   error_notificator.Notificator
+	notifier   notificator.Notificator
 	minuteSvc  minutes_packages.MinutePackageService
 }
 
@@ -28,7 +28,7 @@ func NewSubscriptionService(
 	repo ports.SubscriptionRepo,
 	tariffRepo ports.TariffRepo,
 	minuteSvc minutes_packages.MinutePackageService,
-	notifier error_notificator.Notificator,
+	notifier notificator.Notificator,
 ) ports.SubscriptionService {
 	return &SubscriptionService{
 		repo:       repo,
@@ -396,6 +396,64 @@ func (s *SubscriptionService) Delete(
 			fmt.Sprintf("Ошибка удаления подписки (tg=%d)", telegramID),
 		)
 		return err
+	}
+
+	return nil
+}
+
+func (s *SubscriptionService) CleanupExpiredTrials(
+	ctx context.Context,
+	botID string,
+) error {
+
+	// 1) получаем trial-тариф
+	trial, err := s.tariffRepo.GetTrial(ctx)
+	if err != nil {
+		s.notifier.Notify(ctx, botID, err, "Ошибка загрузки trial-тарифа (cleanup)")
+		return err
+	}
+	if trial == nil {
+		return nil // trial не настроен — нечего чистить
+	}
+
+	now := time.Now()
+
+	// 2) берём все подписки
+	subs, err := s.repo.ListAll(ctx)
+	if err != nil {
+		s.notifier.Notify(ctx, botID, err, "Ошибка чтения подписок (cleanup)")
+		return err
+	}
+
+	// 3) фильтруем только истёкшие trial
+	for _, sub := range subs {
+		if sub.BotID != botID {
+			continue
+		}
+		if sub.PlanID == nil || *sub.PlanID != int64(trial.ID) {
+			continue
+		}
+		if sub.ExpiresAt == nil || sub.ExpiresAt.After(now) {
+			continue
+		}
+
+		// 4) уведомляем пользователя
+		_ = s.notifier.UserNotify(
+			ctx,
+			botID,
+			sub.TelegramID, // chatID == telegramID
+			"⏳ Пробный период закончился. Чтобы продолжить — оформи подписку в меню.",
+		)
+
+		// 5) УДАЛЯЕМ trial-подписку
+		if err := s.repo.Delete(ctx, botID, sub.TelegramID); err != nil {
+			s.notifier.Notify(
+				ctx,
+				botID,
+				err,
+				fmt.Sprintf("Ошибка удаления истёкшего trial (tg=%d)", sub.TelegramID),
+			)
+		}
 	}
 
 	return nil

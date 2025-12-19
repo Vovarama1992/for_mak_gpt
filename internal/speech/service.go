@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Vovarama1992/make_ziper/internal/bots"
-	"github.com/Vovarama1992/make_ziper/internal/error_notificator"
+	error_notificator "github.com/Vovarama1992/make_ziper/internal/notificator"
 )
 
 // === Интерфейсы ===
