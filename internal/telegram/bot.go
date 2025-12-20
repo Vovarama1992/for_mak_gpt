@@ -61,9 +61,6 @@ func (app *BotApp) handleMessage(
 	chatID := msg.Chat.ID
 
 	// ======================================================
-	// ADMIN → USER REPLY
-	// ======================================================
-	// ======================================================
 	// ADMIN HELP MODE → ONE MESSAGE REPLY
 	// ======================================================
 	if isAdmin(tgID) {
@@ -89,6 +86,9 @@ func (app *BotApp) handleMessage(
 
 	mainKB := app.BuildMainKeyboard(status)
 
+	// ======================================================
+	// USER HELP MODE
+	// ======================================================
 	if app.helpMode[botID] != nil && app.helpMode[botID][tgID] {
 
 		if msg.Text == "⬅️ Назад" {
@@ -115,6 +115,12 @@ func (app *BotApp) handleMessage(
 
 		for _, adminID := range admins {
 			bot.Send(tgbotapi.NewMessage(adminID, text))
+
+			// ВКЛЮЧАЕМ ADMIN HELP MODE
+			app.adminHelpMode[adminID] = &AdminHelpContext{
+				BotID:  botID,
+				UserID: tgID,
+			}
 		}
 
 		bot.Send(tgbotapi.NewMessage(
@@ -124,6 +130,9 @@ func (app *BotApp) handleMessage(
 		return
 	}
 
+	// ======================================================
+	// STATUS FLOW
+	// ======================================================
 	switch status {
 
 	case "none":
