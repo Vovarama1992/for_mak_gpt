@@ -24,7 +24,8 @@ func (r *tariffRepo) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 			price,
 			duration_minutes,
 			voice_minutes,
-			description
+			description,
+			is_trial
 		FROM tariff_plans
 		ORDER BY price ASC
 	`)
@@ -44,6 +45,7 @@ func (r *tariffRepo) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 			&t.DurationMinutes,
 			&t.VoiceMinutes,
 			&t.Description,
+			&t.IsTrial,
 		); err != nil {
 			return nil, err
 		}

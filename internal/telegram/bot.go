@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -34,9 +35,14 @@ func (app *BotApp) runBotLoop(botID string, bot *tgbotapi.BotAPI) {
 	}
 }
 
-func (app *BotApp) dispatchUpdate(ctx context.Context, botID string, bot *tgbotapi.BotAPI,
-	tgID int64, status string, update tgbotapi.Update) {
-
+func (app *BotApp) dispatchUpdate(
+	ctx context.Context,
+	botID string,
+	bot *tgbotapi.BotAPI,
+	tgID int64,
+	status string,
+	update tgbotapi.Update,
+) {
 	switch {
 	case update.Message != nil:
 		app.handleMessage(ctx, botID, bot, update.Message, tgID, status)
@@ -55,13 +61,33 @@ func (app *BotApp) handleMessage(
 ) {
 	chatID := msg.Chat.ID
 
+	// ======================================================
+	// ADMIN → USER REPLY
+	// ======================================================
+	if msg.From != nil && isAdmin(msg.From.ID) {
+		if strings.HasPrefix(msg.Text, "/reply ") {
+			parts := strings.SplitN(msg.Text, " ", 3)
+			if len(parts) < 3 {
+				return
+			}
+
+			userID, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil {
+				return
+			}
+
+			replyText := "💬 Ответ от поддержки:\n\n" + parts[2]
+			bot.Send(tgbotapi.NewMessage(userID, replyText))
+			return
+		}
+	}
+
 	log.Printf("[sub-check] botID=%s tgID=%d → status=%s", botID, tgID, status)
 
 	mainKB := app.BuildMainKeyboard(status)
 
 	if app.helpMode[botID] != nil && app.helpMode[botID][tgID] {
 
-		// выход из help
 		if msg.Text == "⬅️ Назад" {
 			delete(app.helpMode[botID], tgID)
 
@@ -74,10 +100,9 @@ func (app *BotApp) handleMessage(
 			return
 		}
 
-		// форвард админу
 		text := "🆘 Помощь\n" +
 			"Bot: " + botID + "\n" +
-			"User: " + fmt.Sprintf("%d", tgID) + "\n\n" +
+			"UserID: " + fmt.Sprintf("%d", tgID) + "\n\n" +
 			msg.Text
 
 		admins := []int64{
@@ -89,7 +114,6 @@ func (app *BotApp) handleMessage(
 			bot.Send(tgbotapi.NewMessage(adminID, text))
 		}
 
-		// подтверждение юзеру
 		bot.Send(tgbotapi.NewMessage(
 			chatID,
 			"Сообщение отправлено администратору. Ожидай ответа.",
@@ -99,13 +123,9 @@ func (app *BotApp) handleMessage(
 
 	switch status {
 
-	// ======================================================
-	// NONE → нет подписки, ждём “Начать урок”
-	// ======================================================
 	case "none":
 		if msg.Text == "🟢 Начать урок" {
 
-			// 1. создаём демо-подписку (один раз, дальше статус сменится)
 			trialTariff, err := app.TariffService.GetTrial(ctx)
 			if err != nil || trialTariff == nil {
 				bot.Send(tgbotapi.NewMessage(
@@ -128,13 +148,11 @@ func (app *BotApp) handleMessage(
 				return
 			}
 
-			// 2. грузим конфиг бота
 			cfg, err := app.BotsService.Get(ctx, botID)
 			if err != nil {
 				log.Printf("[welcome] failed to load bot config: %v", err)
 			}
 
-			// 3. приветственный текст (NULL-safe)
 			var welcomeText string
 			if cfg != nil && cfg.WelcomeText != nil {
 				welcomeText = strings.TrimSpace(*cfg.WelcomeText)
@@ -144,7 +162,6 @@ func (app *BotApp) handleMessage(
 			}
 			bot.Send(tgbotapi.NewMessage(chatID, welcomeText))
 
-			// 4. приветственное видео (NULL-safe, URL из S3)
 			if cfg != nil && cfg.WelcomeVideo != nil && *cfg.WelcomeVideo != "" {
 				video := tgbotapi.NewVideo(
 					chatID,
@@ -153,12 +170,10 @@ func (app *BotApp) handleMessage(
 				bot.Send(video)
 			}
 
-			// 5. меню выбора класса
 			app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
 			return
 		}
 
-		// любое другое сообщение
 		welcome := tgbotapi.NewMessage(
 			chatID,
 			"Добро пожаловать! Нажми «🟢 Начать урок», чтобы начать обучение.",
@@ -167,18 +182,12 @@ func (app *BotApp) handleMessage(
 		bot.Send(welcome)
 		return
 
-	// ======================================================
-	// PENDING → ждём оплаты
-	// ======================================================
 	case "pending":
 		m := tgbotapi.NewMessage(chatID, MsgPending)
 		m.ReplyMarkup = mainKB
 		bot.Send(m)
 		return
 
-	// ======================================================
-	// EXPIRED → срок вышел
-	// ======================================================
 	case "expired":
 		menu := app.BuildSubscriptionMenu(ctx)
 		text := "⏳ Срок подписки истёк. Продли, чтобы снова пользоваться ботом!"
@@ -187,17 +196,12 @@ func (app *BotApp) handleMessage(
 		bot.Send(out)
 		return
 
-	// ======================================================
-	// ACTIVE → основная логика
-	// ======================================================
 	case "active":
 
-		// всегда обновляем клавиатуру
 		msgOut := tgbotapi.NewMessage(chatID, " ")
 		msgOut.ReplyMarkup = mainKB
 		bot.Send(msgOut)
 
-		// кнопки
 		switch msg.Text {
 
 		case "🟢 Продолжить урок":
@@ -225,7 +229,7 @@ func (app *BotApp) handleMessage(
 				chatID,
 				"🆘 Напиши сообщение — его получит администратор.\nЧтобы выйти, нажми «Назад».",
 			)
-			m.ReplyMarkup = helpKeyboard() // отдельная клавиатура
+			m.ReplyMarkup = helpKeyboard()
 			bot.Send(m)
 			return
 
@@ -258,7 +262,6 @@ func (app *BotApp) handleMessage(
 			return
 		}
 
-		// обработка входящих типов
 		switch {
 		case msg.Voice != nil:
 			app.handleVoice(ctx, botID, bot, msg, tgID, mainKB)
@@ -289,9 +292,6 @@ func (app *BotApp) handleMessage(
 			return
 		}
 
-	// ======================================================
-	// UNKNOWN
-	// ======================================================
 	default:
 		bot.Send(tgbotapi.NewMessage(
 			chatID,
@@ -301,7 +301,6 @@ func (app *BotApp) handleMessage(
 	}
 }
 
-// extractTelegramID — выбирает ID пользователя из Update
 func extractTelegramID(u tgbotapi.Update) int64 {
 	switch {
 	case u.Message != nil && u.Message.From != nil:
@@ -311,6 +310,10 @@ func extractTelegramID(u tgbotapi.Update) int64 {
 	default:
 		return 0
 	}
+}
+
+func isAdmin(id int64) bool {
+	return id == 1139929360 || id == 6789440333
 }
 
 func (app *BotApp) checkVoiceAllowed(ctx context.Context, botID string, tgID int64) bool {
