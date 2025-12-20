@@ -16,12 +16,12 @@ func (app *BotApp) BuildSubscriptionMenu(ctx context.Context) tgbotapi.InlineKey
 		log.Printf("[subscription_menu] list fail: %v", err)
 		return errorMenu("Ошибка загрузки тарифов")
 	}
-	if len(tariffs) == 0 {
-		return errorMenu("Нет доступных тарифов")
-	}
 
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for _, t := range tariffs {
+		if t.IsTrial {
+			continue
+		}
 
 		voice := "∞ мин голоса"
 		if t.VoiceMinutes < 9_000_000 {
@@ -36,12 +36,18 @@ func (app *BotApp) BuildSubscriptionMenu(ctx context.Context) tgbotapi.InlineKey
 			voice,
 		)
 
-		btn := tgbotapi.NewInlineKeyboardButtonData(
-			label,
-			"sub:"+t.Code,
+		rows = append(rows,
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(
+					label,
+					"sub:"+t.Code,
+				),
+			),
 		)
+	}
 
-		rows = append(rows, tgbotapi.NewInlineKeyboardRow(btn))
+	if len(rows) == 0 {
+		return errorMenu("Нет платных тарифов")
 	}
 
 	return tgbotapi.NewInlineKeyboardMarkup(rows...)

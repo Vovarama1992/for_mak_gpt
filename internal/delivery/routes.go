@@ -15,6 +15,7 @@ func RegisterRoutes(
 	hPkg *MinutePackageHandler,
 	hClass *ClassHandler,
 	hAuth *AuthHandler,
+	hTextRules *TextRuleHandler,
 ) {
 	// --- auth ---
 	r.With(httputil.RecoverMiddleware).
@@ -118,4 +119,23 @@ func RegisterRoutes(
 
 	r.With(httputil.RecoverMiddleware).
 		Delete("/prompts/{prompt_id}", hClass.DeletePrompt)
+
+	// --- text rules ---
+	r.With(httputil.RecoverMiddleware).
+		Get("/text-rules/letters", hTextRules.ListLetterRules)
+
+	r.With(httputil.RecoverMiddleware).
+		Post("/text-rules/letters", hTextRules.AddLetterRule)
+
+	r.With(httputil.RecoverMiddleware).
+		Delete("/text-rules/letters", hTextRules.DeleteLetterRule)
+
+	r.With(httputil.RecoverMiddleware).
+		Get("/text-rules/words", hTextRules.ListWordRules)
+
+	r.With(httputil.RecoverMiddleware).
+		Post("/text-rules/words", hTextRules.AddWordRule)
+
+	r.With(httputil.RecoverMiddleware).
+		Delete("/text-rules/words", hTextRules.DeleteWordRule)
 }

@@ -48,18 +48,31 @@ func (r *subscriptionRepo) scanRow(row *sql.Row) (*ports.Subscription, error) {
 }
 
 func (r *subscriptionRepo) Create(ctx context.Context, s *ports.Subscription) error {
-	query := `
+	const q = `
 		INSERT INTO subscriptions (
 			bot_id, telegram_id, plan_id, status,
 			started_at, expires_at, updated_at, yookassa_payment_id
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+		VALUES ($1,$2,$3,$4,$5,$6, now(), $7)
+		ON CONFLICT (bot_id, telegram_id)
+		DO UPDATE SET
+			plan_id = EXCLUDED.plan_id,
+			status = EXCLUDED.status,
+			started_at = EXCLUDED.started_at,
+			expires_at = EXCLUDED.expires_at,
+			updated_at = now(),
+			yookassa_payment_id = EXCLUDED.yookassa_payment_id
 		RETURNING id
 	`
 	return r.db.QueryRowContext(
-		ctx, query,
-		s.BotID, s.TelegramID, s.PlanID, s.Status,
-		s.StartedAt, s.ExpiresAt, time.Now(), s.YookassaPaymentID,
+		ctx, q,
+		s.BotID,
+		s.TelegramID,
+		s.PlanID,
+		s.Status,
+		s.StartedAt,
+		s.ExpiresAt,
+		s.YookassaPaymentID,
 	).Scan(&s.ID)
 }
 

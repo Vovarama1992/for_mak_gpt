@@ -14,7 +14,9 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/pdf"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
+	"github.com/Vovarama1992/make_ziper/internal/textrules"
 	"github.com/Vovarama1992/make_ziper/internal/user"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -24,6 +26,7 @@ type BotApp struct {
 	MinutePackageService mpkg.MinutePackageService
 	AiService            *ai.AiService
 	SpeechService        *speech.Service
+	TextRuleService      textrules.Service
 	RecordService        ports.RecordService
 	S3Service            ports.S3Service
 	PDFService           pdf.PDFService
@@ -47,6 +50,7 @@ func NewBotApp(
 	minutePkg mpkg.MinutePackageService,
 	ai *ai.AiService,
 	speech *speech.Service,
+	textRules textrules.Service,
 	record ports.RecordService,
 	s3 ports.S3Service,
 	bots bots.Service,
@@ -66,6 +70,7 @@ func NewBotApp(
 		MinutePackageService: minutePkg,
 		AiService:            ai,
 		SpeechService:        speech,
+		TextRuleService:      textRules,
 		RecordService:        record,
 		S3Service:            s3,
 		PDFService:           pdf,

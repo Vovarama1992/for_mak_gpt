@@ -24,6 +24,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
 	"github.com/Vovarama1992/make_ziper/internal/telegram"
+	"github.com/Vovarama1992/make_ziper/internal/textrules"
 	"github.com/Vovarama1992/make_ziper/internal/user"
 
 	"github.com/go-chi/chi/v5"
@@ -93,6 +94,8 @@ func main() {
 	userRepo := user.NewInfra(db)
 	var authRepo ports.AuthRepo = infra.NewAuthRepo(db)
 
+	textRuleRepo := textrules.NewRepo(db)
+
 	// =========================================================================
 	// ERROR NOTIFICATION
 	// =========================================================================
@@ -101,7 +104,7 @@ func main() {
 	errService := error_notificator.NewService(errInfra)
 
 	// =========================================================================
-	// CLIENTS (AI / TTS / OCR etc.)
+	// CLIENTS
 	// =========================================================================
 
 	openAIClient := ai.NewOpenAIClient()
@@ -126,8 +129,8 @@ func main() {
 	recordService := domain.NewRecordService(recordRepo, errService)
 
 	speechService := speech.NewService(
-		openAIClient, // Whisper
-		ttsClient,    // ElevenLabs
+		openAIClient,
+		ttsClient,
 		botService,
 		errService,
 	)
@@ -147,6 +150,8 @@ func main() {
 		errService,
 	)
 
+	textRuleService := textrules.NewService(textRuleRepo)
+
 	// =========================================================================
 	// TELEGRAM BOTS
 	// =========================================================================
@@ -157,6 +162,7 @@ func main() {
 		minutePackageService,
 		aiService,
 		speechService,
+		textRuleService,
 		recordService,
 		s3Service,
 		botService,
@@ -192,6 +198,7 @@ func main() {
 	minPkgHandler := delivery.NewMinutePackageHandler(minutePackageService)
 	classHandler := delivery.NewClassHandler(classService)
 	authHandler := delivery.NewAuthHandler(authService)
+	textRuleHandler := delivery.NewTextRuleHandler(textRuleRepo)
 
 	// ROUTES
 	delivery.RegisterRoutes(
@@ -203,6 +210,7 @@ func main() {
 		minPkgHandler,
 		classHandler,
 		authHandler,
+		textRuleHandler,
 	)
 
 	r.With(httputil.RecoverMiddleware).Get("/ping", func(w http.ResponseWriter, _ *http.Request) {

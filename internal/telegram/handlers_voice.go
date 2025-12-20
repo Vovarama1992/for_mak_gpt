@@ -84,6 +84,17 @@ func (app *BotApp) handleVoice(
 		return
 	}
 
+	// === POST-PROCESS TEXT ===
+	processed, err := app.TextRuleService.Process(ctx, reply)
+	if err != nil {
+		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
+		m := tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки текста.")
+		m.ReplyMarkup = mainKB
+		bot.Send(m)
+		return
+	}
+	reply = processed
+
 	// TTS
 	outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
 	if err := app.SpeechService.Synthesize(ctx, botID, reply, outVoice); err != nil {
@@ -104,7 +115,7 @@ func (app *BotApp) handleVoice(
 	// убрать AI думает
 	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 
-	// ЯКОРЬНЫЙ ТЕКСТ (ЗАХАРДКОЖЕННЫЙ)
+	// ЯКОРЬНЫЙ ТЕКСТ
 	anchor := tgbotapi.NewMessage(chatID, "🎧 Ответ голосом:")
 	anchor.ReplyMarkup = mainKB
 	bot.Send(anchor)
