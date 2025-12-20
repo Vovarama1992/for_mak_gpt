@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -64,20 +63,24 @@ func (app *BotApp) handleMessage(
 	// ======================================================
 	// ADMIN → USER REPLY
 	// ======================================================
-	if msg.From != nil && isAdmin(msg.From.ID) {
-		if strings.HasPrefix(msg.Text, "/reply ") {
-			parts := strings.SplitN(msg.Text, " ", 3)
-			if len(parts) < 3 {
-				return
-			}
+	// ======================================================
+	// ADMIN HELP MODE → ONE MESSAGE REPLY
+	// ======================================================
+	if isAdmin(tgID) {
+		if ctxHelp, ok := app.adminHelpMode[tgID]; ok {
+			reply := "💬 Ответ от поддержки:\n\n" + msg.Text
 
-			userID, err := strconv.ParseInt(parts[1], 10, 64)
-			if err != nil {
-				return
-			}
+			bot.Send(tgbotapi.NewMessage(
+				ctxHelp.UserID,
+				reply,
+			))
 
-			replyText := "💬 Ответ от поддержки:\n\n" + parts[2]
-			bot.Send(tgbotapi.NewMessage(userID, replyText))
+			delete(app.adminHelpMode, tgID)
+
+			bot.Send(tgbotapi.NewMessage(
+				chatID,
+				"✅ Ответ отправлен пользователю.",
+			))
 			return
 		}
 	}

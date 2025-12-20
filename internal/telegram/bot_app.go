@@ -20,6 +20,19 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+// ==================================================
+// ADMIN HELP CONTEXT
+// ==================================================
+
+type AdminHelpContext struct {
+	BotID  string
+	UserID int64
+}
+
+// ==================================================
+// BOT APP
+// ==================================================
+
 type BotApp struct {
 	SubscriptionService  ports.SubscriptionService
 	TariffService        ports.TariffService
@@ -41,8 +54,17 @@ type BotApp struct {
 	shownKeyboard map[string]map[int64]bool
 
 	ClassService classes.ClassService
-	helpMode     map[string]map[int64]bool
+
+	// user -> admin
+	helpMode map[string]map[int64]bool
+
+	// admin -> user (НОВОЕ)
+	adminHelpMode map[int64]*AdminHelpContext
 }
+
+// ==================================================
+// CONSTRUCTOR
+// ==================================================
 
 func NewBotApp(
 	subs ports.SubscriptionService,
@@ -82,9 +104,14 @@ func NewBotApp(
 		ErrorNotify:  errNotify,
 		ClassService: classes,
 
-		helpMode: make(map[string]map[int64]bool),
+		helpMode:      make(map[string]map[int64]bool),
+		adminHelpMode: make(map[int64]*AdminHelpContext),
 	}
 }
+
+// ==================================================
+// INIT BOTS
+// ==================================================
 
 func (app *BotApp) InitBots(ctx context.Context) error {
 	app.bots = make(map[string]*tgbotapi.BotAPI)
@@ -124,6 +151,7 @@ func (app *BotApp) GetBots() map[string]*tgbotapi.BotAPI {
 // ==================================================
 // TRIAL CLEANUP TICKER
 // ==================================================
+
 func (app *BotApp) startTrialCleanupTicker(
 	ctx context.Context,
 	interval time.Duration,
