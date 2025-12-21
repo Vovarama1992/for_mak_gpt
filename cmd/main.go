@@ -25,6 +25,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/speech"
 	"github.com/Vovarama1992/make_ziper/internal/telegram"
 	"github.com/Vovarama1992/make_ziper/internal/textrules"
+	"github.com/Vovarama1992/make_ziper/internal/trial"
 	"github.com/Vovarama1992/make_ziper/internal/user"
 
 	"github.com/go-chi/chi/v5"
@@ -92,6 +93,7 @@ func main() {
 	minutePackageRepo := minutes_packages.NewMinutePackageRepo(db)
 	classRepo := classes.NewClassRepo(db)
 	userRepo := user.NewInfra(db)
+	trialRepo := trial.NewRepo(db)
 	var authRepo ports.AuthRepo = infra.NewAuthRepo(db)
 
 	textRuleRepo := textrules.NewRepo(db)
@@ -146,6 +148,7 @@ func main() {
 	subscriptionService := domain.NewSubscriptionService(
 		subscriptionRepo,
 		tariffRepo,
+		trialRepo,
 		minutePackageService,
 		errService,
 	)

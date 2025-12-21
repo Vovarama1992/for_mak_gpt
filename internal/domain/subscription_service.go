@@ -14,11 +14,14 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/minutes_packages"
 	"github.com/Vovarama1992/make_ziper/internal/notificator"
 	"github.com/Vovarama1992/make_ziper/internal/ports"
+	"github.com/Vovarama1992/make_ziper/internal/trial"
 )
 
 type SubscriptionService struct {
 	repo       ports.SubscriptionRepo
 	tariffRepo ports.TariffRepo
+	trialRepo  trial.RepoInf
+
 	httpClient *http.Client
 	notifier   notificator.Notificator
 	minuteSvc  minutes_packages.MinutePackageService
@@ -27,12 +30,14 @@ type SubscriptionService struct {
 func NewSubscriptionService(
 	repo ports.SubscriptionRepo,
 	tariffRepo ports.TariffRepo,
+	trialRepo trial.RepoInf,
 	minuteSvc minutes_packages.MinutePackageService,
 	notifier notificator.Notificator,
 ) ports.SubscriptionService {
 	return &SubscriptionService{
 		repo:       repo,
 		tariffRepo: tariffRepo,
+		trialRepo:  trialRepo,
 		minuteSvc:  minuteSvc,
 		notifier:   notifier,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
@@ -259,63 +264,57 @@ func (s *SubscriptionService) ActivateTrial(
 	planCode string,
 ) error {
 
-	// 1. Проверяем: нет ли уже подписки
-	existing, err := s.repo.Get(ctx, botID, telegramID)
+	// 1. Проверяем: был ли уже trial
+	exists, err := s.trialRepo.Exists(ctx, botID, telegramID)
 	if err != nil {
-		s.notifier.Notify(ctx, botID, err,
-			"Ошибка проверки существующей подписки (ActivateTrial)")
 		return err
 	}
-	if existing != nil && existing.Status == "active" {
-		return fmt.Errorf("subscription already active")
+
+	// если trial уже был — МОЛЧА выходим
+	if exists {
+		return nil
 	}
 
-	// 2. Ищем тариф (через GetTrial — инвариант БД)
+	// 2. Ищем trial-тариф
 	plan, err := s.tariffRepo.GetTrial(ctx)
 	if err != nil {
-		s.notifier.Notify(ctx, botID, err,
-			"Ошибка загрузки trial-тарифа")
 		return err
 	}
 	if plan == nil {
 		return fmt.Errorf("trial tariff not configured")
 	}
-
-	// защита от дурака
 	if plan.Code != planCode || !plan.IsTrial {
 		return fmt.Errorf("tariff is not trial: %s", planCode)
 	}
 
-	// 3. Считаем даты
+	// 3. Даты
 	start := time.Now()
 	exp := start.Add(time.Duration(plan.DurationMinutes) * time.Minute)
-
 	planID := int64(plan.ID)
 
-	// 4. Создаём подписку СРАЗУ активной
+	// 4. Создаём подписку
 	sub := &ports.Subscription{
-		BotID:             botID,
-		TelegramID:        telegramID,
-		PlanID:            &planID,
-		Status:            "active",
-		StartedAt:         &start,
-		ExpiresAt:         &exp,
-		YookassaPaymentID: nil,
+		BotID:      botID,
+		TelegramID: telegramID,
+		PlanID:     &planID,
+		Status:     "active",
+		StartedAt:  &start,
+		ExpiresAt:  &exp,
 	}
 
 	if err := s.repo.Create(ctx, sub); err != nil {
-		s.notifier.Notify(ctx, botID, err,
-			"Ошибка создания trial-подписки в БД")
 		return err
 	}
 
-	// 5. Начисляем голосовые минуты, если есть
+	// 5. Фиксируем факт trial
+	if err := s.trialRepo.Create(ctx, botID, telegramID); err != nil {
+		// подписка создана — не откатываем
+		return nil
+	}
+
+	// 6. Минуты
 	if plan.VoiceMinutes > 0 {
-		if err := s.repo.AddVoiceMinutes(ctx, botID, telegramID, plan.VoiceMinutes); err != nil {
-			s.notifier.Notify(ctx, botID, err,
-				"Ошибка начисления голосовых минут для trial")
-			// подписка уже активна — не фейлим
-		}
+		_ = s.repo.AddVoiceMinutes(ctx, botID, telegramID, plan.VoiceMinutes)
 	}
 
 	return nil
@@ -445,15 +444,6 @@ func (s *SubscriptionService) CleanupExpiredTrials(
 			"⏳ Пробный период закончился. Чтобы продолжить — оформи подписку в меню.",
 		)
 
-		// 5) УДАЛЯЕМ trial-подписку
-		if err := s.repo.Delete(ctx, botID, sub.TelegramID); err != nil {
-			s.notifier.Notify(
-				ctx,
-				botID,
-				err,
-				fmt.Sprintf("Ошибка удаления истёкшего trial (tg=%d)", sub.TelegramID),
-			)
-		}
 	}
 
 	return nil
