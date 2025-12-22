@@ -123,6 +123,10 @@ func (app *BotApp) handleVoice(
 	// голос
 	bot.Send(tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice)))
 
+	m := tgbotapi.NewMessage(chatID, "✍️ Можешь ответить текстом или голосом")
+	m.ReplyMarkup = mainKB
+	bot.Send(m)
+
 	// история
 	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
 }
