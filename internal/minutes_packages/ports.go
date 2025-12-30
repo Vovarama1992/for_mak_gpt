@@ -16,7 +16,7 @@ type MinutePackageRepo interface {
 	Update(ctx context.Context, pkg *MinutePackage) error
 	Delete(ctx context.Context, botID string, id int64) error
 	GetByID(ctx context.Context, botID string, id int64) (*MinutePackage, error)
-	ListAll(ctx context.Context, botID string) ([]*MinutePackage, error)
+	ListAll(ctx context.Context) ([]*MinutePackage, error)
 }
 
 type MinutePackageService interface {
@@ -25,7 +25,7 @@ type MinutePackageService interface {
 	Update(ctx context.Context, pkg *MinutePackage) error
 	Delete(ctx context.Context, botID string, id int64) error
 	GetByID(ctx context.Context, botID string, id int64) (*MinutePackage, error)
-	ListAll(ctx context.Context, botID string) ([]*MinutePackage, error)
+	ListAll(ctx context.Context) ([]*MinutePackage, error)
 
 	// покупка пакета минут (создание оплаты)
 	CreatePayment(ctx context.Context, botID string, telegramID int64, packageID int64) (string, error)

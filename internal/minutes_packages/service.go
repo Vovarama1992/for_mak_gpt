@@ -43,8 +43,8 @@ func (s *service) GetByID(ctx context.Context, botID string, id int64) (*MinuteP
 	return s.repo.GetByID(ctx, botID, id)
 }
 
-func (s *service) ListAll(ctx context.Context, botID string) ([]*MinutePackage, error) {
-	return s.repo.ListAll(ctx, botID)
+func (s *service) ListAll(ctx context.Context) ([]*MinutePackage, error) {
+	return s.repo.ListAll(ctx)
 }
 
 // ---------------------------

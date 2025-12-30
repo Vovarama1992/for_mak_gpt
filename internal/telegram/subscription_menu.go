@@ -15,7 +15,7 @@ func (app *BotApp) BuildSubscriptionMenu(
 	botID string,
 ) tgbotapi.InlineKeyboardMarkup {
 
-	tariffs, err := app.TariffService.ListAll(ctx, botID)
+	tariffs, err := app.TariffService.ListAll(ctx)
 	if err != nil {
 		log.Printf("[subscription_menu] list fail: %v", err)
 		return errorMenu("Ошибка загрузки тарифов")

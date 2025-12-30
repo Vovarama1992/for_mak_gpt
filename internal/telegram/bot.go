@@ -327,6 +327,13 @@ func (app *BotApp) handleMessage(
 			m.ReplyMarkup = app.BuildMainKeyboard("none")
 			bot.Send(m)
 			return
+
+		case "📦 Пакеты минут":
+			menu := app.BuildMinutePackagesMenu(ctx, botID)
+			out := tgbotapi.NewMessage(chatID, "Выбери пакет минут:")
+			out.ReplyMarkup = menu
+			bot.Send(out)
+			return
 		}
 
 		switch {

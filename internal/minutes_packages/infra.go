@@ -90,13 +90,12 @@ func (r *repo) GetByID(ctx context.Context, botID string, id int64) (*MinutePack
 	return &pkg, nil
 }
 
-func (r *repo) ListAll(ctx context.Context, botID string) ([]*MinutePackage, error) {
+func (r *repo) ListAll(ctx context.Context) ([]*MinutePackage, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, bot_id, name, minutes, price, active
 		FROM minute_packages
-		WHERE bot_id = $1
 		ORDER BY minutes ASC
-	`, botID)
+	`)
 	if err != nil {
 		return nil, err
 	}

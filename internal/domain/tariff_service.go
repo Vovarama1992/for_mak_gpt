@@ -14,8 +14,8 @@ func NewTariffService(repo ports.TariffRepo) ports.TariffService {
 	return &TariffService{repo: repo}
 }
 
-func (s *TariffService) ListAll(ctx context.Context, botID string) ([]*ports.TariffPlan, error) {
-	return s.repo.ListAll(ctx, botID)
+func (s *TariffService) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
+	return s.repo.ListAll(ctx)
 }
 
 func (s *TariffService) GetByID(ctx context.Context, botID string, id int) (*ports.TariffPlan, error) {

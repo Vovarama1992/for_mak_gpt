@@ -18,13 +18,8 @@ func NewTariffHandler(svc ports.TariffService) *TariffHandler {
 }
 
 func (h *TariffHandler) List(w http.ResponseWriter, r *http.Request) {
-	botID := r.URL.Query().Get("bot_id")
-	if botID == "" {
-		http.Error(w, "bot_id required", http.StatusBadRequest)
-		return
-	}
 
-	items, err := h.svc.ListAll(r.Context(), botID)
+	items, err := h.svc.ListAll(r.Context())
 	if err != nil {
 		http.Error(w, "failed to list tariffs", http.StatusInternalServerError)
 		return

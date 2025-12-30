@@ -14,15 +14,19 @@ func (app *BotApp) BuildMainKeyboard(status string) tgbotapi.ReplyKeyboardMarkup
 
 	row2 := tgbotapi.NewKeyboardButtonRow(
 		tgbotapi.NewKeyboardButton("💳 Тарифы"),
-		tgbotapi.NewKeyboardButton("❓ Помощь"),
+		tgbotapi.NewKeyboardButton("📦 Пакеты минут"),
 	)
 
 	row3 := tgbotapi.NewKeyboardButtonRow(
+		tgbotapi.NewKeyboardButton("❓ Помощь"),
+	)
+
+	row4 := tgbotapi.NewKeyboardButtonRow(
 		tgbotapi.NewKeyboardButton("🗑 Очистить историю"),
 		tgbotapi.NewKeyboardButton("🧹 Сбросить настройки"),
 	)
 
-	kb := tgbotapi.NewReplyKeyboard(row1, row2, row3)
+	kb := tgbotapi.NewReplyKeyboard(row1, row2, row3, row4)
 	kb.ResizeKeyboard = true
 	return kb
 }

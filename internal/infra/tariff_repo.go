@@ -15,7 +15,7 @@ func NewTariffRepo(db *sql.DB) ports.TariffRepo {
 	return &tariffRepo{db: db}
 }
 
-func (r *tariffRepo) ListAll(ctx context.Context, botID string) ([]*ports.TariffPlan, error) {
+func (r *tariffRepo) ListAll(ctx context.Context) ([]*ports.TariffPlan, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT
 			id,
@@ -28,9 +28,8 @@ func (r *tariffRepo) ListAll(ctx context.Context, botID string) ([]*ports.Tariff
 			is_trial,
 			description
 		FROM tariff_plans
-		WHERE bot_id = $1
 		ORDER BY price ASC
-	`, botID)
+	`)
 	if err != nil {
 		return nil, err
 	}

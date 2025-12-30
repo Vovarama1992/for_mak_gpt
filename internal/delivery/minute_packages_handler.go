@@ -21,13 +21,8 @@ func NewMinutePackageHandler(svc mp.MinutePackageService) *MinutePackageHandler 
 
 // GET /minute-packages?bot_id=xxx
 func (h *MinutePackageHandler) List(w http.ResponseWriter, r *http.Request) {
-	botID := r.URL.Query().Get("bot_id")
-	if botID == "" {
-		http.Error(w, "bot_id required", http.StatusBadRequest)
-		return
-	}
 
-	out, err := h.svc.ListAll(r.Context(), botID)
+	out, err := h.svc.ListAll(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

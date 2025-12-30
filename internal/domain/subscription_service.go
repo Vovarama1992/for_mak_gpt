@@ -55,7 +55,7 @@ func (s *SubscriptionService) Create(
 ) (string, error) {
 
 	// 1. Ищем тариф
-	tariffs, err := s.tariffRepo.ListAll(ctx, botID)
+	tariffs, err := s.tariffRepo.ListAll(ctx)
 	if err != nil {
 		s.notifier.Notify(ctx, botID, err, "Ошибка чтения тарифов (подписка)")
 		return "", fmt.Errorf("list tariffs: %w", err)

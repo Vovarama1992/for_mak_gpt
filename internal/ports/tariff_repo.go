@@ -6,7 +6,7 @@ import (
 )
 
 type TariffRepo interface {
-	ListAll(ctx context.Context, botID string) ([]*TariffPlan, error)
+	ListAll(ctx context.Context) ([]*TariffPlan, error)
 	GetByID(ctx context.Context, botID string, id int) (*TariffPlan, error)
 	GetTrial(ctx context.Context, botID string) (*TariffPlan, error)
 	Create(ctx context.Context, plan *TariffPlan) (*TariffPlan, error)
@@ -15,7 +15,7 @@ type TariffRepo interface {
 }
 
 type TariffService interface {
-	ListAll(ctx context.Context, botID string) ([]*TariffPlan, error)
+	ListAll(ctx context.Context) ([]*TariffPlan, error)
 	GetByID(ctx context.Context, botID string, id int) (*TariffPlan, error)
 	GetTrial(ctx context.Context, botID string) (*TariffPlan, error)
 	Create(ctx context.Context, plan *TariffPlan) (*TariffPlan, error)
