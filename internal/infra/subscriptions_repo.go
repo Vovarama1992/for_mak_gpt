@@ -294,3 +294,75 @@ func (r *subscriptionRepo) CreateDemo(
 
 	return err
 }
+
+func (r *subscriptionRepo) GetExpiredTrialsForNotify(
+	ctx context.Context,
+) ([]*ports.Subscription, error) {
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT
+			id,
+			bot_id,
+			telegram_id,
+			plan_id,
+			status,
+			started_at,
+			expires_at,
+			updated_at,
+			yookassa_payment_id,
+			voice_minutes
+		FROM subscriptions
+		WHERE
+			expires_at <= NOW()
+			AND trial_notified_at IS NULL
+			AND status = 'active'
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*ports.Subscription
+
+	for rows.Next() {
+		var s ports.Subscription
+		var yid sql.NullString
+
+		err := rows.Scan(
+			&s.ID,
+			&s.BotID,
+			&s.TelegramID,
+			&s.PlanID,
+			&s.Status,
+			&s.StartedAt,
+			&s.ExpiresAt,
+			&s.UpdatedAt,
+			&yid,
+			&s.VoiceMinutes,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if yid.Valid {
+			s.YookassaPaymentID = &yid.String
+		}
+
+		result = append(result, &s)
+	}
+
+	return result, rows.Err()
+}
+
+func (r *subscriptionRepo) MarkTrialNotified(
+	ctx context.Context,
+	id int64,
+) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE subscriptions
+		SET trial_notified_at = NOW()
+		WHERE id = $1
+	`, id)
+
+	return err
+}

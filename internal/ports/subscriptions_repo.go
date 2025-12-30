@@ -15,6 +15,7 @@ type Subscription struct {
 	StartedAt         *time.Time `json:"started_at"`
 	ExpiresAt         *time.Time `json:"expires_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
+	TrialNotifiedAt   *time.Time `json:"trial_notified_at"` // ← ДОБАВИЛИ
 	YookassaPaymentID *string    `json:"yookassa_payment_id"`
 	VoiceMinutes      float64    `json:"voice_minutes"`
 }
@@ -29,6 +30,8 @@ type SubscriptionRepo interface {
 	AddVoiceMinutes(ctx context.Context, botID string, tgID int64, minutes float64) error
 
 	Delete(ctx context.Context, botID string, telegramID int64) error
+	GetExpiredTrialsForNotify(ctx context.Context) ([]*Subscription, error)
+	MarkTrialNotified(ctx context.Context, id int64) error
 
 	CleanupPending(ctx context.Context, olderThan time.Duration) error
 	Activate(ctx context.Context, id int64, startedAt, expiresAt time.Time, voiceMinutes float64) error

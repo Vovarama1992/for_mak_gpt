@@ -38,4 +38,5 @@ type SubscriptionService interface {
 	CleanupPending(ctx context.Context, olderThan time.Duration) error
 	Delete(ctx context.Context, botID string, telegramID int64) error
 	CleanupExpiredTrials(ctx context.Context, botID string) error
+	NotifyExpiredTrials(ctx context.Context) error
 }

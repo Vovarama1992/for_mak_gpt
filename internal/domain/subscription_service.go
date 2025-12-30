@@ -448,3 +448,26 @@ func (s *SubscriptionService) CleanupExpiredTrials(
 
 	return nil
 }
+
+func (s *SubscriptionService) NotifyExpiredTrials(ctx context.Context) error {
+	subs, err := s.repo.GetExpiredTrialsForNotify(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, sub := range subs {
+		// 1. помечаем подписку как истёкшую
+		if err := s.repo.UpdateStatus(ctx, sub.ID, "expired"); err != nil {
+			continue
+		}
+
+		// 2. помечаем, что уведомление отправлено
+		if err := s.repo.MarkTrialNotified(ctx, sub.ID); err != nil {
+			continue
+		}
+
+		// 3. здесь НИЧЕГО БОЛЬШЕ
+	}
+
+	return nil
+}
