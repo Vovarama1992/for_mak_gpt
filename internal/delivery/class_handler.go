@@ -39,47 +39,65 @@ func (h *ClassHandler) ListClasses(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(classes)
 }
 
-// POST /classes
 func (h *ClassHandler) CreateClass(w http.ResponseWriter, r *http.Request) {
-	botID := getBotID(r)
-
 	var body struct {
+		BotID string `json:"bot_id"`
 		Grade string `json:"grade"`
 	}
+
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, err.Error(), 400)
 		return
 	}
 
-	out, err := h.svc.CreateClass(r.Context(), botID, body.Grade)
+	if body.BotID == "" {
+		http.Error(w, "bot_id required", 400)
+		return
+	}
+
+	out, err := h.svc.CreateClass(
+		r.Context(),
+		body.BotID,
+		body.Grade,
+	)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	json.NewEncoder(w).Encode(out)
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 func (h *ClassHandler) UpdateClass(w http.ResponseWriter, r *http.Request) {
-	botID := getBotID(r)
-
 	idStr := chi.URLParam(r, "class_id")
 	id, _ := strconv.Atoi(idStr)
 
 	var body struct {
+		BotID string `json:"bot_id"`
 		Grade string `json:"grade"`
 	}
+
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, err.Error(), 400)
 		return
 	}
 
-	if err := h.svc.UpdateClass(r.Context(), botID, id, body.Grade); err != nil {
+	if body.BotID == "" {
+		http.Error(w, "bot_id required", 400)
+		return
+	}
+
+	if err := h.svc.UpdateClass(
+		r.Context(),
+		body.BotID,
+		id,
+		body.Grade,
+	); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	w.WriteHeader(204)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // DELETE /classes/{class_id}
