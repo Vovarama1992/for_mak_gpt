@@ -61,7 +61,7 @@ func (app *BotApp) handleMessage(
 	chatID := msg.Chat.ID
 
 	// ======================================================
-	// ADMIN HELP MODE → ONE MESSAGE REPLY
+	// ADMIN HELP MODE
 	// ======================================================
 	if isAdmin(tgID) {
 		if ctxHelp, ok := app.adminHelpMode[tgID]; ok {
@@ -94,10 +94,7 @@ func (app *BotApp) handleMessage(
 		if msg.Text == "⬅️ Назад" {
 			delete(app.helpMode[botID], tgID)
 
-			m := tgbotapi.NewMessage(
-				chatID,
-				"Ты вышел из режима помощи.",
-			)
+			m := tgbotapi.NewMessage(chatID, "Ты вышел из режима помощи.")
 			m.ReplyMarkup = app.BuildMainKeyboard(status)
 			bot.Send(m)
 			return
@@ -108,15 +105,10 @@ func (app *BotApp) handleMessage(
 			"UserID: " + fmt.Sprintf("%d", tgID) + "\n\n" +
 			msg.Text
 
-		admins := []int64{
-			1139929360,
-			6789440333,
-		}
+		admins := []int64{1139929360, 6789440333}
 
 		for _, adminID := range admins {
 			bot.Send(tgbotapi.NewMessage(adminID, text))
-
-			// ВКЛЮЧАЕМ ADMIN HELP MODE
 			app.adminHelpMode[adminID] = &AdminHelpContext{
 				BotID:  botID,
 				UserID: tgID,
@@ -131,11 +123,84 @@ func (app *BotApp) handleMessage(
 	}
 
 	// ======================================================
+	// КЛЮЧЕВАЯ ЧАСТЬ — ПРОВЕРКА КЛАССА
+	// ======================================================
+
+	userClass, _ := app.ClassService.GetUserClass(ctx, botID, tgID)
+
+	// ======================================================
 	// STATUS FLOW
 	// ======================================================
 	switch status {
 
 	case "none":
+
+		// ЕСЛИ КЛАСС УЖЕ ВЫБРАН — ЭТО НЕ НОВЫЙ ПОЛЬЗОВАТЕЛЬ
+		if userClass != nil {
+
+			// пробуем активировать trial (если был — просто вернёт nil)
+			trialTariff, err := app.TariffService.GetTrial(ctx)
+			if err == nil && trialTariff != nil {
+				_ = app.SubscriptionService.ActivateTrial(
+					ctx,
+					botID,
+					tgID,
+					trialTariff.Code,
+				)
+			}
+
+			// перечитываем статус
+			newStatus, err := app.SubscriptionService.GetStatus(ctx, botID, tgID)
+			if err == nil {
+				status = newStatus
+			}
+
+			// если всё ещё не активен → показываем оплату
+			if status != "active" {
+				menu := app.BuildSubscriptionMenu(ctx)
+				out := tgbotapi.NewMessage(
+					chatID,
+					"⛔ Подписка не активна. Оформи подписку, чтобы продолжить обучение.",
+				)
+				out.ReplyMarkup = menu
+				bot.Send(out)
+				return
+			}
+
+			// если активен — работаем как в active
+			msgOut := tgbotapi.NewMessage(chatID, " ")
+			msgOut.ReplyMarkup = app.BuildMainKeyboard("active")
+			bot.Send(msgOut)
+
+			switch {
+			case msg.Voice != nil:
+				app.handleVoice(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
+				return
+
+			case msg.Document != nil:
+				if isPDF(msg.Document) {
+					app.handlePDF(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
+				} else if isWord(msg.Document) {
+					app.handleDoc(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
+				} else {
+					app.handlePhoto(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
+				}
+				return
+
+			case len(msg.Photo) > 0:
+				app.handlePhoto(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
+				return
+
+			case msg.Text != "":
+				app.handleText(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
+				return
+			}
+
+			return
+		}
+
+		// ===== обычный новый пользователь =====
+
 		if msg.Text == "🟢 Начать урок" {
 
 			trialTariff, err := app.TariffService.GetTrial(ctx)
@@ -160,25 +225,17 @@ func (app *BotApp) handleMessage(
 				return
 			}
 
-			cfg, err := app.BotsService.Get(ctx, botID)
-			if err != nil {
-				log.Printf("[welcome] failed to load bot config: %v", err)
-			}
+			cfg, _ := app.BotsService.Get(ctx, botID)
 
-			var welcomeText string
+			welcomeText := "Привет! Я — твой AI-репетитор 🤖📚\nВыбери класс, чтобы начать."
 			if cfg != nil && cfg.WelcomeText != nil {
 				welcomeText = strings.TrimSpace(*cfg.WelcomeText)
 			}
-			if welcomeText == "" {
-				welcomeText = "Привет! Я — твой AI-репетитор 🤖📚\nВыбери класс, чтобы начать."
-			}
+
 			bot.Send(tgbotapi.NewMessage(chatID, welcomeText))
 
 			if cfg != nil && cfg.WelcomeVideo != nil && *cfg.WelcomeVideo != "" {
-				video := tgbotapi.NewVideo(
-					chatID,
-					tgbotapi.FileURL(*cfg.WelcomeVideo),
-				)
+				video := tgbotapi.NewVideo(chatID, tgbotapi.FileURL(*cfg.WelcomeVideo))
 				bot.Send(video)
 			}
 
@@ -202,8 +259,10 @@ func (app *BotApp) handleMessage(
 
 	case "expired":
 		menu := app.BuildSubscriptionMenu(ctx)
-		text := "⏳ Срок подписки истёк. Продли, чтобы снова пользоваться ботом!"
-		out := tgbotapi.NewMessage(chatID, text)
+		out := tgbotapi.NewMessage(
+			chatID,
+			"⏳ Срок подписки истёк. Продли, чтобы продолжить.",
+		)
 		out.ReplyMarkup = menu
 		bot.Send(out)
 		return
@@ -225,8 +284,7 @@ func (app *BotApp) handleMessage(
 
 		case "💳 Тарифы":
 			menu := app.BuildSubscriptionMenu(ctx)
-			text := app.BuildSubscriptionText()
-			out := tgbotapi.NewMessage(chatID, text)
+			out := tgbotapi.NewMessage(chatID, app.BuildSubscriptionText())
 			out.ReplyMarkup = menu
 			bot.Send(out)
 			return
@@ -265,10 +323,7 @@ func (app *BotApp) handleMessage(
 				return
 			}
 
-			m := tgbotapi.NewMessage(
-				chatID,
-				"Настройки сброшены. Можешь начать заново.",
-			)
+			m := tgbotapi.NewMessage(chatID, "Настройки сброшены. Можешь начать заново.")
 			m.ReplyMarkup = app.BuildMainKeyboard("none")
 			bot.Send(m)
 			return
@@ -277,8 +332,6 @@ func (app *BotApp) handleMessage(
 		switch {
 		case msg.Voice != nil:
 			app.handleVoice(ctx, botID, bot, msg, tgID, mainKB)
-			return
-
 		case msg.Document != nil:
 			if isPDF(msg.Document) {
 				app.handlePDF(ctx, botID, bot, msg, tgID, mainKB)
@@ -287,28 +340,15 @@ func (app *BotApp) handleMessage(
 			} else {
 				app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
 			}
-			return
-
 		case len(msg.Photo) > 0:
 			app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
-			return
-
 		case msg.Text != "":
 			app.handleText(ctx, botID, bot, msg, tgID, mainKB)
-			return
-
 		default:
 			m := tgbotapi.NewMessage(chatID, "📎 Отправь текст, голос, фото или документ.")
 			m.ReplyMarkup = mainKB
 			bot.Send(m)
-			return
 		}
-
-	default:
-		bot.Send(tgbotapi.NewMessage(
-			chatID,
-			"⚠️ Неизвестный статус подписки.",
-		))
 		return
 	}
 }
