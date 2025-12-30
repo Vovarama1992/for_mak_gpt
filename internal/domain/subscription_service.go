@@ -55,7 +55,7 @@ func (s *SubscriptionService) Create(
 ) (string, error) {
 
 	// 1. Ищем тариф
-	tariffs, err := s.tariffRepo.ListAll(ctx)
+	tariffs, err := s.tariffRepo.ListAll(ctx, botID)
 	if err != nil {
 		s.notifier.Notify(ctx, botID, err, "Ошибка чтения тарифов (подписка)")
 		return "", fmt.Errorf("list tariffs: %w", err)
@@ -231,7 +231,7 @@ func (s *SubscriptionService) Activate(ctx context.Context, paymentID string) er
 		return err
 	}
 
-	plan, err := s.tariffRepo.GetByID(ctx, int(*sub.PlanID))
+	plan, err := s.tariffRepo.GetByID(ctx, sub.BotID, int(*sub.PlanID))
 	if err != nil {
 		s.notifier.Notify(ctx, sub.BotID, err,
 			"Ошибка загрузки тарифного плана при активации")
@@ -276,7 +276,7 @@ func (s *SubscriptionService) ActivateTrial(
 	}
 
 	// 2. Ищем trial-тариф
-	plan, err := s.tariffRepo.GetTrial(ctx)
+	plan, err := s.tariffRepo.GetTrial(ctx, botID)
 	if err != nil {
 		return err
 	}
@@ -364,7 +364,7 @@ func (s *SubscriptionService) AddMinutesFromPackage(
 	packageID int64,
 ) error {
 
-	pkg, err := s.minuteSvc.GetByID(ctx, packageID)
+	pkg, err := s.minuteSvc.GetByID(ctx, botID, packageID)
 	if err != nil {
 		return err
 	}
@@ -406,7 +406,7 @@ func (s *SubscriptionService) CleanupExpiredTrials(
 ) error {
 
 	// 1) получаем trial-тариф
-	trial, err := s.tariffRepo.GetTrial(ctx)
+	trial, err := s.tariffRepo.GetTrial(ctx, botID)
 	if err != nil {
 		s.notifier.Notify(ctx, botID, err, "Ошибка загрузки trial-тарифа (cleanup)")
 		return err

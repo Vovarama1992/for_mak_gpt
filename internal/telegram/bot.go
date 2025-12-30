@@ -139,7 +139,7 @@ func (app *BotApp) handleMessage(
 		if userClass != nil {
 
 			// пробуем активировать trial (если был — просто вернёт nil)
-			trialTariff, err := app.TariffService.GetTrial(ctx)
+			trialTariff, err := app.TariffService.GetTrial(ctx, botID)
 			if err == nil && trialTariff != nil {
 				_ = app.SubscriptionService.ActivateTrial(
 					ctx,
@@ -157,7 +157,7 @@ func (app *BotApp) handleMessage(
 
 			// если всё ещё не активен → показываем оплату
 			if status != "active" {
-				menu := app.BuildSubscriptionMenu(ctx)
+				menu := app.BuildSubscriptionMenu(ctx, botID)
 				out := tgbotapi.NewMessage(
 					chatID,
 					"⛔ Подписка не активна. Оформи подписку, чтобы продолжить обучение.",
@@ -203,7 +203,7 @@ func (app *BotApp) handleMessage(
 
 		if msg.Text == "🟢 Начать урок" {
 
-			trialTariff, err := app.TariffService.GetTrial(ctx)
+			trialTariff, err := app.TariffService.GetTrial(ctx, botID)
 			if err != nil || trialTariff == nil {
 				bot.Send(tgbotapi.NewMessage(
 					chatID,
@@ -258,7 +258,7 @@ func (app *BotApp) handleMessage(
 		return
 
 	case "expired":
-		menu := app.BuildSubscriptionMenu(ctx)
+		menu := app.BuildSubscriptionMenu(ctx, botID)
 		out := tgbotapi.NewMessage(
 			chatID,
 			"⏳ Срок подписки истёк. Продли, чтобы продолжить.",
@@ -283,7 +283,7 @@ func (app *BotApp) handleMessage(
 			return
 
 		case "💳 Тарифы":
-			menu := app.BuildSubscriptionMenu(ctx)
+			menu := app.BuildSubscriptionMenu(ctx, botID)
 			out := tgbotapi.NewMessage(chatID, app.BuildSubscriptionText())
 			out.ReplyMarkup = menu
 			bot.Send(out)

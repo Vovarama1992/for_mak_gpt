@@ -17,6 +17,10 @@ func NewClassHandler(svc cl.ClassService) *ClassHandler {
 	return &ClassHandler{svc: svc}
 }
 
+func getBotID(r *http.Request) string {
+	return r.Header.Get("X-Bot-ID")
+}
+
 //
 // ----------------------
 //   КЛАССЫ
@@ -25,7 +29,9 @@ func NewClassHandler(svc cl.ClassService) *ClassHandler {
 
 // GET /classes
 func (h *ClassHandler) ListClasses(w http.ResponseWriter, r *http.Request) {
-	classes, err := h.svc.ListClasses(r.Context())
+	botID := getBotID(r)
+
+	classes, err := h.svc.ListClasses(r.Context(), botID)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -34,8 +40,9 @@ func (h *ClassHandler) ListClasses(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /classes
-// body: { "grade": 1 }
 func (h *ClassHandler) CreateClass(w http.ResponseWriter, r *http.Request) {
+	botID := getBotID(r)
+
 	var body struct {
 		Grade string `json:"grade"`
 	}
@@ -44,7 +51,7 @@ func (h *ClassHandler) CreateClass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out, err := h.svc.CreateClass(r.Context(), body.Grade)
+	out, err := h.svc.CreateClass(r.Context(), botID, body.Grade)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -54,6 +61,8 @@ func (h *ClassHandler) CreateClass(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ClassHandler) UpdateClass(w http.ResponseWriter, r *http.Request) {
+	botID := getBotID(r)
+
 	idStr := chi.URLParam(r, "class_id")
 	id, _ := strconv.Atoi(idStr)
 
@@ -65,7 +74,7 @@ func (h *ClassHandler) UpdateClass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.UpdateClass(r.Context(), id, body.Grade); err != nil {
+	if err := h.svc.UpdateClass(r.Context(), botID, id, body.Grade); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -75,10 +84,12 @@ func (h *ClassHandler) UpdateClass(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /classes/{class_id}
 func (h *ClassHandler) DeleteClass(w http.ResponseWriter, r *http.Request) {
+	botID := getBotID(r)
+
 	idStr := chi.URLParam(r, "class_id")
 	id, _ := strconv.Atoi(idStr)
 
-	if err := h.svc.DeleteClass(r.Context(), id); err != nil {
+	if err := h.svc.DeleteClass(r.Context(), botID, id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -88,15 +99,17 @@ func (h *ClassHandler) DeleteClass(w http.ResponseWriter, r *http.Request) {
 
 //
 // ----------------------
-//   ПРОМПТЫ ДЛЯ КЛАССА
+//   ПРОМПТЫ
 // ----------------------
 //
 
 func (h *ClassHandler) GetPrompt(w http.ResponseWriter, r *http.Request) {
+	botID := getBotID(r)
+
 	cidStr := chi.URLParam(r, "class_id")
 	cid, _ := strconv.Atoi(cidStr)
 
-	p, err := h.svc.GetPromptByClassID(r.Context(), cid)
+	p, err := h.svc.GetPromptByClassID(r.Context(), botID, cid)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -110,8 +123,9 @@ func (h *ClassHandler) GetPrompt(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /classes/{class_id}/prompts
-// body: { "prompt": "..." }
 func (h *ClassHandler) CreatePrompt(w http.ResponseWriter, r *http.Request) {
+	botID := getBotID(r)
+
 	cidStr := chi.URLParam(r, "class_id")
 	classID, _ := strconv.Atoi(cidStr)
 
@@ -123,7 +137,7 @@ func (h *ClassHandler) CreatePrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out, err := h.svc.CreatePrompt(r.Context(), classID, body.Prompt)
+	out, err := h.svc.CreatePrompt(r.Context(), botID, classID, body.Prompt)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -133,8 +147,9 @@ func (h *ClassHandler) CreatePrompt(w http.ResponseWriter, r *http.Request) {
 }
 
 // PATCH /prompts/{prompt_id}
-// body: { "prompt": "..." }
 func (h *ClassHandler) UpdatePrompt(w http.ResponseWriter, r *http.Request) {
+	botID := getBotID(r)
+
 	pidStr := chi.URLParam(r, "prompt_id")
 	pid, _ := strconv.Atoi(pidStr)
 
@@ -146,7 +161,7 @@ func (h *ClassHandler) UpdatePrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.UpdatePrompt(r.Context(), pid, body.Prompt); err != nil {
+	if err := h.svc.UpdatePrompt(r.Context(), botID, pid, body.Prompt); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -156,10 +171,12 @@ func (h *ClassHandler) UpdatePrompt(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /prompts/{prompt_id}
 func (h *ClassHandler) DeletePrompt(w http.ResponseWriter, r *http.Request) {
+	botID := getBotID(r)
+
 	pidStr := chi.URLParam(r, "prompt_id")
 	pid, _ := strconv.Atoi(pidStr)
 
-	if err := h.svc.DeletePrompt(r.Context(), pid); err != nil {
+	if err := h.svc.DeletePrompt(r.Context(), botID, pid); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}

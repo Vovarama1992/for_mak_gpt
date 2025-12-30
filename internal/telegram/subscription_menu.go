@@ -10,8 +10,12 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func (app *BotApp) BuildSubscriptionMenu(ctx context.Context) tgbotapi.InlineKeyboardMarkup {
-	tariffs, err := app.TariffService.ListAll(ctx)
+func (app *BotApp) BuildSubscriptionMenu(
+	ctx context.Context,
+	botID string,
+) tgbotapi.InlineKeyboardMarkup {
+
+	tariffs, err := app.TariffService.ListAll(ctx, botID)
 	if err != nil {
 		log.Printf("[subscription_menu] list fail: %v", err)
 		return errorMenu("Ошибка загрузки тарифов")

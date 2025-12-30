@@ -15,13 +15,15 @@ func NewMinutePackageRepo(db *sql.DB) MinutePackageRepo {
 
 func (r *repo) Create(ctx context.Context, pkg *MinutePackage) error {
 	query := `
-		INSERT INTO minute_packages (name, minutes, price, active)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO minute_packages (bot_id, name, minutes, price, active)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
 	`
 
 	return r.db.QueryRowContext(
-		ctx, query,
+		ctx,
+		query,
+		pkg.BotID,
 		pkg.Name,
 		pkg.Minutes,
 		pkg.Price,
@@ -32,38 +34,47 @@ func (r *repo) Create(ctx context.Context, pkg *MinutePackage) error {
 func (r *repo) Update(ctx context.Context, pkg *MinutePackage) error {
 	query := `
 		UPDATE minute_packages
-		SET name=$1, minutes=$2, price=$3, active=$4
-		WHERE id=$5
+		SET name = $1,
+		    minutes = $2,
+		    price = $3,
+		    active = $4
+		WHERE id = $5 AND bot_id = $6
 	`
+
 	_, err := r.db.ExecContext(
-		ctx, query,
+		ctx,
+		query,
 		pkg.Name,
 		pkg.Minutes,
 		pkg.Price,
 		pkg.Active,
 		pkg.ID,
+		pkg.BotID,
 	)
 	return err
 }
 
-func (r *repo) Delete(ctx context.Context, id int64) error {
-	_, err := r.db.ExecContext(ctx,
-		`DELETE FROM minute_packages WHERE id=$1`,
+func (r *repo) Delete(ctx context.Context, botID string, id int64) error {
+	_, err := r.db.ExecContext(
+		ctx,
+		`DELETE FROM minute_packages WHERE id = $1 AND bot_id = $2`,
 		id,
+		botID,
 	)
 	return err
 }
 
-func (r *repo) GetByID(ctx context.Context, id int64) (*MinutePackage, error) {
+func (r *repo) GetByID(ctx context.Context, botID string, id int64) (*MinutePackage, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, name, minutes, price, active
+		SELECT id, bot_id, name, minutes, price, active
 		FROM minute_packages
-		WHERE id=$1
-	`, id)
+		WHERE id = $1 AND bot_id = $2
+	`, id, botID)
 
 	var pkg MinutePackage
 	err := row.Scan(
 		&pkg.ID,
+		&pkg.BotID,
 		&pkg.Name,
 		&pkg.Minutes,
 		&pkg.Price,
@@ -79,12 +90,13 @@ func (r *repo) GetByID(ctx context.Context, id int64) (*MinutePackage, error) {
 	return &pkg, nil
 }
 
-func (r *repo) ListAll(ctx context.Context) ([]*MinutePackage, error) {
+func (r *repo) ListAll(ctx context.Context, botID string) ([]*MinutePackage, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, name, minutes, price, active
+		SELECT id, bot_id, name, minutes, price, active
 		FROM minute_packages
+		WHERE bot_id = $1
 		ORDER BY minutes ASC
-	`)
+	`, botID)
 	if err != nil {
 		return nil, err
 	}
@@ -94,18 +106,16 @@ func (r *repo) ListAll(ctx context.Context) ([]*MinutePackage, error) {
 
 	for rows.Next() {
 		var pkg MinutePackage
-
-		err := rows.Scan(
+		if err := rows.Scan(
 			&pkg.ID,
+			&pkg.BotID,
 			&pkg.Name,
 			&pkg.Minutes,
 			&pkg.Price,
 			&pkg.Active,
-		)
-		if err != nil {
+		); err != nil {
 			return nil, err
 		}
-
 		out = append(out, &pkg)
 	}
 

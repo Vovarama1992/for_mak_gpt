@@ -119,7 +119,7 @@ func (s *AiService) GetReply(
 
 	uc, err := s.classService.GetUserClass(ctx, botID, telegramID)
 	if err == nil && uc != nil {
-		p, err := s.classService.GetPromptByClassID(ctx, uc.ClassID)
+		p, err := s.classService.GetPromptByClassID(ctx, botID, uc.ClassID)
 		if err == nil && p != nil {
 			finalClassPrompt = strings.TrimSpace(p.Prompt)
 		}

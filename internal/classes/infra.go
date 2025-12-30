@@ -17,37 +17,41 @@ func NewClassRepo(db *sql.DB) ClassRepo {
 // classes
 //
 
-func (r *repo) CreateClass(ctx context.Context, grade string) (*Class, error) {
+func (r *repo) CreateClass(ctx context.Context, botID string, grade string) (*Class, error) {
 	row := r.db.QueryRowContext(ctx,
-		`INSERT INTO classes (grade)
-		 VALUES ($1)
-		 RETURNING id, grade`,
-		grade,
+		`INSERT INTO classes (bot_id, grade)
+		 VALUES ($1, $2)
+		 RETURNING id, bot_id, grade`,
+		botID, grade,
 	)
+
 	var c Class
-	if err := row.Scan(&c.ID, &c.Grade); err != nil {
+	if err := row.Scan(&c.ID, &c.BotID, &c.Grade); err != nil {
 		return nil, err
 	}
 	return &c, nil
 }
 
-func (r *repo) ListClasses(ctx context.Context) ([]*Class, error) {
+func (r *repo) ListClasses(ctx context.Context, botID string) ([]*Class, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT 
 			c.id,
+			c.bot_id,
 			c.grade,
 			p.id   AS prompt_id,
 			p.prompt
 		FROM classes c
-		LEFT JOIN class_prompts p ON p.class_id = c.id
+		LEFT JOIN class_prompts p ON p.class_id = c.id AND p.bot_id = c.bot_id
+		WHERE c.bot_id = $1
 		ORDER BY c.grade ASC
-	`)
+	`, botID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	var out []*Class
+
 	for rows.Next() {
 		var (
 			c   Class
@@ -55,14 +59,20 @@ func (r *repo) ListClasses(ctx context.Context) ([]*Class, error) {
 			pp  sql.NullString
 		)
 
-		if err := rows.Scan(&c.ID, &c.Grade, &pid, &pp); err != nil {
+		if err := rows.Scan(
+			&c.ID,
+			&c.BotID,
+			&c.Grade,
+			&pid,
+			&pp,
+		); err != nil {
 			return nil, err
 		}
 
-		// если промпт есть
 		if pid.Valid {
 			c.Prompt = &ClassPrompt{
 				ID:      int(pid.Int64),
+				BotID:   c.BotID,
 				ClassID: c.ID,
 				Prompt:  pp.String,
 			}
@@ -70,103 +80,115 @@ func (r *repo) ListClasses(ctx context.Context) ([]*Class, error) {
 
 		out = append(out, &c)
 	}
+
 	return out, rows.Err()
 }
 
-func (r *repo) UpdateClass(ctx context.Context, id int, grade string) error {
-	_, err := r.db.ExecContext(ctx,
-		`UPDATE classes
-	     SET grade=$1
-	     WHERE id=$2`,
-		grade, id,
-	)
-	return err
-}
-
-// удалить класс
-func (r *repo) DeleteClass(ctx context.Context, id int) error {
-	// 1) удалить всех юзеров, у которых этот класс
-	_, err := r.db.ExecContext(ctx,
-		`DELETE FROM user_classes WHERE class_id=$1`,
-		id,
-	)
-	if err != nil {
-		return err
-	}
-
-	// 2) удалить сам класс
-	_, err = r.db.ExecContext(ctx,
-		`DELETE FROM classes WHERE id=$1`,
-		id,
-	)
-	return err
-}
-
-func (r *repo) GetClassByID(ctx context.Context, id int) (*Class, error) {
+func (r *repo) GetClassByID(ctx context.Context, botID string, id int) (*Class, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, grade
+		`SELECT id, bot_id, grade
 		 FROM classes
-		 WHERE id=$1`,
-		id,
+		 WHERE id=$1 AND bot_id=$2`,
+		id, botID,
 	)
 
 	var c Class
-	if err := row.Scan(&c.ID, &c.Grade); err != nil {
+	if err := row.Scan(&c.ID, &c.BotID, &c.Grade); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+
 	return &c, nil
+}
+
+func (r *repo) UpdateClass(ctx context.Context, botID string, id int, grade string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE classes
+		 SET grade=$1
+		 WHERE id=$2 AND bot_id=$3`,
+		grade, id, botID,
+	)
+	return err
+}
+
+func (r *repo) DeleteClass(ctx context.Context, botID string, id int) error {
+	_, err := r.db.ExecContext(ctx,
+		`DELETE FROM user_classes
+		 WHERE class_id=$1 AND bot_id=$2`,
+		id, botID,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = r.db.ExecContext(ctx,
+		`DELETE FROM class_prompts
+		 WHERE class_id=$1 AND bot_id=$2`,
+		id, botID,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = r.db.ExecContext(ctx,
+		`DELETE FROM classes
+		 WHERE id=$1 AND bot_id=$2`,
+		id, botID,
+	)
+
+	return err
 }
 
 //
 // class_prompts
 //
 
-func (r *repo) CreatePrompt(ctx context.Context, classID int, prompt string) (*ClassPrompt, error) {
+func (r *repo) CreatePrompt(ctx context.Context, botID string, classID int, prompt string) (*ClassPrompt, error) {
 	row := r.db.QueryRowContext(ctx,
-		`INSERT INTO class_prompts (class_id, prompt)
-		 VALUES ($1, $2)
-		 RETURNING id, class_id, prompt`,
-		classID, prompt,
+		`INSERT INTO class_prompts (bot_id, class_id, prompt)
+		 VALUES ($1, $2, $3)
+		 RETURNING id, bot_id, class_id, prompt`,
+		botID, classID, prompt,
 	)
 
 	var p ClassPrompt
-	if err := row.Scan(&p.ID, &p.ClassID, &p.Prompt); err != nil {
+	if err := row.Scan(&p.ID, &p.BotID, &p.ClassID, &p.Prompt); err != nil {
 		return nil, err
 	}
 	return &p, nil
 }
 
-func (r *repo) UpdatePrompt(ctx context.Context, id int, prompt string) error {
+func (r *repo) UpdatePrompt(ctx context.Context, botID string, id int, prompt string) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE class_prompts
 		 SET prompt=$1
-		 WHERE id=$2`,
-		prompt, id,
+		 WHERE id=$2 AND bot_id=$3`,
+		prompt, id, botID,
 	)
 	return err
 }
 
-func (r *repo) DeletePrompt(ctx context.Context, id int) error {
+func (r *repo) DeletePrompt(ctx context.Context, botID string, id int) error {
 	_, err := r.db.ExecContext(ctx,
-		`DELETE FROM class_prompts WHERE id=$1`,
-		id,
+		`DELETE FROM class_prompts
+		 WHERE id=$1 AND bot_id=$2`,
+		id, botID,
 	)
 	return err
 }
 
-func (r *repo) GetPromptByClassID(ctx context.Context, classID int) (*ClassPrompt, error) {
+func (r *repo) GetPromptByClassID(ctx context.Context, botID string, classID int) (*ClassPrompt, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, class_id, prompt
+		`SELECT id, bot_id, class_id, prompt
 		 FROM class_prompts
-		 WHERE class_id=$1`,
-		classID,
+		 WHERE class_id=$1 AND bot_id=$2`,
+		classID, botID,
 	)
 
 	var p ClassPrompt
-	if err := row.Scan(&p.ID, &p.ClassID, &p.Prompt); err != nil {
+	if err := row.Scan(&p.ID, &p.BotID, &p.ClassID, &p.Prompt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -206,6 +228,7 @@ func (r *repo) GetUserClass(ctx context.Context, botID string, telegramID int64)
 		}
 		return nil, err
 	}
+
 	return &uc, nil
 }
 

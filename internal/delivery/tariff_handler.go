@@ -18,11 +18,18 @@ func NewTariffHandler(svc ports.TariffService) *TariffHandler {
 }
 
 func (h *TariffHandler) List(w http.ResponseWriter, r *http.Request) {
-	items, err := h.svc.ListAll(r.Context())
+	botID := r.URL.Query().Get("bot_id")
+	if botID == "" {
+		http.Error(w, "bot_id required", http.StatusBadRequest)
+		return
+	}
+
+	items, err := h.svc.ListAll(r.Context(), botID)
 	if err != nil {
 		http.Error(w, "failed to list tariffs", http.StatusInternalServerError)
 		return
 	}
+
 	_ = json.NewEncoder(w).Encode(items)
 }
 
@@ -30,6 +37,11 @@ func (h *TariffHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var input ports.TariffPlan
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+
+	if input.BotID == "" {
+		http.Error(w, "bot_id required", http.StatusBadRequest)
 		return
 	}
 
@@ -54,6 +66,12 @@ func (h *TariffHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
+
+	if input.BotID == "" {
+		http.Error(w, "bot_id required", http.StatusBadRequest)
+		return
+	}
+
 	input.ID = id
 
 	updated, err := h.svc.Update(r.Context(), &input)
@@ -66,13 +84,19 @@ func (h *TariffHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TariffHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	botID := r.URL.Query().Get("bot_id")
+	if botID == "" {
+		http.Error(w, "bot_id required", http.StatusBadRequest)
+		return
+	}
+
 	id, err := extractIDFromURL(r.URL.Path)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	if err := h.svc.Delete(r.Context(), botID, id); err != nil {
 		http.Error(w, "failed to delete tariff", http.StatusInternalServerError)
 		return
 	}

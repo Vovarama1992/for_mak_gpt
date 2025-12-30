@@ -9,8 +9,12 @@ import (
 )
 
 // BuildMinutePackagesMenu — показывает кнопки с пакетами минут
-func (app *BotApp) BuildMinutePackagesMenu(ctx context.Context) tgbotapi.InlineKeyboardMarkup {
-	pkgs, err := app.MinutePackageService.ListAll(ctx)
+func (app *BotApp) BuildMinutePackagesMenu(
+	ctx context.Context,
+	botID string,
+) tgbotapi.InlineKeyboardMarkup {
+
+	pkgs, err := app.MinutePackageService.ListAll(ctx, botID)
 	if err != nil || len(pkgs) == 0 {
 		log.Printf("[minute_packages] load fail: %v", err)
 		btn := tgbotapi.NewInlineKeyboardButtonData("Ошибка загрузки пакетов", "none")

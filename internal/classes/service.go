@@ -14,44 +14,44 @@ func NewClassService(repo ClassRepo) ClassService {
 // classes
 //
 
-func (s *service) CreateClass(ctx context.Context, grade string) (*Class, error) {
-	return s.repo.CreateClass(ctx, grade)
+func (s *service) CreateClass(ctx context.Context, botID string, grade string) (*Class, error) {
+	return s.repo.CreateClass(ctx, botID, grade)
 }
 
-func (s *service) ListClasses(ctx context.Context) ([]*Class, error) {
-	return s.repo.ListClasses(ctx)
+func (s *service) ListClasses(ctx context.Context, botID string) ([]*Class, error) {
+	return s.repo.ListClasses(ctx, botID)
 }
 
-func (s *service) GetClassByID(ctx context.Context, id int) (*Class, error) {
-	return s.repo.GetClassByID(ctx, id)
+func (s *service) GetClassByID(ctx context.Context, botID string, id int) (*Class, error) {
+	return s.repo.GetClassByID(ctx, botID, id)
 }
 
-func (s *service) UpdateClass(ctx context.Context, id int, grade string) error {
-	return s.repo.UpdateClass(ctx, id, grade)
+func (s *service) UpdateClass(ctx context.Context, botID string, id int, grade string) error {
+	return s.repo.UpdateClass(ctx, botID, id, grade)
 }
 
-func (s *service) DeleteClass(ctx context.Context, id int) error {
-	return s.repo.DeleteClass(ctx, id)
+func (s *service) DeleteClass(ctx context.Context, botID string, id int) error {
+	return s.repo.DeleteClass(ctx, botID, id)
 }
 
 //
 // prompts
 //
 
-func (s *service) CreatePrompt(ctx context.Context, classID int, prompt string) (*ClassPrompt, error) {
-	return s.repo.CreatePrompt(ctx, classID, prompt)
+func (s *service) CreatePrompt(ctx context.Context, botID string, classID int, prompt string) (*ClassPrompt, error) {
+	return s.repo.CreatePrompt(ctx, botID, classID, prompt)
 }
 
-func (s *service) UpdatePrompt(ctx context.Context, id int, prompt string) error {
-	return s.repo.UpdatePrompt(ctx, id, prompt)
+func (s *service) UpdatePrompt(ctx context.Context, botID string, id int, prompt string) error {
+	return s.repo.UpdatePrompt(ctx, botID, id, prompt)
 }
 
-func (s *service) DeletePrompt(ctx context.Context, id int) error {
-	return s.repo.DeletePrompt(ctx, id)
+func (s *service) DeletePrompt(ctx context.Context, botID string, id int) error {
+	return s.repo.DeletePrompt(ctx, botID, id)
 }
 
-func (s *service) GetPromptByClassID(ctx context.Context, classID int) (*ClassPrompt, error) {
-	return s.repo.GetPromptByClassID(ctx, classID)
+func (s *service) GetPromptByClassID(ctx context.Context, botID string, classID int) (*ClassPrompt, error) {
+	return s.repo.GetPromptByClassID(ctx, botID, classID)
 }
 
 //

@@ -30,7 +30,7 @@ func (app *BotApp) handleCallback(
 	// 1) Покупка минут — показать список
 	// ---------------------------
 	if data == "buy_voice" {
-		menu := app.BuildMinutePackagesMenu(ctx)
+		menu := app.BuildMinutePackagesMenu(ctx, botID)
 
 		edit := tgbotapi.NewEditMessageText(
 			chatID,
@@ -72,7 +72,7 @@ func (app *BotApp) handleCallback(
 		idStr := strings.TrimPrefix(data, "pkg_")
 		id, _ := strconv.ParseInt(idStr, 10, 64)
 
-		pkg, err := app.MinutePackageService.GetByID(ctx, id)
+		pkg, err := app.MinutePackageService.GetByID(ctx, botID, id)
 		if err != nil || pkg == nil || !pkg.Active {
 			bot.Send(tgbotapi.NewMessage(chatID, "❗ Пакет недоступен."))
 			return

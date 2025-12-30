@@ -35,16 +35,16 @@ func (s *service) Update(ctx context.Context, pkg *MinutePackage) error {
 	return s.repo.Update(ctx, pkg)
 }
 
-func (s *service) Delete(ctx context.Context, id int64) error {
-	return s.repo.Delete(ctx, id)
+func (s *service) Delete(ctx context.Context, botID string, id int64) error {
+	return s.repo.Delete(ctx, botID, id)
 }
 
-func (s *service) GetByID(ctx context.Context, id int64) (*MinutePackage, error) {
-	return s.repo.GetByID(ctx, id)
+func (s *service) GetByID(ctx context.Context, botID string, id int64) (*MinutePackage, error) {
+	return s.repo.GetByID(ctx, botID, id)
 }
 
-func (s *service) ListAll(ctx context.Context) ([]*MinutePackage, error) {
-	return s.repo.ListAll(ctx)
+func (s *service) ListAll(ctx context.Context, botID string) ([]*MinutePackage, error) {
+	return s.repo.ListAll(ctx, botID)
 }
 
 // ---------------------------
@@ -58,7 +58,7 @@ func (s *service) CreatePayment(
 ) (string, error) {
 
 	// 1. Пакет минут
-	pkg, err := s.repo.GetByID(ctx, packageID)
+	pkg, err := s.repo.GetByID(ctx, botID, packageID)
 	if err != nil {
 		return "", fmt.Errorf("load minute package: %w", err)
 	}
@@ -78,7 +78,7 @@ func (s *service) CreatePayment(
 		apiURL = strings.TrimRight(apiURL, "/") + "/v3/payments"
 	}
 
-	// --- Главное: чек + customer + payment_subject ---
+	// 3. Request body
 	body := map[string]any{
 		"amount": map[string]any{
 			"value":    fmt.Sprintf("%.2f", pkg.Price),
@@ -92,7 +92,6 @@ func (s *service) CreatePayment(
 			"type":       "redirect",
 			"return_url": "https://aifulls.com/success.html",
 		},
-
 		"receipt": map[string]any{
 			"customer": map[string]any{
 				"phone": "+79384095762",
@@ -111,7 +110,6 @@ func (s *service) CreatePayment(
 				},
 			},
 		},
-
 		"metadata": map[string]any{
 			"bot_id":       botID,
 			"telegram_id":  fmt.Sprintf("%d", telegramID),
@@ -131,7 +129,7 @@ func (s *service) CreatePayment(
 	req.Header.Set("Idempotence-Key", fmt.Sprintf("%d", time.Now().UnixNano()))
 	req.Header.Set("Content-Type", "application/json")
 
-	// 3. execute
+	// 4. execute
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("request to yookassa: %w", err)
@@ -143,13 +141,14 @@ func (s *service) CreatePayment(
 		return "", fmt.Errorf("yookassa returned %d: %s", resp.StatusCode, string(raw))
 	}
 
-	// 4. decode
+	// 5. decode
 	var yresp struct {
 		ID           string `json:"id"`
 		Confirmation struct {
 			URL string `json:"confirmation_url"`
 		} `json:"confirmation"`
 	}
+
 	if err := json.Unmarshal(raw, &yresp); err != nil {
 		return "", fmt.Errorf("decode yookassa: %w", err)
 	}

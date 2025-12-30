@@ -19,22 +19,35 @@ func NewMinutePackageHandler(svc mp.MinutePackageService) *MinutePackageHandler 
 	return &MinutePackageHandler{svc: svc}
 }
 
-// GET /minute-packages
+// GET /minute-packages?bot_id=xxx
 func (h *MinutePackageHandler) List(w http.ResponseWriter, r *http.Request) {
-	out, err := h.svc.ListAll(r.Context())
+	botID := r.URL.Query().Get("bot_id")
+	if botID == "" {
+		http.Error(w, "bot_id required", http.StatusBadRequest)
+		return
+	}
+
+	out, err := h.svc.ListAll(r.Context(), botID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(out)
+
+	_ = json.NewEncoder(w).Encode(out)
 }
 
-// GET /minute-packages/{id}
+// GET /minute-packages/{id}?bot_id=xxx
 func (h *MinutePackageHandler) Get(w http.ResponseWriter, r *http.Request) {
+	botID := r.URL.Query().Get("bot_id")
+	if botID == "" {
+		http.Error(w, "bot_id required", http.StatusBadRequest)
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, _ := strconv.ParseInt(idStr, 10, 64)
 
-	out, err := h.svc.GetByID(r.Context(), id)
+	out, err := h.svc.GetByID(r.Context(), botID, id)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -44,7 +57,7 @@ func (h *MinutePackageHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(out)
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 // POST /minute-packages
@@ -55,12 +68,17 @@ func (h *MinutePackageHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if pkg.BotID == "" {
+		http.Error(w, "bot_id required", http.StatusBadRequest)
+		return
+	}
+
 	if err := h.svc.Create(context.Background(), &pkg); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	json.NewEncoder(w).Encode(pkg)
+	_ = json.NewEncoder(w).Encode(pkg)
 }
 
 // PATCH /minute-packages/{id}
@@ -74,6 +92,11 @@ func (h *MinutePackageHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if pkg.BotID == "" {
+		http.Error(w, "bot_id required", http.StatusBadRequest)
+		return
+	}
+
 	pkg.ID = id
 
 	if err := h.svc.Update(r.Context(), &pkg); err != nil {
@@ -81,18 +104,24 @@ func (h *MinutePackageHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(pkg)
+	_ = json.NewEncoder(w).Encode(pkg)
 }
 
-// DELETE /minute-packages/{id}
+// DELETE /minute-packages/{id}?bot_id=xxx
 func (h *MinutePackageHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	botID := r.URL.Query().Get("bot_id")
+	if botID == "" {
+		http.Error(w, "bot_id required", http.StatusBadRequest)
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, _ := strconv.ParseInt(idStr, 10, 64)
 
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	if err := h.svc.Delete(r.Context(), botID, id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	w.WriteHeader(204)
+	w.WriteHeader(http.StatusNoContent)
 }
