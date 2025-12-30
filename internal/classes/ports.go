@@ -30,7 +30,7 @@ type UserClass struct {
 type ClassRepo interface {
 	// classes
 	CreateClass(ctx context.Context, botID string, grade string) (*Class, error)
-	ListClasses(ctx context.Context, botID string) ([]*Class, error)
+	ListClasses(ctx context.Context) ([]*Class, error)
 	GetClassByID(ctx context.Context, botID string, id int) (*Class, error)
 	UpdateClass(ctx context.Context, botID string, id int, grade string) error
 	DeleteClass(ctx context.Context, botID string, id int) error
@@ -50,7 +50,7 @@ type ClassRepo interface {
 type ClassService interface {
 	// classes
 	CreateClass(ctx context.Context, botID string, grade string) (*Class, error)
-	ListClasses(ctx context.Context, botID string) ([]*Class, error)
+	ListClasses(ctx context.Context) ([]*Class, error)
 	GetClassByID(ctx context.Context, botID string, id int) (*Class, error)
 	UpdateClass(ctx context.Context, botID string, id int, grade string) error
 	DeleteClass(ctx context.Context, botID string, id int) error

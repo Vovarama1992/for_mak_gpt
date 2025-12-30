@@ -18,8 +18,8 @@ func (s *service) CreateClass(ctx context.Context, botID string, grade string) (
 	return s.repo.CreateClass(ctx, botID, grade)
 }
 
-func (s *service) ListClasses(ctx context.Context, botID string) ([]*Class, error) {
-	return s.repo.ListClasses(ctx, botID)
+func (s *service) ListClasses(ctx context.Context) ([]*Class, error) {
+	return s.repo.ListClasses(ctx)
 }
 
 func (s *service) GetClassByID(ctx context.Context, botID string, id int) (*Class, error) {

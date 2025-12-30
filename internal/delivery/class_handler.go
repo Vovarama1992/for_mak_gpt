@@ -29,9 +29,8 @@ func getBotID(r *http.Request) string {
 
 // GET /classes
 func (h *ClassHandler) ListClasses(w http.ResponseWriter, r *http.Request) {
-	botID := getBotID(r)
 
-	classes, err := h.svc.ListClasses(r.Context(), botID)
+	classes, err := h.svc.ListClasses(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
