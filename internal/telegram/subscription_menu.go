@@ -22,7 +22,12 @@ func (app *BotApp) BuildSubscriptionMenu(
 	}
 
 	var rows [][]tgbotapi.InlineKeyboardButton
+
 	for _, t := range tariffs {
+		if t.BotID != botID {
+			continue
+		}
+
 		if t.IsTrial {
 			continue
 		}
@@ -51,7 +56,7 @@ func (app *BotApp) BuildSubscriptionMenu(
 	}
 
 	if len(rows) == 0 {
-		return errorMenu("Нет платных тарифов")
+		return errorMenu("Нет доступных тарифов")
 	}
 
 	return tgbotapi.NewInlineKeyboardMarkup(rows...)

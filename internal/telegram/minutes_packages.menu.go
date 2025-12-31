@@ -15,7 +15,7 @@ func (app *BotApp) BuildMinutePackagesMenu(
 ) tgbotapi.InlineKeyboardMarkup {
 
 	pkgs, err := app.MinutePackageService.ListAll(ctx)
-	if err != nil || len(pkgs) == 0 {
+	if err != nil {
 		log.Printf("[minute_packages] load fail: %v", err)
 		btn := tgbotapi.NewInlineKeyboardButtonData("Ошибка загрузки пакетов", "none")
 		return tgbotapi.NewInlineKeyboardMarkup(
@@ -26,6 +26,10 @@ func (app *BotApp) BuildMinutePackagesMenu(
 	var rows [][]tgbotapi.InlineKeyboardButton
 
 	for _, p := range pkgs {
+		if p.BotID != botID {
+			continue
+		}
+
 		if !p.Active {
 			continue
 		}

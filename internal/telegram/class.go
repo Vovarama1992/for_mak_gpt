@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/Vovarama1992/make_ziper/internal/classes"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -25,54 +27,52 @@ func (app *BotApp) ShowClassPicker(
 	tgID int64,
 	chatID int64,
 ) {
-	// список классов
 	list, err := app.ClassService.ListClasses(ctx)
 	if err != nil {
 		bot.Send(tgbotapi.NewMessage(chatID, "Не удалось получить список классов"))
 		return
 	}
 
-	// -----------------------------------------------------
-	// СОРТИРОВКА: сперва цифры по возрастанию, затем строки
-	// -----------------------------------------------------
-	sort.Slice(list, func(i, j int) bool {
-		ai, okA := extractNumber(list[i].Grade)
-		bj, okB := extractNumber(list[j].Grade)
+	var filtered []*classes.Class
+	for _, c := range list {
+		if c.BotID == botID {
+			filtered = append(filtered, c)
+		}
+	}
+
+	if len(filtered) == 0 {
+		bot.Send(tgbotapi.NewMessage(chatID, "Классы не найдены"))
+		return
+	}
+
+	sort.Slice(filtered, func(i, j int) bool {
+		ai, okA := extractNumber(filtered[i].Grade)
+		bj, okB := extractNumber(filtered[j].Grade)
 
 		if okA && okB {
-			// оба начинаются с числа
 			return ai < bj
 		}
-		if okA && !okB {
-			// число выше строки
+		if okA {
 			return true
 		}
-		if !okA && okB {
-			// строка идёт после чисел
+		if okB {
 			return false
 		}
-
-		// оба строковые → по алфавиту
-		return list[i].Grade < list[j].Grade
+		return filtered[i].Grade < filtered[j].Grade
 	})
-	// -----------------------------------------------------
 
-	text := "📚 Выбор класса\n\n"
-
-	// inline-кнопки
 	rows := [][]tgbotapi.InlineKeyboardButton{}
-	for _, c := range list {
-		rows = append(rows, []tgbotapi.InlineKeyboardButton{
+
+	for _, c := range filtered {
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData(
 				fmt.Sprintf("%s класс", c.Grade),
 				fmt.Sprintf("set_class_%d", c.ID),
 			),
-		})
+		))
 	}
 
-	menu := tgbotapi.NewInlineKeyboardMarkup(rows...)
-
-	out := tgbotapi.NewMessage(chatID, text)
-	out.ReplyMarkup = menu
-	bot.Send(out)
+	msg := tgbotapi.NewMessage(chatID, "📚 Выбор класса")
+	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
+	bot.Send(msg)
 }
