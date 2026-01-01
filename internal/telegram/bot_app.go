@@ -58,8 +58,12 @@ type BotApp struct {
 	// user -> admin
 	helpMode map[string]map[int64]bool
 
-	// admin -> user (НОВОЕ)
+	// admin -> user (старое, оставлено)
 	adminHelpMode map[int64]*AdminHelpContext
+
+	// ✅ НОВОЕ: отдельный admin-бот
+	adminBot         *AdminBot
+	adminBotUsername string
 }
 
 // ==================================================
@@ -180,4 +184,8 @@ func (app *BotApp) startTrialCleanupTicker(
 			}
 		}
 	}()
+}
+
+func (app *BotApp) SetAdminBotUsername(username string) {
+	app.adminBotUsername = username
 }

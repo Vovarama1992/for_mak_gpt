@@ -60,34 +60,12 @@ func (app *BotApp) handleMessage(
 ) {
 	chatID := msg.Chat.ID
 
-	// ======================================================
-	// ADMIN HELP MODE
-	// ======================================================
-	if isAdmin(tgID) {
-		if ctxHelp, ok := app.adminHelpMode[tgID]; ok {
-			reply := "💬 Ответ от поддержки:\n\n" + msg.Text
-
-			bot.Send(tgbotapi.NewMessage(
-				ctxHelp.UserID,
-				reply,
-			))
-
-			delete(app.adminHelpMode, tgID)
-
-			bot.Send(tgbotapi.NewMessage(
-				chatID,
-				"✅ Ответ отправлен пользователю.",
-			))
-			return
-		}
-	}
-
 	log.Printf("[sub-check] botID=%s tgID=%d → status=%s", botID, tgID, status)
 
 	mainKB := app.BuildMainKeyboard(status)
 
 	// ======================================================
-	// USER HELP MODE
+	// USER HELP MODE (SEND TO ADMIN BOT)
 	// ======================================================
 	if app.helpMode[botID] != nil && app.helpMode[botID][tgID] {
 
@@ -95,7 +73,7 @@ func (app *BotApp) handleMessage(
 			delete(app.helpMode[botID], tgID)
 
 			m := tgbotapi.NewMessage(chatID, "Ты вышел из режима помощи.")
-			m.ReplyMarkup = app.BuildMainKeyboard(status)
+			m.ReplyMarkup = mainKB
 			bot.Send(m)
 			return
 		}
@@ -105,20 +83,16 @@ func (app *BotApp) handleMessage(
 			"UserID: " + fmt.Sprintf("%d", tgID) + "\n\n" +
 			msg.Text
 
-		admins := []int64{1139929360, 6789440333}
-
-		for _, adminID := range admins {
-			bot.Send(tgbotapi.NewMessage(adminID, text))
-			app.adminHelpMode[adminID] = &AdminHelpContext{
-				BotID:  botID,
-				UserID: tgID,
-			}
+		if app.adminBot != nil {
+			app.adminBot.Send(tgID, text)
 		}
 
 		bot.Send(tgbotapi.NewMessage(
 			chatID,
-			"Сообщение отправлено администратору. Ожидай ответа.",
+			"Сообщение отправлено в поддержку. Ожидай ответа.",
 		))
+
+		delete(app.helpMode[botID], tgID)
 		return
 	}
 
@@ -135,10 +109,8 @@ func (app *BotApp) handleMessage(
 
 	case "none":
 
-		// ЕСЛИ КЛАСС УЖЕ ВЫБРАН — ЭТО НЕ НОВЫЙ ПОЛЬЗОВАТЕЛЬ
 		if userClass != nil {
 
-			// пробуем активировать trial (если был — просто вернёт nil)
 			trialTariff, err := app.TariffService.GetTrial(ctx, botID)
 			if err == nil && trialTariff != nil {
 				_ = app.SubscriptionService.ActivateTrial(
@@ -149,13 +121,11 @@ func (app *BotApp) handleMessage(
 				)
 			}
 
-			// перечитываем статус
 			newStatus, err := app.SubscriptionService.GetStatus(ctx, botID, tgID)
 			if err == nil {
 				status = newStatus
 			}
 
-			// если всё ещё не активен → показываем оплату
 			if status != "active" {
 				menu := app.BuildSubscriptionMenu(ctx, botID)
 				out := tgbotapi.NewMessage(
@@ -167,7 +137,6 @@ func (app *BotApp) handleMessage(
 				return
 			}
 
-			// если активен — работаем как в active
 			msgOut := tgbotapi.NewMessage(chatID, " ")
 			msgOut.ReplyMarkup = app.BuildMainKeyboard("active")
 			bot.Send(msgOut)
@@ -176,7 +145,6 @@ func (app *BotApp) handleMessage(
 			case msg.Voice != nil:
 				app.handleVoice(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
 				return
-
 			case msg.Document != nil:
 				if isPDF(msg.Document) {
 					app.handlePDF(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
@@ -186,20 +154,15 @@ func (app *BotApp) handleMessage(
 					app.handlePhoto(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
 				}
 				return
-
 			case len(msg.Photo) > 0:
 				app.handlePhoto(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
 				return
-
 			case msg.Text != "":
 				app.handleText(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
 				return
 			}
-
 			return
 		}
-
-		// ===== обычный новый пользователь =====
 
 		if msg.Text == "🟢 Начать урок" {
 
@@ -290,16 +253,30 @@ func (app *BotApp) handleMessage(
 			return
 
 		case "❓ Помощь":
-			if app.helpMode[botID] == nil {
-				app.helpMode[botID] = make(map[int64]bool)
+			if app.adminBotUsername == "" {
+				bot.Send(tgbotapi.NewMessage(
+					chatID,
+					"Поддержка временно недоступна.",
+				))
+				return
 			}
-			app.helpMode[botID][tgID] = true
+
+			url := "https://t.me/" + app.adminBotUsername + "?start=support"
 
 			m := tgbotapi.NewMessage(
 				chatID,
-				"🆘 Напиши сообщение — его получит администратор.\nЧтобы выйти, нажми «Назад».",
+				"🆘 Чтобы написать в поддержку, нажми кнопку ниже:",
 			)
-			m.ReplyMarkup = helpKeyboard()
+
+			m.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonURL(
+						"✉️ Написать в поддержку",
+						url,
+					),
+				),
+			)
+
 			bot.Send(m)
 			return
 
