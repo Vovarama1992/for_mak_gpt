@@ -405,26 +405,18 @@ func (s *SubscriptionService) CleanupExpiredTrials(
 	botID string,
 ) error {
 
-	// 1) получаем trial-тариф
 	trial, err := s.tariffRepo.GetTrial(ctx, botID)
-	if err != nil {
-		s.notifier.Notify(ctx, botID, err, "Ошибка загрузки trial-тарифа (cleanup)")
+	if err != nil || trial == nil {
 		return err
-	}
-	if trial == nil {
-		return nil // trial не настроен — нечего чистить
 	}
 
 	now := time.Now()
 
-	// 2) берём все подписки
 	subs, err := s.repo.ListAll(ctx)
 	if err != nil {
-		s.notifier.Notify(ctx, botID, err, "Ошибка чтения подписок (cleanup)")
 		return err
 	}
 
-	// 3) фильтруем только истёкшие trial
 	for _, sub := range subs {
 		if sub.BotID != botID {
 			continue
@@ -436,14 +428,8 @@ func (s *SubscriptionService) CleanupExpiredTrials(
 			continue
 		}
 
-		// 4) уведомляем пользователя
-		_ = s.notifier.UserNotify(
-			ctx,
-			botID,
-			sub.TelegramID, // chatID == telegramID
-			"⏳ Пробный период закончился. Чтобы продолжить — оформи подписку в меню.",
-		)
-
+		// ❗ ТУТ НИЧЕГО НЕ ОТПРАВЛЯЕМ
+		// максимум — смена статуса, если нужно
 	}
 
 	return nil
