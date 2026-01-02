@@ -11,7 +11,7 @@ type TariffRepo interface {
 	GetTrial(ctx context.Context, botID string) (*TariffPlan, error)
 	Create(ctx context.Context, plan *TariffPlan) (*TariffPlan, error)
 	Update(ctx context.Context, plan *TariffPlan) (*TariffPlan, error)
-	Delete(ctx context.Context, botID string, id int) error
+	Delete(ctx context.Context, id int) error
 }
 
 type TariffService interface {
@@ -20,7 +20,7 @@ type TariffService interface {
 	GetTrial(ctx context.Context, botID string) (*TariffPlan, error)
 	Create(ctx context.Context, plan *TariffPlan) (*TariffPlan, error)
 	Update(ctx context.Context, plan *TariffPlan) (*TariffPlan, error)
-	Delete(ctx context.Context, botID string, id int) error
+	Delete(ctx context.Context, id int) error
 }
 
 type TariffPlan struct {

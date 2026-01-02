@@ -247,8 +247,12 @@ func (app *BotApp) handleMessage(
 
 		case "💳 Тарифы":
 			menu := app.BuildSubscriptionMenu(ctx, botID)
-			out := tgbotapi.NewMessage(chatID, app.BuildSubscriptionText())
+
+			text := app.BuildSubscriptionText(ctx, botID)
+
+			out := tgbotapi.NewMessage(chatID, text)
 			out.ReplyMarkup = menu
+
 			bot.Send(out)
 			return
 

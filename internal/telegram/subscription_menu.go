@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"strconv"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -29,13 +28,24 @@ func (app *BotApp) BuildSubscriptionMenu(
 			continue
 		}
 
-		label := fmt.Sprintf("%s — %s", t.Name, formatRUB(t.Price))
+		voice := "∞ мин голоса"
+		if t.VoiceMinutes < 9_000_000 {
+			voice = fmt.Sprintf("%d мин голоса", int(t.VoiceMinutes))
+		}
+
+		label := fmt.Sprintf(
+			"%s — %s (%s, %s)",
+			t.Name,
+			formatRUB(t.Price),
+			minutesToDays(t.DurationMinutes),
+			voice,
+		)
 
 		rows = append(rows,
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData(
 					label,
-					fmt.Sprintf("sub_preview:%d", t.ID),
+					"sub:"+t.Code,
 				),
 			),
 		)
@@ -48,67 +58,20 @@ func (app *BotApp) BuildSubscriptionMenu(
 	return tgbotapi.NewInlineKeyboardMarkup(rows...)
 }
 
-func (app *BotApp) BuildSubscriptionText() string {
-	return "🎓 Тарифы AI-репетитора\n\n" +
-		"Выберите тариф, чтобы посмотреть описание ⬇️"
-}
-
-func (app *BotApp) HandleTariffPreview(
+func (app *BotApp) BuildSubscriptionText(
 	ctx context.Context,
 	botID string,
-	cb *tgbotapi.CallbackQuery,
-) {
-	idStr := strings.TrimPrefix(cb.Data, "sub_preview:")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		return
+) string {
+
+	// 🔹 тянем конфиг бота (ДАЖЕ ЕСЛИ СЕРВИСА ЕЩЁ НЕТ)
+	cfg, err := app.BotsService.Get(ctx, botID)
+	if err == nil && cfg != nil && cfg.TariffText != nil && *cfg.WelcomeText != "" {
+		return *cfg.TariffText
 	}
 
-	t, err := app.TariffService.GetByID(ctx, botID, id)
-	if err != nil {
-		return
-	}
-
-	voice := "∞ мин голоса"
-	if t.VoiceMinutes < 9_000_000 {
-		voice = fmt.Sprintf("%d мин голоса", int(t.VoiceMinutes))
-	}
-
-	text := fmt.Sprintf(
-		"%s — %s\n\n"+
-			"🕒 %s\n"+
-			"🎤 %s\n\n"+
-			"%s\n\n"+
-			"Подключить тариф?",
-		t.Name,
-		formatRUB(t.Price),
-		minutesToDays(t.DurationMinutes),
-		voice,
-		t.Description,
-	)
-
-	kb := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(
-				"✅ Подключить",
-				fmt.Sprintf("sub_confirm:%s", t.Code),
-			),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("⬅ Назад", "sub_back"),
-		),
-	)
-
-	bot := app.bots[botID]
-
-	msg := tgbotapi.NewEditMessageTextAndMarkup(
-		cb.Message.Chat.ID,
-		cb.Message.MessageID,
-		text,
-		kb,
-	)
-
-	bot.Send(msg)
+	// fallback — если текста нет
+	return "🎓 Тарифы AI-репетитора\n\n" +
+		"Выберите подходящий тариф ниже ⬇️"
 }
 
 func errorMenu(text string) tgbotapi.InlineKeyboardMarkup {

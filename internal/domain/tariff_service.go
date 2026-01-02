@@ -34,6 +34,6 @@ func (s *TariffService) Update(ctx context.Context, plan *ports.TariffPlan) (*po
 	return s.repo.Update(ctx, plan)
 }
 
-func (s *TariffService) Delete(ctx context.Context, botID string, id int) error {
-	return s.repo.Delete(ctx, botID, id)
+func (s *TariffService) Delete(ctx context.Context, id int) error {
+	return s.repo.Delete(ctx, id)
 }

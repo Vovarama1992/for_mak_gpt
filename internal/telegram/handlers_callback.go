@@ -85,41 +85,18 @@ func (app *BotApp) handleCallback(
 			return
 		}
 
-		bot.Send(tgbotapi.NewMessage(chatID,
-			fmt.Sprintf("🔄 Для оплаты перейди по ссылке:\n%s", payURL)))
-		return
-	}
-
-	// ---------------------------
-	// 4) ПРЕДПРОСМОТР ТАРИФА
-	// ---------------------------
-	if strings.HasPrefix(data, "sub_preview:") {
-		app.HandleTariffPreview(ctx, botID, cb)
-		return
-	}
-
-	// ---------------------------
-	// 5) ВОЗВРАТ К СПИСКУ ТАРИФОВ
-	// ---------------------------
-	if data == "sub_back" {
-		text := app.BuildSubscriptionText()
-		menu := app.BuildSubscriptionMenu(ctx, botID)
-
-		edit := tgbotapi.NewEditMessageTextAndMarkup(
+		bot.Send(tgbotapi.NewMessage(
 			chatID,
-			cb.Message.MessageID,
-			text,
-			menu,
-		)
-		bot.Send(edit)
+			fmt.Sprintf("🔄 Для оплаты перейди по ссылке:\n%s", payURL),
+		))
 		return
 	}
 
 	// ---------------------------
-	// 6) ПОДТВЕРЖДЕНИЕ ПОДПИСКИ
+	// 4) Подписка (без предпросмотров)
 	// ---------------------------
-	if strings.HasPrefix(data, "sub_confirm:") {
-		planCode := strings.TrimPrefix(data, "sub_confirm:")
+	if strings.HasPrefix(data, "sub:") {
+		planCode := strings.TrimPrefix(data, "sub:")
 
 		switch status {
 		case "active":

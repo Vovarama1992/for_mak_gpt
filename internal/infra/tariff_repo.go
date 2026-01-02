@@ -237,10 +237,10 @@ func (r *tariffRepo) Update(ctx context.Context, plan *ports.TariffPlan) (*ports
 	return &t, nil
 }
 
-func (r *tariffRepo) Delete(ctx context.Context, botID string, id int) error {
+func (r *tariffRepo) Delete(ctx context.Context, id int) error {
 	_, err := r.db.ExecContext(ctx, `
 		DELETE FROM tariff_plans
-		WHERE id = $1 AND bot_id = $2
-	`, id, botID)
+		WHERE id = $1
+	`, id)
 	return err
 }

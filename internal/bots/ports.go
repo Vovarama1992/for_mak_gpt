@@ -30,6 +30,7 @@ type BotConfig struct {
 	VoiceID          string `json:"voice_id"`
 
 	WelcomeText  *string `json:"welcome_text"`
+	TariffText   *string `json:"tariff_text"`
 	WelcomeVideo *string `json:"welcome_video_url"`
 }
 
@@ -41,6 +42,7 @@ type UpdateInput struct {
 	PhotoStylePrompt *string
 	VoiceID          *string
 	WelcomeText      *string
+	TariffText       *string
 
 	// INTERNAL USE ONLY
 	WelcomeVideo *string

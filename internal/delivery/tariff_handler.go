@@ -79,19 +79,13 @@ func (h *TariffHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TariffHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	botID := r.URL.Query().Get("bot_id")
-	if botID == "" {
-		http.Error(w, "bot_id required", http.StatusBadRequest)
-		return
-	}
-
 	id, err := extractIDFromURL(r.URL.Path)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	if err := h.svc.Delete(r.Context(), botID, id); err != nil {
+	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, "failed to delete tariff", http.StatusInternalServerError)
 		return
 	}

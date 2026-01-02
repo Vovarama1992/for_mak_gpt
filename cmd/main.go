@@ -260,7 +260,7 @@ func main() {
 					continue
 				}
 
-				text := botApp.BuildSubscriptionText()
+				text := botApp.BuildSubscriptionText(ctx, sub.BotID)
 				kb := botApp.BuildSubscriptionMenu(ctx, sub.BotID)
 
 				msg := tgbotapi.NewMessage(sub.TelegramID, text)
@@ -276,7 +276,7 @@ func main() {
 					continue
 				}
 
-				// 4. помечаем как уведомлённого
+				// помечаем как уведомлённого
 				if err := subscriptionRepo.MarkTrialNotified(ctx, sub.ID); err != nil {
 					log.Printf("[trial-notify] mark failed id=%d err=%v", sub.ID, err)
 				}

@@ -1,0 +1,2 @@
+ALTER TABLE bot_configs
+ADD COLUMN IF NOT EXISTS tariff_text TEXT DEFAULT ''
