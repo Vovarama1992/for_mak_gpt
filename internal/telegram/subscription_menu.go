@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strconv"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -24,32 +25,17 @@ func (app *BotApp) BuildSubscriptionMenu(
 	var rows [][]tgbotapi.InlineKeyboardButton
 
 	for _, t := range tariffs {
-		if t.BotID != botID {
+		if t.BotID != botID || t.IsTrial {
 			continue
 		}
 
-		if t.IsTrial {
-			continue
-		}
-
-		voice := "∞ мин голоса"
-		if t.VoiceMinutes < 9_000_000 {
-			voice = fmt.Sprintf("%d мин голоса", int(t.VoiceMinutes))
-		}
-
-		label := fmt.Sprintf(
-			"%s — %s (%s, %s)",
-			t.Name,
-			formatRUB(t.Price),
-			minutesToDays(t.DurationMinutes),
-			voice,
-		)
+		label := fmt.Sprintf("%s — %s", t.Name, formatRUB(t.Price))
 
 		rows = append(rows,
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData(
 					label,
-					"sub:"+t.Code,
+					fmt.Sprintf("sub_preview:%d", t.ID),
 				),
 			),
 		)
@@ -63,9 +49,66 @@ func (app *BotApp) BuildSubscriptionMenu(
 }
 
 func (app *BotApp) BuildSubscriptionText() string {
-	return "🎓 Тарифы AI-Репетитора\n\n" +
-		"Каждый тариф действует ограниченное число дней и включает голосовые минуты.\n" +
-		"Выберите подходящий тариф ниже ⬇️"
+	return "🎓 Тарифы AI-репетитора\n\n" +
+		"Выберите тариф, чтобы посмотреть описание ⬇️"
+}
+
+func (app *BotApp) HandleTariffPreview(
+	ctx context.Context,
+	botID string,
+	cb *tgbotapi.CallbackQuery,
+) {
+	idStr := strings.TrimPrefix(cb.Data, "sub_preview:")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return
+	}
+
+	t, err := app.TariffService.GetByID(ctx, botID, id)
+	if err != nil {
+		return
+	}
+
+	voice := "∞ мин голоса"
+	if t.VoiceMinutes < 9_000_000 {
+		voice = fmt.Sprintf("%d мин голоса", int(t.VoiceMinutes))
+	}
+
+	text := fmt.Sprintf(
+		"%s — %s\n\n"+
+			"🕒 %s\n"+
+			"🎤 %s\n\n"+
+			"%s\n\n"+
+			"Подключить тариф?",
+		t.Name,
+		formatRUB(t.Price),
+		minutesToDays(t.DurationMinutes),
+		voice,
+		t.Description,
+	)
+
+	kb := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData(
+				"✅ Подключить",
+				fmt.Sprintf("sub_confirm:%s", t.Code),
+			),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("⬅ Назад", "sub_back"),
+		),
+	)
+
+	bot := app.bots[botID]
+
+	msg := tgbotapi.NewEditMessageTextAndMarkup(
+		cb.Message.Chat.ID,
+		cb.Message.MessageID,
+		text,
+		kb,
+	)
+
+	bot.Send(msg)
 }
 
 func errorMenu(text string) tgbotapi.InlineKeyboardMarkup {
@@ -75,7 +118,6 @@ func errorMenu(text string) tgbotapi.InlineKeyboardMarkup {
 	)
 }
 
-// minutesToDays — UI-представление, БД не трогаем
 func minutesToDays(minutes int) string {
 	if minutes <= 0 {
 		return "0 дн"
@@ -87,7 +129,6 @@ func minutesToDays(minutes int) string {
 	return fmt.Sprintf("%d дн", days)
 }
 
-// formatRUB форматирует цену: 199 → "199 ₽", 199.5 → "199.50 ₽"
 func formatRUB(p float64) string {
 	if p == math.Trunc(p) {
 		return fmt.Sprintf("%.0f ₽", p)

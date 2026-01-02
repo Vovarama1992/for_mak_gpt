@@ -27,7 +27,7 @@ func (app *BotApp) handleCallback(
 	log.Printf("[callback] botID=%s tgID=%d data=%s", botID, tgID, data)
 
 	// ---------------------------
-	// 1) Покупка минут — показать список
+	// 1) Покупка минут
 	// ---------------------------
 	if data == "buy_voice" {
 		menu := app.BuildMinutePackagesMenu(ctx, botID)
@@ -91,10 +91,35 @@ func (app *BotApp) handleCallback(
 	}
 
 	// ---------------------------
-	// 4) Подписки (КАНОНИЧНО)
+	// 4) ПРЕДПРОСМОТР ТАРИФА
 	// ---------------------------
-	if strings.HasPrefix(data, "sub:") {
-		planCode := strings.TrimPrefix(data, "sub:")
+	if strings.HasPrefix(data, "sub_preview:") {
+		app.HandleTariffPreview(ctx, botID, cb)
+		return
+	}
+
+	// ---------------------------
+	// 5) ВОЗВРАТ К СПИСКУ ТАРИФОВ
+	// ---------------------------
+	if data == "sub_back" {
+		text := app.BuildSubscriptionText()
+		menu := app.BuildSubscriptionMenu(ctx, botID)
+
+		edit := tgbotapi.NewEditMessageTextAndMarkup(
+			chatID,
+			cb.Message.MessageID,
+			text,
+			menu,
+		)
+		bot.Send(edit)
+		return
+	}
+
+	// ---------------------------
+	// 6) ПОДТВЕРЖДЕНИЕ ПОДПИСКИ
+	// ---------------------------
+	if strings.HasPrefix(data, "sub_confirm:") {
+		planCode := strings.TrimPrefix(data, "sub_confirm:")
 
 		switch status {
 		case "active":
@@ -113,8 +138,10 @@ func (app *BotApp) handleCallback(
 				return
 			}
 
-			bot.Send(tgbotapi.NewMessage(chatID,
-				fmt.Sprintf("✅ Заявка принята!\n%s", paymentURL)))
+			bot.Send(tgbotapi.NewMessage(
+				chatID,
+				fmt.Sprintf("✅ Заявка принята!\n%s", paymentURL),
+			))
 			return
 		}
 	}
