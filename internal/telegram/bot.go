@@ -221,13 +221,6 @@ func (app *BotApp) handleMessage(
 		return
 
 	case "expired":
-		menu := app.BuildSubscriptionMenu(ctx, botID)
-		out := tgbotapi.NewMessage(
-			chatID,
-			"⏳ Срок подписки истёк. Продли, чтобы продолжить.",
-		)
-		out.ReplyMarkup = menu
-		bot.Send(out)
 		return
 
 	case "active":
