@@ -183,10 +183,6 @@ func main() {
 		log.Fatalf("failed to init telegram bots: %v", err)
 	}
 
-	if err := botApp.InitBots(ctx); err != nil {
-		log.Fatalf("failed to init telegram bots: %v", err)
-	}
-
 	adminToken := os.Getenv("ADMIN_BOT_TOKEN")
 	if err := botApp.InitAdminBot(ctx, adminToken); err != nil {
 		log.Fatalf("failed to init admin bot: %v", err)
