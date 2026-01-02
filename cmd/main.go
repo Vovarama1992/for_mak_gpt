@@ -59,10 +59,11 @@ func main() {
 		log.Fatalf("failed to connect to postgres: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// ⬇️ ТОЛЬКО ДЛЯ БД
+	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := db.PingContext(ctx); err != nil {
+	if err := db.PingContext(dbCtx); err != nil {
 		log.Fatalf("db ping failed: %v", err)
 	}
 	defer db.Close()
@@ -179,12 +180,15 @@ func main() {
 
 	botApp.SetAdminBotUsername(os.Getenv("ADMIN_BOT_USERNAME"))
 
-	if err := botApp.InitBots(ctx); err != nil {
+	// ⬇️ ВАЖНО: БЕЗ TIMEOUT
+	botCtx := context.Background()
+
+	if err := botApp.InitBots(botCtx); err != nil {
 		log.Fatalf("failed to init telegram bots: %v", err)
 	}
 
 	adminToken := os.Getenv("ADMIN_BOT_TOKEN")
-	if err := botApp.InitAdminBot(ctx, adminToken); err != nil {
+	if err := botApp.InitAdminBot(botCtx, adminToken); err != nil {
 		log.Fatalf("failed to init admin bot: %v", err)
 	}
 
@@ -201,7 +205,6 @@ func main() {
 		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
 	}))
 
-	// HANDLERS
 	recordHandler := delivery.NewRecordHandler(recordService, zl)
 	subHandler := delivery.NewSubscriptionHandler(subscriptionService)
 	tariffHandler := delivery.NewTariffHandler(tariffService)
@@ -211,7 +214,6 @@ func main() {
 	authHandler := delivery.NewAuthHandler(authService)
 	textRuleHandler := delivery.NewTextRuleHandler(textRuleRepo)
 
-	// ROUTES
 	delivery.RegisterRoutes(
 		r,
 		recordHandler,
@@ -240,23 +242,19 @@ func main() {
 		for range ticker.C {
 			ctx := context.Background()
 
-			// 1. чистим pending
 			if err := subscriptionService.CleanupPending(ctx, 5*time.Minute); err != nil {
 				log.Printf("[cleanup-pending] error: %v", err)
 			}
 
-			// 2. получаем истёкшие trial
 			subs, err := subscriptionRepo.GetExpiredTrialsForNotify(ctx)
 			if err != nil {
 				log.Printf("[trial-check] error: %v", err)
 				continue
 			}
 
-			// 3. отправляем уведомления
 			for _, sub := range subs {
 				bot, ok := botApp.GetBots()[sub.BotID]
 				if !ok || bot == nil {
-					log.Printf("[trial-notify] bot not found: %s", sub.BotID)
 					continue
 				}
 
@@ -267,19 +265,10 @@ func main() {
 				msg.ReplyMarkup = kb
 
 				if _, err := bot.Send(msg); err != nil {
-					log.Printf(
-						"[trial-notify] send failed bot=%s tg=%d err=%v",
-						sub.BotID,
-						sub.TelegramID,
-						err,
-					)
 					continue
 				}
 
-				// помечаем как уведомлённого
-				if err := subscriptionRepo.MarkTrialNotified(ctx, sub.ID); err != nil {
-					log.Printf("[trial-notify] mark failed id=%d err=%v", sub.ID, err)
-				}
+				_ = subscriptionRepo.MarkTrialNotified(ctx, sub.ID)
 			}
 		}
 	}()
