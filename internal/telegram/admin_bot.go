@@ -18,6 +18,7 @@ type AdminBot struct {
 
 func (app *BotApp) InitAdminBot(ctx context.Context, token string) error {
 	if token == "" {
+		log.Println("[admin-bot] token is empty, bot disabled")
 		return nil
 	}
 
@@ -50,13 +51,22 @@ func (a *AdminBot) run(ctx context.Context) {
 
 	updates := a.bot.GetUpdatesChan(u)
 
+	log.Println("[admin-bot] polling started")
+
 	for {
 		select {
 		case <-ctx.Done():
+			log.Println("[admin-bot] context cancelled, stopping")
 			return
 
 		case upd := <-updates:
 			if upd.Message != nil {
+				log.Printf(
+					"[admin-bot] incoming message from=%d text=%q",
+					upd.Message.From.ID,
+					upd.Message.Text,
+				)
+
 				a.handleMessage(upd.Message)
 			}
 		}
@@ -64,7 +74,7 @@ func (a *AdminBot) run(ctx context.Context) {
 }
 
 // ==================================================
-// SEND FROM USER-BOT → ADMIN
+// SEND FROM USER → ADMIN
 // ==================================================
 
 func (a *AdminBot) Send(userID int64, text string) {
@@ -74,7 +84,21 @@ func (a *AdminBot) Send(userID int64, text string) {
 	}
 
 	for _, adminID := range admins {
-		a.bot.Send(tgbotapi.NewMessage(adminID, text))
+		log.Printf(
+			"[admin-bot] forward user=%d → admin=%d",
+			userID,
+			adminID,
+		)
+
+		_, err := a.bot.Send(tgbotapi.NewMessage(adminID, text))
+		if err != nil {
+			log.Printf(
+				"[admin-bot] failed to send to admin=%d err=%v",
+				adminID,
+				err,
+			)
+			continue
+		}
 
 		a.app.adminHelpMode[adminID] = &AdminHelpContext{
 			UserID: userID,
@@ -89,7 +113,12 @@ func (a *AdminBot) Send(userID int64, text string) {
 func (a *AdminBot) handleMessage(msg *tgbotapi.Message) {
 	adminID := msg.From.ID
 
-	// старт диалога
+	log.Printf(
+		"[admin-bot] admin message from=%d text=%q",
+		adminID,
+		msg.Text,
+	)
+
 	if msg.Text == "/start" {
 		a.bot.Send(tgbotapi.NewMessage(
 			msg.Chat.ID,
@@ -100,6 +129,11 @@ func (a *AdminBot) handleMessage(msg *tgbotapi.Message) {
 
 	ctxHelp, ok := a.app.adminHelpMode[adminID]
 	if !ok {
+		log.Printf(
+			"[admin-bot] no active dialog for admin=%d",
+			adminID,
+		)
+
 		a.bot.Send(tgbotapi.NewMessage(
 			msg.Chat.ID,
 			"❗ Нет активного диалога.",
@@ -109,11 +143,24 @@ func (a *AdminBot) handleMessage(msg *tgbotapi.Message) {
 
 	reply := "💬 Ответ поддержки:\n\n" + msg.Text
 
-	// ⬇️ напрямую пользователю
-	a.bot.Send(tgbotapi.NewMessage(
+	log.Printf(
+		"[admin-bot] send reply admin=%d → user=%d",
+		adminID,
+		ctxHelp.UserID,
+	)
+
+	_, err := a.bot.Send(tgbotapi.NewMessage(
 		ctxHelp.UserID,
 		reply,
 	))
+	if err != nil {
+		log.Printf(
+			"[admin-bot] failed to send reply to user=%d err=%v",
+			ctxHelp.UserID,
+			err,
+		)
+		return
+	}
 
 	delete(a.app.adminHelpMode, adminID)
 
