@@ -61,12 +61,6 @@ func (a *AdminBot) run(ctx context.Context) {
 
 		case upd := <-updates:
 			if upd.Message != nil {
-				log.Printf(
-					"[admin-bot] received message from user=%d chat=%d text=%q",
-					upd.Message.From.ID,
-					upd.Message.Chat.ID,
-					upd.Message.Text,
-				)
 				a.handleMessage(upd.Message)
 			}
 		}
@@ -74,10 +68,23 @@ func (a *AdminBot) run(ctx context.Context) {
 }
 
 // ==================================================
-// USER → ADMIN (FORWARD)
+// ROLE CHECK
 // ==================================================
 
-func (a *AdminBot) Send(userID int64, text string) {
+func isAdmin(userID int64) bool {
+	switch userID {
+	case 1139929360, 6789440333:
+		return true
+	default:
+		return false
+	}
+}
+
+// ==================================================
+// USER → ADMIN
+// ==================================================
+
+func (a *AdminBot) forwardToAdmins(userID int64, text string) {
 	admins := []int64{
 		1139929360,
 		6789440333,
@@ -85,12 +92,15 @@ func (a *AdminBot) Send(userID int64, text string) {
 
 	for _, adminID := range admins {
 		log.Printf(
-			"[admin-bot] forwarding message user=%d → admin=%d",
+			"[admin-bot] forward user=%d → admin=%d",
 			userID,
 			adminID,
 		)
 
-		msg := tgbotapi.NewMessage(adminID, text)
+		msg := tgbotapi.NewMessage(
+			adminID,
+			text,
+		)
 		msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true}
 
 		if _, err := a.bot.Send(msg); err != nil {
@@ -109,12 +119,35 @@ func (a *AdminBot) Send(userID int64, text string) {
 // ==================================================
 
 func (a *AdminBot) handleMessage(msg *tgbotapi.Message) {
+	fromID := msg.From.ID
+
 	log.Printf(
-		"[admin-bot] admin message from=%d text=%q reply=%v",
-		msg.From.ID,
+		"[admin-bot] incoming from=%d text=%q reply=%v",
+		fromID,
 		msg.Text,
 		msg.ReplyToMessage != nil,
 	)
+
+	// ===============================
+	// USER → ADMIN
+	// ===============================
+	if !isAdmin(fromID) {
+		log.Printf(
+			"[admin-bot] user message user=%d → forward to admins",
+			fromID,
+		)
+
+		text := "🆘 Помощь\n" +
+			"UserID: " + strconv.FormatInt(fromID, 10) + "\n\n" +
+			msg.Text
+
+		a.forwardToAdmins(fromID, text)
+		return
+	}
+
+	// ===============================
+	// ADMIN → USER
+	// ===============================
 
 	if msg.Text == "/start" {
 		a.bot.Send(tgbotapi.NewMessage(
@@ -124,13 +157,7 @@ func (a *AdminBot) handleMessage(msg *tgbotapi.Message) {
 		return
 	}
 
-	// принимаем ТОЛЬКО ответы reply
 	if msg.ReplyToMessage == nil {
-		log.Printf(
-			"[admin-bot] ignore admin=%d message without reply",
-			msg.From.ID,
-		)
-
 		a.bot.Send(tgbotapi.NewMessage(
 			msg.Chat.ID,
 			"❗ Ответь reply на сообщение пользователя.",
@@ -138,7 +165,7 @@ func (a *AdminBot) handleMessage(msg *tgbotapi.Message) {
 		return
 	}
 
-	userID, ok := extractUserID(msg.ReplyToMessage.Text)
+	targetUserID, ok := extractUserID(msg.ReplyToMessage.Text)
 	if !ok {
 		log.Printf(
 			"[admin-bot] failed to extract userID from reply text=%q",
@@ -153,18 +180,18 @@ func (a *AdminBot) handleMessage(msg *tgbotapi.Message) {
 	}
 
 	log.Printf(
-		"[admin-bot] sending reply admin=%d → user=%d",
-		msg.From.ID,
-		userID,
+		"[admin-bot] reply admin=%d → user=%d",
+		fromID,
+		targetUserID,
 	)
 
 	reply := "💬 Ответ поддержки:\n\n" + msg.Text
 
-	if _, err := a.bot.Send(tgbotapi.NewMessage(userID, reply)); err != nil {
+	if _, err := a.bot.Send(tgbotapi.NewMessage(targetUserID, reply)); err != nil {
 		log.Printf(
 			"[admin-bot] failed to send reply admin=%d → user=%d err=%v",
-			msg.From.ID,
-			userID,
+			fromID,
+			targetUserID,
 			err,
 		)
 		return

@@ -337,10 +337,6 @@ func extractTelegramID(u tgbotapi.Update) int64 {
 	}
 }
 
-func isAdmin(id int64) bool {
-	return id == 1139929360 || id == 6789440333
-}
-
 func (app *BotApp) checkVoiceAllowed(ctx context.Context, botID string, tgID int64) bool {
 	sub, err := app.SubscriptionService.Get(ctx, botID, tgID)
 	if err != nil {
