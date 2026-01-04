@@ -244,6 +244,16 @@ func (app *BotApp) handleMessage(
 		return
 
 	case "expired":
+		log.Printf("[flow:expired] show paywall bot=%s tg=%d", botID, tgID)
+
+		menu := app.BuildSubscriptionMenu(ctx, botID)
+
+		out := tgbotapi.NewMessage(
+			chatID,
+			"⛔ Подписка истекла.\nОформи подписку, чтобы продолжить обучение.",
+		)
+		out.ReplyMarkup = menu
+		bot.Send(out)
 		return
 
 	case "active":
