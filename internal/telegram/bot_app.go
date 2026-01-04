@@ -24,11 +24,6 @@ import (
 // ADMIN HELP CONTEXT
 // ==================================================
 
-type AdminHelpContext struct {
-	BotID  string
-	UserID int64
-}
-
 // ==================================================
 // BOT APP
 // ==================================================
@@ -54,12 +49,6 @@ type BotApp struct {
 	shownKeyboard map[string]map[int64]bool
 
 	ClassService classes.ClassService
-
-	// user -> admin
-	helpMode map[string]map[int64]bool
-
-	// admin -> user (старое, оставлено)
-	adminHelpMode map[int64]*AdminHelpContext
 
 	// ✅ НОВОЕ: отдельный admin-бот
 	adminBot         *AdminBot
@@ -107,9 +96,6 @@ func NewBotApp(
 
 		ErrorNotify:  errNotify,
 		ClassService: classes,
-
-		helpMode:      make(map[string]map[int64]bool),
-		adminHelpMode: make(map[int64]*AdminHelpContext),
 	}
 }
 

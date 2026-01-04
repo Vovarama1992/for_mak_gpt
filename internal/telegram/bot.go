@@ -2,7 +2,6 @@ package telegram
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"strings"
 
@@ -63,38 +62,6 @@ func (app *BotApp) handleMessage(
 	log.Printf("[sub-check] botID=%s tgID=%d → status=%s", botID, tgID, status)
 
 	mainKB := app.BuildMainKeyboard(status)
-
-	// ======================================================
-	// USER HELP MODE (SEND TO ADMIN BOT)
-	// ======================================================
-	if app.helpMode[botID] != nil && app.helpMode[botID][tgID] {
-
-		if msg.Text == "⬅️ Назад" {
-			delete(app.helpMode[botID], tgID)
-
-			m := tgbotapi.NewMessage(chatID, "Ты вышел из режима помощи.")
-			m.ReplyMarkup = mainKB
-			bot.Send(m)
-			return
-		}
-
-		text := "🆘 Помощь\n" +
-			"Bot: " + botID + "\n" +
-			"UserID: " + fmt.Sprintf("%d", tgID) + "\n\n" +
-			msg.Text
-
-		if app.adminBot != nil {
-			app.adminBot.Send(tgID, text)
-		}
-
-		bot.Send(tgbotapi.NewMessage(
-			chatID,
-			"Сообщение отправлено в поддержку. Ожидай ответа.",
-		))
-
-		delete(app.helpMode[botID], tgID)
-		return
-	}
 
 	// ======================================================
 	// КЛЮЧЕВАЯ ЧАСТЬ — ПРОВЕРКА КЛАССА

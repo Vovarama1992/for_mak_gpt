@@ -3,6 +3,8 @@ package telegram
 import (
 	"context"
 	"log"
+	"regexp"
+	"strconv"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -37,7 +39,6 @@ func (app *BotApp) InitAdminBot(ctx context.Context, token string) error {
 	app.adminBot = admin
 
 	go admin.run(ctx)
-
 	return nil
 }
 
@@ -50,7 +51,6 @@ func (a *AdminBot) run(ctx context.Context) {
 	u.Timeout = 60
 
 	updates := a.bot.GetUpdatesChan(u)
-
 	log.Println("[admin-bot] polling started")
 
 	for {
@@ -62,11 +62,11 @@ func (a *AdminBot) run(ctx context.Context) {
 		case upd := <-updates:
 			if upd.Message != nil {
 				log.Printf(
-					"[admin-bot] incoming message from=%d text=%q",
+					"[admin-bot] received message from user=%d chat=%d text=%q",
 					upd.Message.From.ID,
+					upd.Message.Chat.ID,
 					upd.Message.Text,
 				)
-
 				a.handleMessage(upd.Message)
 			}
 		}
@@ -74,7 +74,7 @@ func (a *AdminBot) run(ctx context.Context) {
 }
 
 // ==================================================
-// SEND FROM USER → ADMIN
+// USER → ADMIN (FORWARD)
 // ==================================================
 
 func (a *AdminBot) Send(userID int64, text string) {
@@ -85,87 +85,112 @@ func (a *AdminBot) Send(userID int64, text string) {
 
 	for _, adminID := range admins {
 		log.Printf(
-			"[admin-bot] forward user=%d → admin=%d",
+			"[admin-bot] forwarding message user=%d → admin=%d",
 			userID,
 			adminID,
 		)
 
-		_, err := a.bot.Send(tgbotapi.NewMessage(adminID, text))
-		if err != nil {
+		msg := tgbotapi.NewMessage(adminID, text)
+		msg.ReplyMarkup = tgbotapi.ForceReply{ForceReply: true}
+
+		if _, err := a.bot.Send(msg); err != nil {
 			log.Printf(
-				"[admin-bot] failed to send to admin=%d err=%v",
+				"[admin-bot] failed to forward user=%d → admin=%d err=%v",
+				userID,
 				adminID,
 				err,
 			)
-			continue
-		}
-
-		a.app.adminHelpMode[adminID] = &AdminHelpContext{
-			UserID: userID,
 		}
 	}
 }
 
 // ==================================================
-// HANDLE ADMIN MESSAGE
+// ADMIN MESSAGE HANDLER
 // ==================================================
 
 func (a *AdminBot) handleMessage(msg *tgbotapi.Message) {
-	adminID := msg.From.ID
-
 	log.Printf(
-		"[admin-bot] admin message from=%d text=%q",
-		adminID,
+		"[admin-bot] admin message from=%d text=%q reply=%v",
+		msg.From.ID,
 		msg.Text,
+		msg.ReplyToMessage != nil,
 	)
 
 	if msg.Text == "/start" {
 		a.bot.Send(tgbotapi.NewMessage(
 			msg.Chat.ID,
-			"👋 Напиши сообщение — я передам его пользователю.",
+			"👋 Это бот поддержки. Отвечай reply на сообщения пользователей.",
 		))
 		return
 	}
 
-	ctxHelp, ok := a.app.adminHelpMode[adminID]
-	if !ok {
+	// принимаем ТОЛЬКО ответы reply
+	if msg.ReplyToMessage == nil {
 		log.Printf(
-			"[admin-bot] no active dialog for admin=%d",
-			adminID,
+			"[admin-bot] ignore admin=%d message without reply",
+			msg.From.ID,
 		)
 
 		a.bot.Send(tgbotapi.NewMessage(
 			msg.Chat.ID,
-			"❗ Нет активного диалога.",
+			"❗ Ответь reply на сообщение пользователя.",
 		))
 		return
 	}
 
-	reply := "💬 Ответ поддержки:\n\n" + msg.Text
+	userID, ok := extractUserID(msg.ReplyToMessage.Text)
+	if !ok {
+		log.Printf(
+			"[admin-bot] failed to extract userID from reply text=%q",
+			msg.ReplyToMessage.Text,
+		)
+
+		a.bot.Send(tgbotapi.NewMessage(
+			msg.Chat.ID,
+			"❗ Не удалось определить пользователя.",
+		))
+		return
+	}
 
 	log.Printf(
-		"[admin-bot] send reply admin=%d → user=%d",
-		adminID,
-		ctxHelp.UserID,
+		"[admin-bot] sending reply admin=%d → user=%d",
+		msg.From.ID,
+		userID,
 	)
 
-	_, err := a.bot.Send(tgbotapi.NewMessage(
-		ctxHelp.UserID,
-		reply,
-	))
-	if err != nil {
+	reply := "💬 Ответ поддержки:\n\n" + msg.Text
+
+	if _, err := a.bot.Send(tgbotapi.NewMessage(userID, reply)); err != nil {
 		log.Printf(
-			"[admin-bot] failed to send reply to user=%d err=%v",
-			ctxHelp.UserID,
+			"[admin-bot] failed to send reply admin=%d → user=%d err=%v",
+			msg.From.ID,
+			userID,
 			err,
 		)
 		return
 	}
 
-	delete(a.app.adminHelpMode, adminID)
-
 	a.bot.Send(tgbotapi.NewMessage(
 		msg.Chat.ID,
 		"✅ Ответ отправлен пользователю.",
 	))
+}
+
+// ==================================================
+// UTILS
+// ==================================================
+
+func extractUserID(text string) (int64, bool) {
+	re := regexp.MustCompile(`UserID:\s*(\d+)`)
+	m := re.FindStringSubmatch(text)
+	if len(m) != 2 {
+		return 0, false
+	}
+
+	id, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+
+	return id, true
 }
