@@ -17,7 +17,33 @@ func (app *BotApp) runBotLoop(botID string, bot *tgbotapi.BotAPI) {
 	log.Printf("[bot_loop] started botID=%s username=@%s", botID, bot.Self.UserName)
 
 	for update := range updates {
+
+		// =========================================
+		// ФАКТ ВЗАИМОДЕЙСТВИЯ С БОТОМ (САМЫЙ ВАЖНЫЙ ЛОГ)
+		// =========================================
+		var fromID int64
+		switch {
+		case update.Message != nil && update.Message.From != nil:
+			fromID = update.Message.From.ID
+		case update.CallbackQuery != nil && update.CallbackQuery.From != nil:
+			fromID = update.CallbackQuery.From.ID
+		}
+
+		if fromID != 0 {
+			log.Printf(
+				"[bot_touch] botID=%s fromTG=%d updateID=%d",
+				botID,
+				fromID,
+				update.UpdateID,
+			)
+		}
+
+		// =========================================
+		// ДАЛЬШЕ — ТВОЯ СУЩЕСТВУЮЩАЯ ЛОГИКА
+		// =========================================
+
 		ctx := context.Background()
+
 		tgID := extractTelegramID(update)
 		if tgID == 0 {
 			continue
@@ -25,7 +51,12 @@ func (app *BotApp) runBotLoop(botID string, bot *tgbotapi.BotAPI) {
 
 		status, err := app.SubscriptionService.GetStatus(ctx, botID, tgID)
 		if err != nil {
-			log.Printf("[bot_loop] getStatus fail botID=%s tgID=%d err=%v", botID, tgID, err)
+			log.Printf(
+				"[bot_loop] getStatus fail botID=%s tgID=%d err=%v",
+				botID,
+				tgID,
+				err,
+			)
 			continue
 		}
 
