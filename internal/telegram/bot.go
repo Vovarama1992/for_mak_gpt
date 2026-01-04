@@ -109,24 +109,41 @@ func (app *BotApp) handleMessage(
 
 	case "none":
 
+		log.Printf("[flow:none] enter bot=%s tg=%d userClass=%v",
+			botID, tgID, userClass != nil,
+		)
+
 		if userClass != nil {
 
 			trialTariff, err := app.TariffService.GetTrial(ctx, botID)
-			if err == nil && trialTariff != nil {
-				_ = app.SubscriptionService.ActivateTrial(
-					ctx,
-					botID,
-					tgID,
-					trialTariff.Code,
+			if err != nil {
+				log.Printf("[flow:none] GetTrial error: %v", err)
+			} else if trialTariff == nil {
+				log.Printf("[flow:none] trialTariff = nil")
+			} else {
+				log.Printf("[flow:none] trialTariff found code=%s", trialTariff.Code)
+
+				err := app.SubscriptionService.ActivateTrial(
+					ctx, botID, tgID, trialTariff.Code,
 				)
+				if err != nil {
+					log.Printf("[flow:none] ActivateTrial error: %v", err)
+				} else {
+					log.Printf("[flow:none] ActivateTrial ok")
+				}
 			}
 
 			newStatus, err := app.SubscriptionService.GetStatus(ctx, botID, tgID)
-			if err == nil {
+			if err != nil {
+				log.Printf("[flow:none] GetStatus error: %v", err)
+			} else {
+				log.Printf("[flow:none] status after trial = %s", newStatus)
 				status = newStatus
 			}
 
 			if status != "active" {
+				log.Printf("[flow:none] status != active → show paywall (status=%s)", status)
+
 				menu := app.BuildSubscriptionMenu(ctx, botID)
 				out := tgbotapi.NewMessage(
 					chatID,
@@ -137,15 +154,19 @@ func (app *BotApp) handleMessage(
 				return
 			}
 
+			log.Printf("[flow:none] status active → proceed lesson")
+
 			msgOut := tgbotapi.NewMessage(chatID, " ")
 			msgOut.ReplyMarkup = app.BuildMainKeyboard("active")
 			bot.Send(msgOut)
 
 			switch {
 			case msg.Voice != nil:
+				log.Printf("[flow:none] input=voice")
 				app.handleVoice(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
 				return
 			case msg.Document != nil:
+				log.Printf("[flow:none] input=document")
 				if isPDF(msg.Document) {
 					app.handlePDF(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
 				} else if isWord(msg.Document) {
@@ -155,12 +176,16 @@ func (app *BotApp) handleMessage(
 				}
 				return
 			case len(msg.Photo) > 0:
+				log.Printf("[flow:none] input=photo")
 				app.handlePhoto(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
 				return
 			case msg.Text != "":
+				log.Printf("[flow:none] input=text text=%q", msg.Text)
 				app.handleText(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
 				return
 			}
+
+			log.Printf("[flow:none] input=unknown")
 			return
 		}
 
