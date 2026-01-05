@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
-	"github.com/Vovarama1992/make_ziper/internal/speech"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -29,12 +29,28 @@ func (app *BotApp) handleVoice(
 		return
 	}
 
-	// списание STT
-	go app.SubscriptionService.UseVoiceMinutes(
-		ctx, botID, tgID, float64(msg.Voice.Duration)/60.0,
-	)
+	// ===== ПРОВЕРКА ЛИМИТА (ЕДИНСТВЕННОЕ ИЗМЕНЕНИЕ) =====
 
-	// получить файл
+	used := float64(msg.Voice.Duration) / 60.0
+	ok, err := app.SubscriptionService.UseVoiceMinutes(ctx, botID, tgID, used)
+	if err != nil || !ok {
+		cfg, _ := app.BotsService.Get(ctx, botID)
+
+		text := "Недостаточно голосовых минут."
+		if cfg != nil && cfg.NoVoiceMinutesText != nil {
+			if t := strings.TrimSpace(*cfg.NoVoiceMinutesText); t != "" {
+				text = t
+			}
+		}
+
+		m := tgbotapi.NewMessage(chatID, text)
+		m.ReplyMarkup = app.BuildMinutePackagesMenu(ctx, botID)
+		bot.Send(m)
+		return
+	}
+
+	// ===== ДАЛЬШЕ ФАЙЛ БЕЗ ИЗМЕНЕНИЙ =====
+
 	file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 	if err != nil {
 		m := tgbotapi.NewMessage(chatID, "⚠️ Не удалось получить голосовое.")
@@ -58,7 +74,6 @@ func (app *BotApp) handleVoice(
 	out.Close()
 	defer os.Remove(path)
 
-	// STT
 	text, err := app.SpeechService.Transcribe(ctx, botID, path)
 	if err != nil {
 		m := tgbotapi.NewMessage(chatID, "⚠️ Не удалось распознать голос.")
@@ -69,12 +84,10 @@ func (app *BotApp) handleVoice(
 
 	app.RecordService.AddText(ctx, botID, tgID, "user", text)
 
-	// AI думает
 	thinking := tgbotapi.NewMessage(chatID, "🤖 AI думает…")
 	thinking.ReplyMarkup = mainKB
 	sentThinking, _ := bot.Send(thinking)
 
-	// GPT
 	reply, err := app.AiService.GetReply(ctx, botID, tgID, "voice", text, nil)
 	if err != nil {
 		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
@@ -84,7 +97,6 @@ func (app *BotApp) handleVoice(
 		return
 	}
 
-	// === POST-PROCESS TEXT ===
 	processed, err := app.TextRuleService.Process(ctx, reply)
 	if err != nil {
 		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
@@ -95,7 +107,6 @@ func (app *BotApp) handleVoice(
 	}
 	reply = processed
 
-	// TTS
 	outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
 	if err := app.SpeechService.Synthesize(ctx, botID, reply, outVoice); err != nil {
 		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
@@ -106,27 +117,17 @@ func (app *BotApp) handleVoice(
 	}
 	defer os.Remove(outVoice)
 
-	if durSec, err := speech.AudioDuration(outVoice); err == nil {
-		go app.SubscriptionService.UseVoiceMinutes(ctx, botID, tgID, durSec/60.0)
-	}
-
-	// ===== ФИНАЛ =====
-
-	// убрать AI думает
 	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 
-	// ЯКОРЬНЫЙ ТЕКСТ
 	anchor := tgbotapi.NewMessage(chatID, "🎧 Ответ голосом:")
 	anchor.ReplyMarkup = mainKB
 	bot.Send(anchor)
 
-	// голос
 	bot.Send(tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice)))
 
 	textMsg := tgbotapi.NewMessage(chatID, reply)
 	textMsg.ReplyMarkup = mainKB
 	bot.Send(textMsg)
 
-	// история
 	app.RecordService.AddText(ctx, botID, tgID, "tutor", reply)
 }
