@@ -284,10 +284,16 @@ func (app *BotApp) handleMessage(
 		switch msg.Text {
 
 		case "🟢 Продолжить урок":
-			bot.Send(tgbotapi.NewMessage(
-				chatID,
-				"Отправь текст, голос, фото или документ для урока.",
-			))
+			cfg, _ := app.BotsService.Get(ctx, botID)
+
+			text := "Отправь текст, голос, фото или документ для урока."
+			if cfg != nil && cfg.AfterContinueText != nil {
+				if t := strings.TrimSpace(*cfg.AfterContinueText); t != "" {
+					text = t
+				}
+			}
+
+			bot.Send(tgbotapi.NewMessage(chatID, text))
 			return
 
 		case "🗑 Очистить историю":

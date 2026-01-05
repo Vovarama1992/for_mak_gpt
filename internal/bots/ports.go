@@ -29,20 +29,22 @@ type BotConfig struct {
 	PhotoStylePrompt string `json:"photo_style_prompt"`
 	VoiceID          string `json:"voice_id"`
 
-	WelcomeText  *string `json:"welcome_text"`
-	TariffText   *string `json:"tariff_text"`
-	WelcomeVideo *string `json:"welcome_video_url"`
+	WelcomeText       *string `json:"welcome_text"`
+	TariffText        *string `json:"tariff_text"`
+	AfterContinueText *string `json:"after_continue_text"`
+	WelcomeVideo      *string `json:"welcome_video_url"`
 }
 
 type UpdateInput struct {
-	BotID            string
-	Model            *string
-	TextStylePrompt  *string
-	VoiceStylePrompt *string
-	PhotoStylePrompt *string
-	VoiceID          *string
-	WelcomeText      *string
-	TariffText       *string
+	BotID             string
+	Model             *string
+	TextStylePrompt   *string
+	VoiceStylePrompt  *string
+	PhotoStylePrompt  *string
+	VoiceID           *string
+	WelcomeText       *string
+	TariffText        *string
+	AfterContinueText *string
 
 	// INTERNAL USE ONLY
 	WelcomeVideo *string

@@ -51,12 +51,14 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Model            *string `json:"model"`
-		TextStylePrompt  *string `json:"text_style_prompt"`
-		VoiceStylePrompt *string `json:"voice_style_prompt"`
-		PhotoStylePrompt *string `json:"photo_style_prompt"`
-		VoiceID          *string `json:"voice_id"`
-		WelcomeText      *string `json:"welcome_text"`
+		Model             *string `json:"model"`
+		TextStylePrompt   *string `json:"text_style_prompt"`
+		VoiceStylePrompt  *string `json:"voice_style_prompt"`
+		PhotoStylePrompt  *string `json:"photo_style_prompt"`
+		VoiceID           *string `json:"voice_id"`
+		WelcomeText       *string `json:"welcome_text"`
+		TariffText        *string `json:"tariff_text"`
+		AfterContinueText *string `json:"after_continue_text"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -65,13 +67,15 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	in := &UpdateInput{
-		BotID:            botID,
-		Model:            body.Model,
-		TextStylePrompt:  body.TextStylePrompt,
-		VoiceStylePrompt: body.VoiceStylePrompt,
-		PhotoStylePrompt: body.PhotoStylePrompt,
-		WelcomeText:      body.WelcomeText,
-		VoiceID:          body.VoiceID,
+		BotID:             botID,
+		Model:             body.Model,
+		TextStylePrompt:   body.TextStylePrompt,
+		VoiceStylePrompt:  body.VoiceStylePrompt,
+		PhotoStylePrompt:  body.PhotoStylePrompt,
+		VoiceID:           body.VoiceID,
+		WelcomeText:       body.WelcomeText,
+		TariffText:        body.TariffText,
+		AfterContinueText: body.AfterContinueText,
 	}
 
 	out, err := h.svc.Update(r.Context(), in)

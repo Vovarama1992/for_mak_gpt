@@ -27,6 +27,7 @@ func (r *repo) ListAll(ctx context.Context) ([]*BotConfig, error) {
 		       voice_id,
 		       welcome_text,
 		       tariff_text,
+		       after_continue_text,
 		       welcome_video
 		FROM bot_configs
 		ORDER BY bot_id
@@ -50,6 +51,7 @@ func (r *repo) ListAll(ctx context.Context) ([]*BotConfig, error) {
 			&b.VoiceID,
 			&b.WelcomeText,
 			&b.TariffText,
+			&b.AfterContinueText,
 			&b.WelcomeVideo,
 		); err != nil {
 			return nil, err
@@ -75,6 +77,7 @@ func (r *repo) Get(ctx context.Context, botID string) (*BotConfig, error) {
 		       voice_id,
 		       welcome_text,
 		       tariff_text,
+		       after_continue_text,
 		       welcome_video
 		FROM bot_configs
 		WHERE bot_id = $1
@@ -88,6 +91,7 @@ func (r *repo) Get(ctx context.Context, botID string) (*BotConfig, error) {
 		&b.VoiceID,
 		&b.WelcomeText,
 		&b.TariffText,
+		&b.AfterContinueText,
 		&b.WelcomeVideo,
 	)
 
@@ -122,6 +126,7 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 	appendField("voice_id", in.VoiceID)
 	appendField("welcome_text", in.WelcomeText)
 	appendField("tariff_text", in.TariffText)
+	appendField("after_continue_text", in.AfterContinueText)
 	appendField("welcome_video", in.WelcomeVideo)
 
 	if len(args) == 0 {
@@ -143,6 +148,7 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 			voice_id,
 			welcome_text,
 			tariff_text,
+			after_continue_text,
 			welcome_video
 	`
 
@@ -159,6 +165,7 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 		&b.VoiceID,
 		&b.WelcomeText,
 		&b.TariffText,
+		&b.AfterContinueText,
 		&b.WelcomeVideo,
 	)
 	if err != nil {
