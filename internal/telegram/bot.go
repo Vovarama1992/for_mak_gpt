@@ -95,6 +95,49 @@ func (app *BotApp) handleMessage(
 	mainKB := app.BuildMainKeyboard(status)
 
 	// ======================================================
+	// ГЛОБАЛЬНЫЕ КОМАНДЫ (НЕ ЗАВИСЯТ ОТ СТАТУСА)
+	// ======================================================
+
+	switch msg.Text {
+
+	case "❓ Помощь":
+		if app.adminBotUsername == "" {
+			bot.Send(tgbotapi.NewMessage(
+				chatID,
+				"Поддержка временно недоступна.",
+			))
+			return
+		}
+
+		url := "https://t.me/" + app.adminBotUsername + "?start=support"
+
+		m := tgbotapi.NewMessage(
+			chatID,
+			"🆘 Чтобы написать в поддержку, нажми кнопку ниже:",
+		)
+		m.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonURL(
+					"✉️ Написать в поддержку",
+					url,
+				),
+			),
+		)
+
+		bot.Send(m)
+		return
+
+	case "💳 Тарифы":
+		menu := app.BuildSubscriptionMenu(ctx, botID)
+		text := app.BuildSubscriptionText(ctx, botID)
+
+		out := tgbotapi.NewMessage(chatID, text)
+		out.ReplyMarkup = menu
+		bot.Send(out)
+		return
+	}
+
+	// ======================================================
 	// КЛЮЧЕВАЯ ЧАСТЬ — ПРОВЕРКА КЛАССА
 	// ======================================================
 
@@ -103,6 +146,7 @@ func (app *BotApp) handleMessage(
 	// ======================================================
 	// STATUS FLOW
 	// ======================================================
+
 	switch status {
 
 	case "none":
@@ -126,22 +170,15 @@ func (app *BotApp) handleMessage(
 				)
 				if err != nil {
 					log.Printf("[flow:none] ActivateTrial error: %v", err)
-				} else {
-					log.Printf("[flow:none] ActivateTrial ok")
 				}
 			}
 
 			newStatus, err := app.SubscriptionService.GetStatus(ctx, botID, tgID)
-			if err != nil {
-				log.Printf("[flow:none] GetStatus error: %v", err)
-			} else {
-				log.Printf("[flow:none] status after trial = %s", newStatus)
+			if err == nil {
 				status = newStatus
 			}
 
 			if status != "active" {
-				log.Printf("[flow:none] status != active → show paywall (status=%s)", status)
-
 				menu := app.BuildSubscriptionMenu(ctx, botID)
 				out := tgbotapi.NewMessage(
 					chatID,
@@ -152,19 +189,14 @@ func (app *BotApp) handleMessage(
 				return
 			}
 
-			log.Printf("[flow:none] status active → proceed lesson")
-
 			msgOut := tgbotapi.NewMessage(chatID, " ")
 			msgOut.ReplyMarkup = app.BuildMainKeyboard("active")
 			bot.Send(msgOut)
 
 			switch {
 			case msg.Voice != nil:
-				log.Printf("[flow:none] input=voice")
 				app.handleVoice(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
-				return
 			case msg.Document != nil:
-				log.Printf("[flow:none] input=document")
 				if isPDF(msg.Document) {
 					app.handlePDF(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
 				} else if isWord(msg.Document) {
@@ -172,18 +204,11 @@ func (app *BotApp) handleMessage(
 				} else {
 					app.handlePhoto(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
 				}
-				return
 			case len(msg.Photo) > 0:
-				log.Printf("[flow:none] input=photo")
 				app.handlePhoto(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
-				return
 			case msg.Text != "":
-				log.Printf("[flow:none] input=text text=%q", msg.Text)
 				app.handleText(ctx, botID, bot, msg, tgID, app.BuildMainKeyboard("active"))
-				return
 			}
-
-			log.Printf("[flow:none] input=unknown")
 			return
 		}
 
@@ -199,10 +224,7 @@ func (app *BotApp) handleMessage(
 			}
 
 			if err := app.SubscriptionService.ActivateTrial(
-				ctx,
-				botID,
-				tgID,
-				trialTariff.Code,
+				ctx, botID, tgID, trialTariff.Code,
 			); err != nil {
 				bot.Send(tgbotapi.NewMessage(
 					chatID,
@@ -244,10 +266,7 @@ func (app *BotApp) handleMessage(
 		return
 
 	case "expired":
-		log.Printf("[flow:expired] show paywall bot=%s tg=%d", botID, tgID)
-
 		menu := app.BuildSubscriptionMenu(ctx, botID)
-
 		out := tgbotapi.NewMessage(
 			chatID,
 			"⛔ Подписка истекла.\nОформи подписку, чтобы продолжить обучение.",
@@ -269,45 +288,6 @@ func (app *BotApp) handleMessage(
 				chatID,
 				"Отправь текст, голос, фото или документ для урока.",
 			))
-			return
-
-		case "💳 Тарифы":
-			menu := app.BuildSubscriptionMenu(ctx, botID)
-
-			text := app.BuildSubscriptionText(ctx, botID)
-
-			out := tgbotapi.NewMessage(chatID, text)
-			out.ReplyMarkup = menu
-
-			bot.Send(out)
-			return
-
-		case "❓ Помощь":
-			if app.adminBotUsername == "" {
-				bot.Send(tgbotapi.NewMessage(
-					chatID,
-					"Поддержка временно недоступна.",
-				))
-				return
-			}
-
-			url := "https://t.me/" + app.adminBotUsername + "?start=support"
-
-			m := tgbotapi.NewMessage(
-				chatID,
-				"🆘 Чтобы написать в поддержку, нажми кнопку ниже:",
-			)
-
-			m.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
-				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonURL(
-						"✉️ Написать в поддержку",
-						url,
-					),
-				),
-			)
-
-			bot.Send(m)
 			return
 
 		case "🗑 Очистить историю":

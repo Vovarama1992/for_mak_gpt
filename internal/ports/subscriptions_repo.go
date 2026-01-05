@@ -36,4 +36,11 @@ type SubscriptionRepo interface {
 	CleanupPending(ctx context.Context, olderThan time.Duration) error
 	Activate(ctx context.Context, id int64, startedAt, expiresAt time.Time, voiceMinutes float64) error
 	CreateDemo(ctx context.Context, botID string, telegramID int64, startedAt, expiresAt time.Time, voiceMinutes float64) error
+	UpdateLimits(
+		ctx context.Context,
+		id int64,
+		expiresAt time.Time,
+		voiceMinutes float64,
+		status string,
+	) error
 }

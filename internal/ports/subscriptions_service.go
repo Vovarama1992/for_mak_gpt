@@ -39,4 +39,11 @@ type SubscriptionService interface {
 	Delete(ctx context.Context, botID string, telegramID int64) error
 	CleanupExpiredTrials(ctx context.Context, botID string) error
 	NotifyExpiredTrials(ctx context.Context) error
+	UpdateLimits(
+		ctx context.Context,
+		subscriptionID int64,
+		status string,
+		expiresAt *time.Time,
+		voiceMinutes float64,
+	) error
 }

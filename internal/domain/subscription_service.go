@@ -457,3 +457,40 @@ func (s *SubscriptionService) NotifyExpiredTrials(ctx context.Context) error {
 
 	return nil
 }
+
+func (s *SubscriptionService) UpdateLimits(
+	ctx context.Context,
+	subscriptionID int64,
+	status string,
+	expiresAt *time.Time,
+	voiceMinutes float64,
+) error {
+
+	// если статус не передали — не ломаемся
+	if status == "" {
+		status = "active"
+	}
+
+	// expiresAt обязателен на уровне repo → тут защищаемся
+	if expiresAt == nil {
+		return fmt.Errorf("expiresAt is required")
+	}
+
+	if err := s.repo.UpdateLimits(
+		ctx,
+		subscriptionID,
+		*expiresAt,
+		voiceMinutes,
+		status,
+	); err != nil {
+		s.notifier.Notify(
+			ctx,
+			"admin",
+			err,
+			fmt.Sprintf("Ошибка ручного редактирования подписки id=%d", subscriptionID),
+		)
+		return err
+	}
+
+	return nil
+}

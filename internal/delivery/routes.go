@@ -136,6 +136,8 @@ func RegisterRoutes(
 	r.With(httputil.RecoverMiddleware).
 		Post("/text-rules/words", hTextRules.AddWordRule)
 
+	r.Patch("/subscribe/{id}", hSubs.UpdateLimits)
+
 	r.With(httputil.RecoverMiddleware).
 		Delete("/text-rules/words", hTextRules.DeleteWordRule)
 }

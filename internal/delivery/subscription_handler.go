@@ -214,3 +214,45 @@ func (h *SubscriptionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// PATCH /subscribe/{id}
+func (h *SubscriptionHandler) UpdateLimits(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	subID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid subscription id", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Status       string     `json:"status"`
+		ExpiresAt    *time.Time `json:"expires_at"`
+		VoiceMinutes float64    `json:"voice_minutes"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+
+	if req.ExpiresAt == nil {
+		http.Error(w, "expires_at is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.service.UpdateLimits(
+		r.Context(),
+		subID,
+		req.Status,
+		req.ExpiresAt,
+		req.VoiceMinutes,
+	); err != nil {
+		http.Error(w, "failed to update subscription: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status": "ok",
+	})
+}

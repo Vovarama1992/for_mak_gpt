@@ -117,7 +117,7 @@ func (app *BotApp) handleCallback(
 
 			bot.Send(tgbotapi.NewMessage(
 				chatID,
-				fmt.Sprintf("✅ Заявка принята!\n%s", paymentURL),
+				fmt.Sprintf("✅ Ссылка на оплату\n%s", paymentURL),
 			))
 			return
 		}

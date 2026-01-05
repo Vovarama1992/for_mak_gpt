@@ -366,3 +366,23 @@ func (r *subscriptionRepo) MarkTrialNotified(
 
 	return err
 }
+
+func (r *subscriptionRepo) UpdateLimits(
+	ctx context.Context,
+	id int64,
+	expiresAt time.Time,
+	voiceMinutes float64,
+	status string,
+) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE subscriptions
+		SET
+			expires_at    = $2,
+			voice_minutes = $3,
+			status        = $4,
+			updated_at    = NOW()
+		WHERE id = $1
+	`, id, expiresAt, voiceMinutes, status)
+
+	return err
+}

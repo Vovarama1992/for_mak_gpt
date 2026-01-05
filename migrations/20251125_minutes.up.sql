@@ -5,3 +5,6 @@ CREATE TABLE minute_packages (
     price NUMERIC(10,2) NOT NULL,     -- цена в рублях
     active BOOLEAN NOT NULL DEFAULT true
 );
+
+ALTER TABLE minute_packages
+DROP CONSTRAINT minute_packages_name_key;
