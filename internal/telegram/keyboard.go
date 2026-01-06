@@ -5,7 +5,7 @@ import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 func (app *BotApp) BuildMainKeyboard(status string) tgbotapi.ReplyKeyboardMarkup {
 	first := "🟢 Начать урок"
 	if status == "active" {
-		first = "🟢 Продолжить урок"
+		first = "🟢 Продолжить"
 	}
 
 	row1 := tgbotapi.NewKeyboardButtonRow(
