@@ -88,6 +88,15 @@ func (app *BotApp) handleMessage(
 	log.Printf("[handleMessage] tg=%d status=%s text=%q", tgID, status, text)
 
 	// =====================================================
+	// FIX #2: ПЕРВОЕ СООБЩЕНИЕ → СРАЗУ ПРИКРЕПЛЯЕМ КЛАВИАТУРУ
+	// =====================================================
+	if status == "none" {
+		anchor := tgbotapi.NewMessage(chatID, " ")
+		anchor.ReplyMarkup = app.BuildMainKeyboard("none")
+		bot.Send(anchor)
+	}
+
+	// =====================================================
 	// 0) СБРОС НАСТРОЕК
 	// =====================================================
 	if strings.Contains(textLower, "сброс") {
@@ -99,8 +108,6 @@ func (app *BotApp) handleMessage(
 			return
 		}
 
-		status = "none"
-
 		m := tgbotapi.NewMessage(chatID, "Настройки сброшены. Начнём заново.")
 		m.ReplyMarkup = app.BuildMainKeyboard("none")
 		bot.Send(m)
@@ -110,15 +117,6 @@ func (app *BotApp) handleMessage(
 	// =====================================================
 	// 1) ГЛОБАЛЬНЫЕ КНОПКИ
 	// =====================================================
-
-	if strings.Contains(textLower, "тариф") {
-		menu := app.BuildSubscriptionMenu(ctx, botID)
-		out := tgbotapi.NewMessage(chatID, app.BuildSubscriptionText(ctx, botID))
-		out.ReplyMarkup = menu
-		bot.Send(out)
-		return
-	}
-
 	if strings.Contains(textLower, "минут") {
 		menu := app.BuildMinutePackagesMenu(ctx, botID)
 		out := tgbotapi.NewMessage(chatID, "Выбери пакет минут:")
@@ -145,7 +143,7 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// 2) НАЧАТЬ УРОК → ONBOARDING
+	// FIX #1: НАЧАТЬ УРОК → ONBOARDING С КЛАССОМ (НЕ ДЛЯ ASSISTANT)
 	// =====================================================
 	if strings.Contains(textLower, "начать") && status != "active" {
 		cfg, _ := app.BotsService.Get(ctx, botID)
@@ -161,21 +159,19 @@ func (app *BotApp) handleMessage(
 		}
 		bot.Send(tgbotapi.NewMessage(chatID, welcome))
 
-		menu := app.BuildSubscriptionMenu(ctx, botID)
-		out := tgbotapi.NewMessage(chatID, "Чтобы продолжить — выбери тариф:")
-		out.ReplyMarkup = menu
-		bot.Send(out)
+		// 👇 КЛЮЧЕВОЙ ФИКС
+		if botID != "assistant" {
+			app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
+		}
+
 		return
 	}
 
 	// =====================================================
-	// 3) НЕТ ACTIVE → ВСЕГДА ТАРИФЫ
+	// 3) НЕТ ACTIVE → НИЧЕГО НЕ ЛОМАЕМ (TRIAL РЕШАЕТ)
 	// =====================================================
 	if status != "active" {
-		menu := app.BuildSubscriptionMenu(ctx, botID)
-		out := tgbotapi.NewMessage(chatID, "⛔ Доступ закрыт. Выбери тариф:")
-		out.ReplyMarkup = menu
-		bot.Send(out)
+		// ничего не делаем, ждём "Начать урок"
 		return
 	}
 
