@@ -91,10 +91,7 @@ func (app *BotApp) BuildSubscriptionMenu(
 	)
 
 	if len(rows) == 0 {
-		log.Printf(
-			"[subscription_menu] EMPTY result botID=%s",
-			botID,
-		)
+		log.Printf("[subscription_menu] EMPTY result botID=%s", botID)
 		return errorMenu("Нет доступных тарифов")
 	}
 
@@ -106,13 +103,17 @@ func (app *BotApp) BuildSubscriptionText(
 	botID string,
 ) string {
 
-	// 🔹 тянем конфиг бота (ДАЖЕ ЕСЛИ СЕРВИСА ЕЩЁ НЕТ)
 	cfg, err := app.BotsService.Get(ctx, botID)
-	if err == nil && cfg != nil && cfg.TariffText != nil && *cfg.WelcomeText != "" {
-		return *cfg.TariffText
+
+	// ✅ ФИКС: проверяем TariffText, а не WelcomeText
+	if err == nil && cfg != nil && cfg.TariffText != nil {
+		text := strings.TrimSpace(*cfg.TariffText)
+		if text != "" {
+			return text
+		}
 	}
 
-	// fallback — если текста нет
+	// fallback — гарантированно НЕ пустой
 	return "🎓 Тарифы AI-репетитора\n\n" +
 		"Выберите подходящий тариф ниже ⬇️"
 }

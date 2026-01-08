@@ -85,32 +85,41 @@ func (app *BotApp) handleMessage(
 	text := strings.TrimSpace(msg.Text)
 	textLower := strings.ToLower(text)
 
-	log.Printf(
-		"[handleMessage] tg=%d status=%s text=%q",
-		tgID, status, text,
-	)
-
-	mainKB := app.BuildMainKeyboard(status)
+	log.Printf("[handleMessage] tg=%d status=%s text=%q", tgID, status, text)
 
 	// =====================================================
-	// 1) ГЛОБАЛЬНЫЕ КНОПКИ (НЕ ЗАВИСЯТ ОТ ПОДПИСКИ)
+	// 0) СБРОС НАСТРОЕК
+	// =====================================================
+	if strings.Contains(textLower, "сброс") {
+		log.Printf("[ui] RESET pressed tg=%d", tgID)
+
+		if err := app.UserService.ResetUserSettings(ctx, botID, tgID); err != nil {
+			log.Printf("[ui] reset error tg=%d err=%v", tgID, err)
+			bot.Send(tgbotapi.NewMessage(chatID, "Ошибка сброса настроек."))
+			return
+		}
+
+		status = "none"
+
+		m := tgbotapi.NewMessage(chatID, "Настройки сброшены. Начнём заново.")
+		m.ReplyMarkup = app.BuildMainKeyboard("none")
+		bot.Send(m)
+		return
+	}
+
+	// =====================================================
+	// 1) ГЛОБАЛЬНЫЕ КНОПКИ
 	// =====================================================
 
 	if strings.Contains(textLower, "тариф") {
-		log.Printf("[ui] TARIFFS pressed tg=%d text=%q", tgID, text)
-
 		menu := app.BuildSubscriptionMenu(ctx, botID)
 		out := tgbotapi.NewMessage(chatID, app.BuildSubscriptionText(ctx, botID))
 		out.ReplyMarkup = menu
-
-		sent, err := bot.Send(out)
-		log.Printf("[ui] tariffs send err=%v sent_msg_id=%d", err, sent.MessageID)
+		bot.Send(out)
 		return
 	}
 
 	if strings.Contains(textLower, "минут") {
-		log.Printf("[ui] MINUTES pressed tg=%d", tgID)
-
 		menu := app.BuildMinutePackagesMenu(ctx, botID)
 		out := tgbotapi.NewMessage(chatID, "Выбери пакет минут:")
 		out.ReplyMarkup = menu
@@ -119,24 +128,16 @@ func (app *BotApp) handleMessage(
 	}
 
 	if strings.Contains(textLower, "помощ") {
-		log.Printf("[ui] HELP pressed tg=%d", tgID)
-
 		if app.adminBotUsername == "" {
 			bot.Send(tgbotapi.NewMessage(chatID, "Поддержка временно недоступна."))
 			return
 		}
 
 		url := "https://t.me/" + app.adminBotUsername + "?start=support"
-		m := tgbotapi.NewMessage(
-			chatID,
-			"🆘 Чтобы написать в поддержку, нажми кнопку ниже:",
-		)
+		m := tgbotapi.NewMessage(chatID, "🆘 Написать в поддержку:")
 		m.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonURL(
-					"✉️ Написать в поддержку",
-					url,
-				),
+				tgbotapi.NewInlineKeyboardButtonURL("✉️ Поддержка", url),
 			),
 		)
 		bot.Send(m)
@@ -144,62 +145,44 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// 2) КНОПКА «НАЧАТЬ УРОК» (status != active) → ВИДЕО + ТЕКСТ + ТАРИФЫ
+	// 2) НАЧАТЬ УРОК → ONBOARDING
 	// =====================================================
-
 	if strings.Contains(textLower, "начать") && status != "active" {
-		log.Printf("[flow] START pressed tg=%d status=%s", tgID, status)
-
 		cfg, _ := app.BotsService.Get(ctx, botID)
 
-		// видео
 		if cfg != nil && cfg.WelcomeVideo != nil && *cfg.WelcomeVideo != "" {
-			log.Printf("[onboarding] send video tg=%d url=%s", tgID, *cfg.WelcomeVideo)
-			video := tgbotapi.NewVideo(
-				chatID,
-				tgbotapi.FileURL(*cfg.WelcomeVideo),
-			)
+			video := tgbotapi.NewVideo(chatID, tgbotapi.FileURL(*cfg.WelcomeVideo))
 			bot.Send(video)
 		}
 
-		// текст
 		welcome := "Привет! Я — твой AI-репетитор 🤖"
 		if cfg != nil && cfg.WelcomeText != nil {
 			welcome = strings.TrimSpace(*cfg.WelcomeText)
 		}
 		bot.Send(tgbotapi.NewMessage(chatID, welcome))
 
-		// дальше — тарифы
 		menu := app.BuildSubscriptionMenu(ctx, botID)
-		out := tgbotapi.NewMessage(
-			chatID,
-			"Чтобы продолжить — выбери тариф:",
-		)
+		out := tgbotapi.NewMessage(chatID, "Чтобы продолжить — выбери тариф:")
 		out.ReplyMarkup = menu
 		bot.Send(out)
 		return
 	}
 
 	// =====================================================
-	// 3) ЛЮБОЙ ВВОД БЕЗ ACTIVE → ТАРИФЫ
+	// 3) НЕТ ACTIVE → ВСЕГДА ТАРИФЫ
 	// =====================================================
-
 	if status != "active" {
-		log.Printf("[access] BLOCKED tg=%d status=%s", tgID, status)
-
 		menu := app.BuildSubscriptionMenu(ctx, botID)
-		out := tgbotapi.NewMessage(
-			chatID,
-			"⛔ Доступ к урокам закрыт. Выбери тариф:",
-		)
+		out := tgbotapi.NewMessage(chatID, "⛔ Доступ закрыт. Выбери тариф:")
 		out.ReplyMarkup = menu
 		bot.Send(out)
 		return
 	}
 
 	// =====================================================
-	// 4) ACTIVE — ОБРАБОТКА КОНТЕНТА
+	// 4) ACTIVE — КОНТЕНТ
 	// =====================================================
+	mainKB := app.BuildMainKeyboard("active")
 
 	switch {
 	case msg.Voice != nil:
