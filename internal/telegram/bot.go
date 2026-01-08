@@ -86,10 +86,14 @@ func (app *BotApp) handleMessage(
 	log.Printf("[sub-check] botID=%s tgID=%d → status=%s", botID, tgID, status)
 
 	mainKB := app.BuildMainKeyboard(status)
+	textLower := strings.ToLower(msg.Text)
 
-	switch msg.Text {
+	// =====================================================
+	// ГЛОБАЛЬНЫЕ КОМАНДЫ (НЕ ЗАВИСЯТ ОТ STATUS)
+	// =====================================================
+	switch {
 
-	case "❓ Помощь":
+	case strings.Contains(textLower, "помощ"):
 		if app.adminBotUsername == "" {
 			bot.Send(tgbotapi.NewMessage(chatID, "Поддержка временно недоступна."))
 			return
@@ -113,7 +117,7 @@ func (app *BotApp) handleMessage(
 		bot.Send(m)
 		return
 
-	case "💳 Тарифы":
+	case strings.Contains(textLower, "тариф"):
 		menu := app.BuildSubscriptionMenu(ctx, botID)
 		text := app.BuildSubscriptionText(ctx, botID)
 
@@ -121,10 +125,20 @@ func (app *BotApp) handleMessage(
 		out.ReplyMarkup = menu
 		bot.Send(out)
 		return
+
+	case strings.Contains(textLower, "минут"):
+		menu := app.BuildMinutePackagesMenu(ctx, botID)
+		out := tgbotapi.NewMessage(chatID, "Выбери пакет минут:")
+		out.ReplyMarkup = menu
+		bot.Send(out)
+		return
 	}
 
 	userClass, _ := app.ClassService.GetUserClass(ctx, botID, tgID)
 
+	// =====================================================
+	// ОСНОВНОЙ FLOW ПО STATUS
+	// =====================================================
 	switch status {
 
 	case "none":
@@ -133,12 +147,9 @@ func (app *BotApp) handleMessage(
 			botID, tgID, userClass != nil,
 		)
 
-		// ===============================
-		// 🔥 ASSISTANT: БЕЗ ВЫБОРА КЛАССА
-		// ===============================
 		if botID == "assistant" {
 
-			if msg.Text == "🟢 Начать урок" {
+			if strings.Contains(textLower, "начать") {
 
 				trialTariff, err := app.TariffService.GetTrial(ctx, botID)
 				if err != nil || trialTariff == nil {
@@ -177,10 +188,6 @@ func (app *BotApp) handleMessage(
 			return
 		}
 
-		// ===============================
-		// 🧠 ОСТАЛЬНЫЕ БОТЫ — СТАРОЕ
-		// ===============================
-
 		if userClass != nil {
 
 			trialTariff, _ := app.TariffService.GetTrial(ctx, botID)
@@ -212,7 +219,7 @@ func (app *BotApp) handleMessage(
 			return
 		}
 
-		if msg.Text == "🟢 Начать урок" {
+		if strings.Contains(textLower, "начать") {
 
 			trialTariff, err := app.TariffService.GetTrial(ctx, botID)
 			if err != nil || trialTariff == nil {
@@ -269,9 +276,9 @@ func (app *BotApp) handleMessage(
 		msgOut.ReplyMarkup = mainKB
 		bot.Send(msgOut)
 
-		switch msg.Text {
+		switch {
 
-		case "🟢 Продолжить":
+		case strings.Contains(textLower, "продолж"):
 			cfg, _ := app.BotsService.Get(ctx, botID)
 
 			text := "Отправь текст, голос, фото или документ для урока."
@@ -284,25 +291,18 @@ func (app *BotApp) handleMessage(
 			bot.Send(tgbotapi.NewMessage(chatID, text))
 			return
 
-		case "🗑 Очистить историю":
+		case strings.Contains(textLower, "очист"):
 			_ = app.RecordService.DeleteUserHistory(ctx, botID, tgID)
 			m := tgbotapi.NewMessage(chatID, "История очищена.")
 			m.ReplyMarkup = mainKB
 			bot.Send(m)
 			return
 
-		case "🧹 Сбросить настройки":
+		case strings.Contains(textLower, "сброс"):
 			_ = app.UserService.ResetUserSettings(ctx, botID, tgID)
 			m := tgbotapi.NewMessage(chatID, "Настройки сброшены. Можешь начать заново.")
 			m.ReplyMarkup = app.BuildMainKeyboard("none")
 			bot.Send(m)
-			return
-
-		case "📦 Пакеты минут":
-			menu := app.BuildMinutePackagesMenu(ctx, botID)
-			out := tgbotapi.NewMessage(chatID, "Выбери пакет минут:")
-			out.ReplyMarkup = menu
-			bot.Send(out)
 			return
 		}
 
