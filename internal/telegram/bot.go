@@ -87,6 +87,8 @@ func (app *BotApp) handleMessage(
 
 	log.Printf("[handleMessage] tg=%d status=%s text=%q", tgID, status, text)
 
+	isStart := textLower == "/start" || strings.Contains(textLower, "начать")
+
 	// =====================================================
 	// 0) ЯКОРЬ — КЛАВИАТУРА ВСЕГДА
 	// =====================================================
@@ -112,7 +114,7 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// 2) ГЛОБАЛЬНЫЕ КНОПКИ (НЕ ЛОМАЕМ)
+	// 2) ГЛОБАЛЬНЫЕ КНОПКИ
 	// =====================================================
 	if strings.Contains(textLower, "ариф") {
 		menu := app.BuildSubscriptionMenu(ctx, botID)
@@ -148,25 +150,31 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// 3) ВОЗВРАТ СТАРОГО: РЕАЛЬНАЯ АКТИВАЦИЯ TRIAL
+	// 3) START → TRIAL ИЛИ ТАРИФЫ
 	// =====================================================
-	isStart := textLower == "/start" || strings.Contains(textLower, "начать")
+	if isStart && status != "active" {
 
-	if (status == "none" || status == "expired") && (isStart || text != "") {
-		trial, err := app.TariffService.GetTrial(ctx, botID)
-		if err == nil && trial != nil {
+		trial, _ := app.TariffService.GetTrial(ctx, botID)
+		used, _ := app.SubscriptionService.HasUsedTrial(ctx, botID, tgID)
+
+		// --- 3.1 первый раз → активируем trial
+		if trial != nil && !used {
 			if err := app.SubscriptionService.ActivateTrial(ctx, botID, tgID, trial.Code); err == nil {
-				if newStatus, err := app.SubscriptionService.GetStatus(ctx, botID, tgID); err == nil && newStatus != "" {
-					status = newStatus
-					log.Printf("[trial] activated tg=%d status=%s", tgID, status)
-				}
+				status = "active"
+				log.Printf("[trial] activated tg=%d", tgID)
 			}
+		} else {
+			// --- 3.2 trial был → показываем тарифы
+			menu := app.BuildSubscriptionMenu(ctx, botID)
+			out := tgbotapi.NewMessage(chatID, "⛔ Пробный период завершён. Выбери тариф:")
+			out.ReplyMarkup = menu
+			bot.Send(out)
+			return
 		}
 	}
 
 	// =====================================================
-	// 4) ONBOARDING: VIDEO + TEXT — ВСЕМ
-	//    ВЫБОР КЛАССА — НЕ assistant И ЕСЛИ НЕТ КЛАССА
+	// 4) ONBOARDING: VIDEO + TEXT
 	// =====================================================
 	if isStart {
 		cfg, _ := app.BotsService.Get(ctx, botID)
@@ -192,7 +200,6 @@ func (app *BotApp) handleMessage(
 				app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
 			}
 		}
-
 		return
 	}
 
