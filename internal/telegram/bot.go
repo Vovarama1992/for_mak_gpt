@@ -88,7 +88,7 @@ func (app *BotApp) handleMessage(
 	log.Printf("[handleMessage] tg=%d status=%s text=%q", tgID, status, text)
 
 	// =====================================================
-	// FIX #2: ПЕРВОЕ СООБЩЕНИЕ → СРАЗУ ПРИКРЕПЛЯЕМ КЛАВИАТУРУ
+	// 0) ЯКОРЬ — КЛАВИАТУРА ВСЕГДА
 	// =====================================================
 	if status == "none" {
 		anchor := tgbotapi.NewMessage(chatID, " ")
@@ -97,13 +97,10 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// 0) СБРОС НАСТРОЕК
+	// 1) СБРОС НАСТРОЕК
 	// =====================================================
 	if strings.Contains(textLower, "сброс") {
-		log.Printf("[ui] RESET pressed tg=%d", tgID)
-
 		if err := app.UserService.ResetUserSettings(ctx, botID, tgID); err != nil {
-			log.Printf("[ui] reset error tg=%d err=%v", tgID, err)
 			bot.Send(tgbotapi.NewMessage(chatID, "Ошибка сброса настроек."))
 			return
 		}
@@ -115,8 +112,16 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// 1) ГЛОБАЛЬНЫЕ КНОПКИ
+	// 2) ГЛОБАЛЬНЫЕ КНОПКИ (НЕ ЛОМАЕМ)
 	// =====================================================
+	if strings.Contains(textLower, "ариф") {
+		menu := app.BuildSubscriptionMenu(ctx, botID)
+		out := tgbotapi.NewMessage(chatID, "💳 Выбери тариф ниже:")
+		out.ReplyMarkup = menu
+		bot.Send(out)
+		return
+	}
+
 	if strings.Contains(textLower, "минут") {
 		menu := app.BuildMinutePackagesMenu(ctx, botID)
 		out := tgbotapi.NewMessage(chatID, "Выбери пакет минут:")
@@ -143,20 +148,32 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// FIX #1: НАЧАТЬ УРОК → ONBOARDING
-	// welcome video + welcome text — ВСЕМ
-	// выбор класса — ТОЛЬКО если:
-	//   - бот НЕ assistant
-	//   - класс ещё НЕ выбран
+	// 3) ВОЗВРАТ СТАРОГО: РЕАЛЬНАЯ АКТИВАЦИЯ TRIAL
 	// =====================================================
 	isStart := textLower == "/start" || strings.Contains(textLower, "начать")
 
-	if isStart && status != "active" {
+	if (status == "none" || status == "expired") && (isStart || text != "") {
+		trial, err := app.TariffService.GetTrial(ctx, botID)
+		if err == nil && trial != nil {
+			if err := app.SubscriptionService.ActivateTrial(ctx, botID, tgID, trial.Code); err == nil {
+				if newStatus, err := app.SubscriptionService.GetStatus(ctx, botID, tgID); err == nil && newStatus != "" {
+					status = newStatus
+					log.Printf("[trial] activated tg=%d status=%s", tgID, status)
+				}
+			}
+		}
+	}
+
+	// =====================================================
+	// 4) ONBOARDING: VIDEO + TEXT — ВСЕМ
+	//    ВЫБОР КЛАССА — НЕ assistant И ЕСЛИ НЕТ КЛАССА
+	// =====================================================
+	if isStart {
 		cfg, _ := app.BotsService.Get(ctx, botID)
 
 		if cfg != nil && cfg.WelcomeVideo != nil && *cfg.WelcomeVideo != "" {
 			video := tgbotapi.NewVideo(chatID, tgbotapi.FileURL(*cfg.WelcomeVideo))
-			video.ReplyMarkup = app.BuildMainKeyboard("none")
+			video.ReplyMarkup = app.BuildMainKeyboard(status)
 			bot.Send(video)
 		}
 
@@ -164,7 +181,10 @@ func (app *BotApp) handleMessage(
 		if cfg != nil && cfg.WelcomeText != nil {
 			welcome = strings.TrimSpace(*cfg.WelcomeText)
 		}
-		bot.Send(tgbotapi.NewMessage(chatID, welcome))
+
+		msgOut := tgbotapi.NewMessage(chatID, welcome)
+		msgOut.ReplyMarkup = app.BuildMainKeyboard(status)
+		bot.Send(msgOut)
 
 		if botID != "assistant" {
 			uc, _ := app.ClassService.GetUserClass(ctx, botID, tgID)
@@ -177,15 +197,17 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// 3) НЕТ ACTIVE → НИЧЕГО НЕ ДЕЛАЕМ
-	// trial сам решает доступ
+	// 5) НЕТ ACTIVE → НЕ МОЛЧИМ
 	// =====================================================
 	if status != "active" {
+		m := tgbotapi.NewMessage(chatID, "Нажми «Начать урок», чтобы продолжить.")
+		m.ReplyMarkup = app.BuildMainKeyboard(status)
+		bot.Send(m)
 		return
 	}
 
 	// =====================================================
-	// 4) ACTIVE — КОНТЕНТ
+	// 6) ACTIVE — КОНТЕНТ (КАК БЫЛО)
 	// =====================================================
 	mainKB := app.BuildMainKeyboard("active")
 
