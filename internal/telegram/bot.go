@@ -87,8 +87,6 @@ func (app *BotApp) handleMessage(
 
 	log.Printf("[handleMessage] tg=%d status=%s text=%q", tgID, status, text)
 
-	isStart := textLower == "/start" || strings.Contains(textLower, "начать")
-
 	// =====================================================
 	// 0) ЯКОРЬ — КЛАВИАТУРА ВСЕГДА
 	// =====================================================
@@ -150,31 +148,39 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// 3) START → TRIAL ИЛИ ТАРИФЫ
+	// 3) АКТИВАЦИЯ TRIAL (КАК БЫЛО)
 	// =====================================================
-	if isStart && status != "active" {
+	isStart := textLower == "/start" || strings.Contains(textLower, "начать")
 
-		trial, _ := app.TariffService.GetTrial(ctx, botID)
-		used, _ := app.SubscriptionService.HasUsedTrial(ctx, botID, tgID)
-
-		// --- 3.1 первый раз → активируем trial
-		if trial != nil && !used {
-			if err := app.SubscriptionService.ActivateTrial(ctx, botID, tgID, trial.Code); err == nil {
-				status = "active"
-				log.Printf("[trial] activated tg=%d", tgID)
+	if (status == "none" || status == "expired") && (isStart || text != "") {
+		trial, err := app.TariffService.GetTrial(ctx, botID)
+		if err == nil && trial != nil {
+			_ = app.SubscriptionService.ActivateTrial(ctx, botID, tgID, trial.Code)
+			if newStatus, err := app.SubscriptionService.GetStatus(ctx, botID, tgID); err == nil {
+				status = newStatus
+				log.Printf("[trial] after activate tg=%d status=%s", tgID, status)
 			}
-		} else {
-			// --- 3.2 trial был → показываем тарифы
-			menu := app.BuildSubscriptionMenu(ctx, botID)
-			out := tgbotapi.NewMessage(chatID, "⛔ Пробный период завершён. Выбери тариф:")
-			out.ReplyMarkup = menu
-			bot.Send(out)
-			return
 		}
 	}
 
 	// =====================================================
-	// 4) ONBOARDING: VIDEO + TEXT
+	// FIX: ЕСЛИ START, НО STATUS ВСЁ ЕЩЁ НЕ ACTIVE → ТАРИФЫ
+	// (устраняет зацикливание)
+	// =====================================================
+	if isStart && status != "active" {
+		menu := app.BuildSubscriptionMenu(ctx, botID)
+		out := tgbotapi.NewMessage(
+			chatID,
+			"⛔ Пробный тариф недоступен. Выбери тариф:",
+		)
+		out.ReplyMarkup = menu
+		bot.Send(out)
+		return
+	}
+
+	// =====================================================
+	// 4) ONBOARDING: VIDEO + TEXT — ВСЕМ
+	//    ВЫБОР КЛАССА — НЕ assistant И ЕСЛИ НЕТ КЛАССА
 	// =====================================================
 	if isStart {
 		cfg, _ := app.BotsService.Get(ctx, botID)
@@ -200,21 +206,12 @@ func (app *BotApp) handleMessage(
 				app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
 			}
 		}
+
 		return
 	}
 
 	// =====================================================
-	// 5) НЕТ ACTIVE → НЕ МОЛЧИМ
-	// =====================================================
-	if status != "active" {
-		m := tgbotapi.NewMessage(chatID, "Нажми «Начать урок», чтобы продолжить.")
-		m.ReplyMarkup = app.BuildMainKeyboard(status)
-		bot.Send(m)
-		return
-	}
-
-	// =====================================================
-	// 6) ACTIVE — КОНТЕНТ (КАК БЫЛО)
+	// 5) ACTIVE — КОНТЕНТ (КАК БЫЛО)
 	// =====================================================
 	mainKB := app.BuildMainKeyboard("active")
 
