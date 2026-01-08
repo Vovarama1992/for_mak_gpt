@@ -143,13 +143,18 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// FIX #1: НАЧАТЬ УРОК → ONBOARDING С КЛАССОМ (НЕ ДЛЯ ASSISTANT)
+	// FIX #1: НАЧАТЬ УРОК → ONBOARDING
+	// welcome video + welcome text — ВСЕМ
+	// выбор класса — ТОЛЬКО если:
+	//   - бот НЕ assistant
+	//   - класс ещё НЕ выбран
 	// =====================================================
 	if strings.Contains(textLower, "начать") && status != "active" {
 		cfg, _ := app.BotsService.Get(ctx, botID)
 
 		if cfg != nil && cfg.WelcomeVideo != nil && *cfg.WelcomeVideo != "" {
 			video := tgbotapi.NewVideo(chatID, tgbotapi.FileURL(*cfg.WelcomeVideo))
+			video.ReplyMarkup = app.BuildMainKeyboard("none")
 			bot.Send(video)
 		}
 
@@ -159,19 +164,21 @@ func (app *BotApp) handleMessage(
 		}
 		bot.Send(tgbotapi.NewMessage(chatID, welcome))
 
-		// 👇 КЛЮЧЕВОЙ ФИКС
 		if botID != "assistant" {
-			app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
+			uc, _ := app.ClassService.GetUserClass(ctx, botID, tgID)
+			if uc == nil {
+				app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
+			}
 		}
 
 		return
 	}
 
 	// =====================================================
-	// 3) НЕТ ACTIVE → НИЧЕГО НЕ ЛОМАЕМ (TRIAL РЕШАЕТ)
+	// 3) НЕТ ACTIVE → НИЧЕГО НЕ ДЕЛАЕМ
+	// trial сам решает доступ
 	// =====================================================
 	if status != "active" {
-		// ничего не делаем, ждём "Начать урок"
 		return
 	}
 
