@@ -100,12 +100,11 @@ func (app *BotApp) handleMessage(
 		log.Printf("[ui] TARIFFS pressed tg=%d text=%q", tgID, text)
 
 		menu := app.BuildSubscriptionMenu(ctx, botID)
-		out := tgbotapi.NewMessage(
-			chatID,
-			app.BuildSubscriptionText(ctx, botID),
-		)
+		out := tgbotapi.NewMessage(chatID, app.BuildSubscriptionText(ctx, botID))
 		out.ReplyMarkup = menu
-		bot.Send(out)
+
+		sent, err := bot.Send(out)
+		log.Printf("[ui] tariffs send err=%v sent_msg_id=%d", err, sent.MessageID)
 		return
 	}
 

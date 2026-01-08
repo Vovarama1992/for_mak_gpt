@@ -17,14 +17,41 @@ func (app *BotApp) BuildSubscriptionMenu(
 
 	tariffs, err := app.TariffService.ListAll(ctx)
 	if err != nil {
-		log.Printf("[subscription_menu] list fail: %v", err)
+		log.Printf("[subscription_menu] list fail err=%v", err)
 		return errorMenu("Ошибка загрузки тарифов")
 	}
+
+	log.Printf(
+		"[subscription_menu] fetched tariffs total=%d botID=%s",
+		len(tariffs),
+		botID,
+	)
 
 	var rows [][]tgbotapi.InlineKeyboardButton
 
 	for _, t := range tariffs {
-		if t.BotID != botID || t.IsTrial {
+		log.Printf(
+			"[subscription_menu] check tariff id=%d botID=%s code=%s isTrial=%v",
+			t.ID,
+			t.BotID,
+			t.Code,
+			t.IsTrial,
+		)
+
+		if t.BotID != botID {
+			log.Printf(
+				"[subscription_menu] skip tariff code=%s reason=botID_mismatch tariffBotID=%s",
+				t.Code,
+				t.BotID,
+			)
+			continue
+		}
+
+		if t.IsTrial {
+			log.Printf(
+				"[subscription_menu] skip tariff code=%s reason=is_trial",
+				t.Code,
+			)
 			continue
 		}
 
@@ -49,9 +76,25 @@ func (app *BotApp) BuildSubscriptionMenu(
 				),
 			),
 		)
+
+		log.Printf(
+			"[subscription_menu] added tariff code=%s label=%q",
+			t.Code,
+			label,
+		)
 	}
 
+	log.Printf(
+		"[subscription_menu] result rows=%d botID=%s",
+		len(rows),
+		botID,
+	)
+
 	if len(rows) == 0 {
+		log.Printf(
+			"[subscription_menu] EMPTY result botID=%s",
+			botID,
+		)
 		return errorMenu("Нет доступных тарифов")
 	}
 
