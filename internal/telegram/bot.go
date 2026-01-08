@@ -149,7 +149,9 @@ func (app *BotApp) handleMessage(
 	//   - бот НЕ assistant
 	//   - класс ещё НЕ выбран
 	// =====================================================
-	if strings.Contains(textLower, "начать") && status != "active" {
+	isStart := textLower == "/start" || strings.Contains(textLower, "начать")
+
+	if isStart && status != "active" {
 		cfg, _ := app.BotsService.Get(ctx, botID)
 
 		if cfg != nil && cfg.WelcomeVideo != nil && *cfg.WelcomeVideo != "" {
