@@ -32,7 +32,11 @@ func (r *repo) CreateClass(ctx context.Context, botID string, grade string) (*Cl
 	return &c, nil
 }
 
-func (r *repo) ListClasses(ctx context.Context) ([]*Class, error) {
+func (r *repo) ListClasses(
+	ctx context.Context,
+	botID string,
+) ([]*Class, error) {
+
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT 
 			c.id,
@@ -44,8 +48,9 @@ func (r *repo) ListClasses(ctx context.Context) ([]*Class, error) {
 		LEFT JOIN class_prompts p 
 			ON p.class_id = c.id 
 			AND p.bot_id = c.bot_id
+		WHERE c.bot_id = $1
 		ORDER BY c.grade ASC
-	`)
+	`, botID)
 	if err != nil {
 		return nil, err
 	}

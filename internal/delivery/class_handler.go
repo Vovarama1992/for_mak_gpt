@@ -27,15 +27,27 @@ func getBotID(r *http.Request) string {
 // ----------------------
 //
 
-// GET /classes
 func (h *ClassHandler) ListClasses(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-	classes, err := h.svc.ListClasses(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
+	botIDs := []string{
+		"assistant",
+		"repetitor",
 	}
-	json.NewEncoder(w).Encode(classes)
+
+	var out []*cl.Class
+
+	for _, botID := range botIDs {
+		list, err := h.svc.ListClasses(ctx, botID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		out = append(out, list...)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 func (h *ClassHandler) CreateClass(w http.ResponseWriter, r *http.Request) {

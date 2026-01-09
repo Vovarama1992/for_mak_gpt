@@ -144,10 +144,11 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// 3) ЕСЛИ ПОДПИСКА ЕСТЬ — ПРОСТО ОБЩАЕМСЯ
+	// 3) ПОДПИСКА ЕСТЬ → ОБЫЧНЫЙ ДИАЛОГ
 	// =====================================================
 	if status == "active" {
 		mainKB := app.BuildMainKeyboard(botID, "active")
+
 		switch {
 		case msg.Voice != nil:
 			app.handleVoice(ctx, botID, bot, msg, tgID, mainKB)
@@ -180,16 +181,19 @@ func (app *BotApp) handleMessage(
 		return
 	}
 
-	// --- 4.1 TRIAL УЖЕ БЫЛ → ТОЛЬКО ПЛАТНЫЕ ТАРИФЫ
+	// --- 4.1 TRIAL УЖЕ БЫЛ → СРАЗУ ПЛАТНЫЕ ТАРИФЫ
 	if trialUsed {
 		menu := app.BuildSubscriptionMenu(ctx, botID)
-		out := tgbotapi.NewMessage(chatID, "⛔ Пробный тариф уже использован.\nВыбери тариф:")
+		out := tgbotapi.NewMessage(
+			chatID,
+			"⛔ Пробный тариф уже использован.\nВыбери тариф:",
+		)
 		out.ReplyMarkup = menu
 		bot.Send(out)
 		return
 	}
 
-	// --- 4.2 TRIAL НЕ БЫЛ → ОНБОРДИНГ
+	// --- 4.2 TRIAL НЕ БЫЛ → ОНБОРДИНГ + ВЫБОР КЛАССА
 	cfg, _ := app.BotsService.Get(ctx, botID)
 
 	if cfg != nil && cfg.WelcomeVideo != nil && *cfg.WelcomeVideo != "" {
@@ -207,14 +211,9 @@ func (app *BotApp) handleMessage(
 	msgOut.ReplyMarkup = app.BuildMainKeyboard(botID, status)
 	bot.Send(msgOut)
 
+	// ВАЖНО: здесь ТОЛЬКО выбор класса
 	bot.Send(tgbotapi.NewMessage(chatID, "Выбери класс:"))
 	app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
-
-	// после выбора класса — тарифы (trial + платные)
-	menu := app.BuildSubscriptionMenu(ctx, botID)
-	out := tgbotapi.NewMessage(chatID, "Доступные тарифы:")
-	out.ReplyMarkup = menu
-	bot.Send(out)
 }
 
 func extractTelegramID(u tgbotapi.Update) int64 {

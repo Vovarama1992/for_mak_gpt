@@ -27,7 +27,7 @@ func (app *BotApp) ShowClassPicker(
 	tgID int64,
 	chatID int64,
 ) {
-	list, err := app.ClassService.ListClasses(ctx)
+	list, err := app.ClassService.ListClasses(ctx, botID)
 	if err != nil {
 		bot.Send(tgbotapi.NewMessage(chatID, "Не удалось получить список классов"))
 		return
