@@ -99,19 +99,20 @@ func (h *ClassHandler) UpdateClass(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DELETE /classes/{class_id}
 func (h *ClassHandler) DeleteClass(w http.ResponseWriter, r *http.Request) {
-	botID := getBotID(r)
-
 	idStr := chi.URLParam(r, "class_id")
-	id, _ := strconv.Atoi(idStr)
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "invalid class_id", 400)
+		return
+	}
 
-	if err := h.svc.DeleteClass(r.Context(), botID, id); err != nil {
+	if err := h.svc.DeleteClassByID(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	w.WriteHeader(204)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 //

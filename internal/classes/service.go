@@ -14,12 +14,12 @@ func NewClassService(repo ClassRepo) ClassService {
 // classes
 //
 
-func (s *service) CreateClass(ctx context.Context, botID string, grade string) (*Class, error) {
-	return s.repo.CreateClass(ctx, botID, grade)
-}
-
 func (s *service) ListClasses(ctx context.Context) ([]*Class, error) {
 	return s.repo.ListClasses(ctx)
+}
+
+func (s *service) CreateClass(ctx context.Context, botID string, grade string) (*Class, error) {
+	return s.repo.CreateClass(ctx, botID, grade)
 }
 
 func (s *service) GetClassByID(ctx context.Context, botID string, id int) (*Class, error) {
@@ -30,8 +30,9 @@ func (s *service) UpdateClass(ctx context.Context, botID string, id int, grade s
 	return s.repo.UpdateClass(ctx, botID, id, grade)
 }
 
-func (s *service) DeleteClass(ctx context.Context, botID string, id int) error {
-	return s.repo.DeleteClass(ctx, botID, id)
+// ВОТ ТУТ — как было концептуально, но уже без bot_id в роуте
+func (s *service) DeleteClassByID(ctx context.Context, id int) error {
+	return s.repo.DeleteClassByID(ctx, id)
 }
 
 //

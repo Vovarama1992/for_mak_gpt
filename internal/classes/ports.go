@@ -33,7 +33,7 @@ type ClassRepo interface {
 	ListClasses(ctx context.Context) ([]*Class, error)
 	GetClassByID(ctx context.Context, botID string, id int) (*Class, error)
 	UpdateClass(ctx context.Context, botID string, id int, grade string) error
-	DeleteClass(ctx context.Context, botID string, id int) error
+	DeleteClassByID(ctx context.Context, id int) error
 
 	// class_prompts
 	CreatePrompt(ctx context.Context, botID string, classID int, prompt string) (*ClassPrompt, error)
@@ -53,7 +53,7 @@ type ClassService interface {
 	ListClasses(ctx context.Context) ([]*Class, error)
 	GetClassByID(ctx context.Context, botID string, id int) (*Class, error)
 	UpdateClass(ctx context.Context, botID string, id int, grade string) error
-	DeleteClass(ctx context.Context, botID string, id int) error
+	DeleteClassByID(ctx context.Context, id int) error
 
 	// prompts
 	CreatePrompt(ctx context.Context, botID string, classID int, prompt string) (*ClassPrompt, error)

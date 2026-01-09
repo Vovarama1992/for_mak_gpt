@@ -114,11 +114,11 @@ func (r *repo) UpdateClass(ctx context.Context, botID string, id int, grade stri
 	return err
 }
 
-func (r *repo) DeleteClass(ctx context.Context, botID string, id int) error {
+func (r *repo) DeleteClassByID(ctx context.Context, id int) error {
 	_, err := r.db.ExecContext(ctx,
 		`DELETE FROM user_classes
-		 WHERE class_id=$1 AND bot_id=$2`,
-		id, botID,
+		 WHERE class_id = $1`,
+		id,
 	)
 	if err != nil {
 		return err
@@ -126,8 +126,8 @@ func (r *repo) DeleteClass(ctx context.Context, botID string, id int) error {
 
 	_, err = r.db.ExecContext(ctx,
 		`DELETE FROM class_prompts
-		 WHERE class_id=$1 AND bot_id=$2`,
-		id, botID,
+		 WHERE class_id = $1`,
+		id,
 	)
 	if err != nil {
 		return err
@@ -135,8 +135,8 @@ func (r *repo) DeleteClass(ctx context.Context, botID string, id int) error {
 
 	_, err = r.db.ExecContext(ctx,
 		`DELETE FROM classes
-		 WHERE id=$1 AND bot_id=$2`,
-		id, botID,
+		 WHERE id = $1`,
+		id,
 	)
 
 	return err
