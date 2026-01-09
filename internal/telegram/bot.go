@@ -92,7 +92,7 @@ func (app *BotApp) handleMessage(
 	// =====================================================
 	if status == "none" {
 		anchor := tgbotapi.NewMessage(chatID, " ")
-		anchor.ReplyMarkup = app.BuildMainKeyboard("none")
+		anchor.ReplyMarkup = app.BuildMainKeyboard(botID, "none")
 		bot.Send(anchor)
 	}
 
@@ -106,7 +106,7 @@ func (app *BotApp) handleMessage(
 		}
 
 		m := tgbotapi.NewMessage(chatID, "Настройки сброшены. Начнём заново.")
-		m.ReplyMarkup = app.BuildMainKeyboard("none")
+		m.ReplyMarkup = app.BuildMainKeyboard(botID, "none")
 		bot.Send(m)
 		return
 	}
@@ -123,7 +123,7 @@ func (app *BotApp) handleMessage(
 	}
 
 	if strings.Contains(textLower, "минут") {
-		menu := app.BuildMinutePackagesMenu(ctx, botID)
+		menu := app.BuildMinutePackagesMenu(ctx, botID, tgID)
 		out := tgbotapi.NewMessage(chatID, "Выбери пакет минут:")
 		out.ReplyMarkup = menu
 		bot.Send(out)
@@ -148,30 +148,50 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// 3) АКТИВАЦИЯ TRIAL (КАК БЫЛО)
+	// 3) TRIAL — ЯВНОЕ ПРЕДЛОЖЕНИЕ
 	// =====================================================
 	isStart := textLower == "/start" || strings.Contains(textLower, "начать")
 
-	if (status == "none" || status == "expired") && (isStart || text != "") {
+	if (status == "none" || status == "expired") && isStart {
 		trial, err := app.TariffService.GetTrial(ctx, botID)
-		if err == nil && trial != nil {
-			_ = app.SubscriptionService.ActivateTrial(ctx, botID, tgID, trial.Code)
-			if newStatus, err := app.SubscriptionService.GetStatus(ctx, botID, tgID); err == nil {
-				status = newStatus
-				log.Printf("[trial] after activate tg=%d status=%s", tgID, status)
-			}
+		if err != nil || trial == nil {
+			// trial не настроен — сразу тарифы
+			menu := app.BuildSubscriptionMenu(ctx, botID)
+			out := tgbotapi.NewMessage(chatID, "Выбери тариф:")
+			out.ReplyMarkup = menu
+			bot.Send(out)
+			return
 		}
-	}
 
-	// =====================================================
-	// FIX: ЕСЛИ START, НО STATUS ВСЁ ЕЩЁ НЕ ACTIVE → ТАРИФЫ
-	// (устраняет зацикливание)
-	// =====================================================
-	if isStart && status != "active" {
+		used, err := app.TrialRepo.Exists(ctx, botID, tgID)
+		if err != nil {
+			app.ErrorNotify.Notify(ctx, botID, err, "Ошибка проверки trial usage")
+			return
+		}
+
+		if !used {
+			text := "🎁 Пробный тариф\n\n" + trial.Description
+
+			kb := tgbotapi.NewInlineKeyboardMarkup(
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData(
+						"🚀 Активировать trial",
+						"activate_trial",
+					),
+				),
+			)
+
+			msg := tgbotapi.NewMessage(chatID, text)
+			msg.ReplyMarkup = kb
+			bot.Send(msg)
+			return
+		}
+
+		// trial уже был — обычные тарифы
 		menu := app.BuildSubscriptionMenu(ctx, botID)
 		out := tgbotapi.NewMessage(
 			chatID,
-			"⛔ Пробный тариф недоступен. Выбери тариф:",
+			"⛔ Пробный тариф уже использован. Выбери тариф:",
 		)
 		out.ReplyMarkup = menu
 		bot.Send(out)
@@ -179,15 +199,14 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// 4) ONBOARDING: VIDEO + TEXT — ВСЕМ
-	//    ВЫБОР КЛАССА — НЕ assistant И ЕСЛИ НЕТ КЛАССА
+	// 4) ONBOARDING: VIDEO + TEXT + NEXT STEP — ВСЕМ
 	// =====================================================
 	if isStart {
 		cfg, _ := app.BotsService.Get(ctx, botID)
 
 		if cfg != nil && cfg.WelcomeVideo != nil && *cfg.WelcomeVideo != "" {
 			video := tgbotapi.NewVideo(chatID, tgbotapi.FileURL(*cfg.WelcomeVideo))
-			video.ReplyMarkup = app.BuildMainKeyboard(status)
+			video.ReplyMarkup = app.BuildMainKeyboard(botID, status)
 			bot.Send(video)
 		}
 
@@ -197,23 +216,46 @@ func (app *BotApp) handleMessage(
 		}
 
 		msgOut := tgbotapi.NewMessage(chatID, welcome)
-		msgOut.ReplyMarkup = app.BuildMainKeyboard(status)
+		msgOut.ReplyMarkup = app.BuildMainKeyboard(botID, status)
 		bot.Send(msgOut)
 
-		if botID != "assistant" {
-			uc, _ := app.ClassService.GetUserClass(ctx, botID, tgID)
-			if uc == nil {
-				app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
-			}
+		// ---- единый следующий шаг, разный текст ----
+		nextText := "Выбери класс"
+		if botID == "assistant" {
+			nextText = "Как со мной общаться?"
 		}
 
+		next := tgbotapi.NewMessage(chatID, nextText)
+		next.ReplyMarkup = app.BuildMainKeyboard(botID, status)
+		bot.Send(next)
+
+		// показываем picker всем
+		app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
+
+		return
+	}
+
+	// =====================================================
+	// X) ОЧИСТКА ИСТОРИИ
+	// =====================================================
+	if strings.Contains(textLower, "очист") {
+		if err := app.RecordService.DeleteUserHistory(ctx, botID, tgID); err != nil {
+			m := tgbotapi.NewMessage(chatID, "⚠️ Не удалось очистить историю.")
+			m.ReplyMarkup = app.BuildMainKeyboard(botID, status)
+			bot.Send(m)
+			return
+		}
+
+		m := tgbotapi.NewMessage(chatID, "🗑 История диалога очищена.")
+		m.ReplyMarkup = app.BuildMainKeyboard(botID, status)
+		bot.Send(m)
 		return
 	}
 
 	// =====================================================
 	// 5) ACTIVE — КОНТЕНТ (КАК БЫЛО)
 	// =====================================================
-	mainKB := app.BuildMainKeyboard("active")
+	mainKB := app.BuildMainKeyboard(botID, "active")
 
 	switch {
 	case msg.Voice != nil:

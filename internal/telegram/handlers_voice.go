@@ -44,7 +44,7 @@ func (app *BotApp) handleVoice(
 		}
 
 		m := tgbotapi.NewMessage(chatID, text)
-		m.ReplyMarkup = app.BuildMinutePackagesMenu(ctx, botID)
+		m.ReplyMarkup = app.BuildMinutePackagesMenu(ctx, botID, tgID)
 		bot.Send(m)
 		return
 	}
@@ -118,10 +118,6 @@ func (app *BotApp) handleVoice(
 	defer os.Remove(outVoice)
 
 	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
-
-	anchor := tgbotapi.NewMessage(chatID, "🎧 Ответ голосом:")
-	anchor.ReplyMarkup = mainKB
-	bot.Send(anchor)
 
 	bot.Send(tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice)))
 

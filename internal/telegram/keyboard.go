@@ -2,10 +2,19 @@ package telegram
 
 import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
-func (app *BotApp) BuildMainKeyboard(status string) tgbotapi.ReplyKeyboardMarkup {
+func (app *BotApp) BuildMainKeyboard(botID, status string) tgbotapi.ReplyKeyboardMarkup {
 	first := "🟢 Начать урок"
+
+	if botID == "assistant" {
+		first = "🟢 Начать диалог"
+	}
+
 	if status == "active" {
-		first = "🟢 Продолжить"
+		if botID == "assistant" {
+			first = "🟢 Продолжить диалог"
+		} else {
+			first = "🟢 Продолжить"
+		}
 	}
 
 	row1 := tgbotapi.NewKeyboardButtonRow(
@@ -14,7 +23,7 @@ func (app *BotApp) BuildMainKeyboard(status string) tgbotapi.ReplyKeyboardMarkup
 
 	row2 := tgbotapi.NewKeyboardButtonRow(
 		tgbotapi.NewKeyboardButton("💳 Тарифы"),
-		tgbotapi.NewKeyboardButton("📦 Пакеты минут"),
+		tgbotapi.NewKeyboardButton("📦 Остаток минут"),
 	)
 
 	row3 := tgbotapi.NewKeyboardButtonRow(

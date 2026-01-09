@@ -15,6 +15,7 @@ import (
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 	"github.com/Vovarama1992/make_ziper/internal/speech"
 	"github.com/Vovarama1992/make_ziper/internal/textrules"
+	"github.com/Vovarama1992/make_ziper/internal/trial"
 	"github.com/Vovarama1992/make_ziper/internal/user"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -32,13 +33,16 @@ type BotApp struct {
 	SubscriptionService  ports.SubscriptionService
 	TariffService        ports.TariffService
 	MinutePackageService mpkg.MinutePackageService
-	AiService            *ai.AiService
-	SpeechService        *speech.Service
-	TextRuleService      textrules.Service
-	RecordService        ports.RecordService
-	S3Service            ports.S3Service
-	PDFService           pdf.PDFService
-	DocService           doc.Service
+
+	TrialRepo trial.RepoInf // ← ВОТ ОНО
+
+	AiService       *ai.AiService
+	SpeechService   *speech.Service
+	TextRuleService textrules.Service
+	RecordService   ports.RecordService
+	S3Service       ports.S3Service
+	PDFService      pdf.PDFService
+	DocService      doc.Service
 
 	BotsService bots.Service
 	UserService user.Service
@@ -50,7 +54,6 @@ type BotApp struct {
 
 	ClassService classes.ClassService
 
-	// ✅ НОВОЕ: отдельный admin-бот
 	adminBot         *AdminBot
 	adminBotUsername string
 }
@@ -63,6 +66,7 @@ func NewBotApp(
 	subs ports.SubscriptionService,
 	tariffs ports.TariffService,
 	minutePkg mpkg.MinutePackageService,
+	trialRepo trial.RepoInf, // ← ДОБАВИЛИ
 	ai *ai.AiService,
 	speech *speech.Service,
 	textRules textrules.Service,
@@ -78,18 +82,23 @@ func NewBotApp(
 	if minutePkg == nil {
 		panic("MinutePackageService is nil")
 	}
+	if trialRepo == nil {
+		panic("TrialRepo is nil")
+	}
 
 	return &BotApp{
 		SubscriptionService:  subs,
 		TariffService:        tariffs,
 		MinutePackageService: minutePkg,
-		AiService:            ai,
-		SpeechService:        speech,
-		TextRuleService:      textRules,
-		RecordService:        record,
-		S3Service:            s3,
-		PDFService:           pdf,
-		DocService:           doc,
+		TrialRepo:            trialRepo,
+
+		AiService:       ai,
+		SpeechService:   speech,
+		TextRuleService: textRules,
+		RecordService:   record,
+		S3Service:       s3,
+		PDFService:      pdf,
+		DocService:      doc,
 
 		BotsService: bots,
 		UserService: userSvc,

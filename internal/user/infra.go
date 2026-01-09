@@ -33,24 +33,5 @@ func (i *infra) ResetUserSettings(
 		return err
 	}
 
-	// 2) подписка
-	if _, err := tx.ExecContext(ctx, `
-		DELETE FROM subscriptions
-		WHERE bot_id = $1 AND telegram_id = $2
-	`, botID, telegramID); err != nil {
-		return err
-	}
-
-	// 3) состояние истории (курсор / токены)
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE history_state
-		SET last_n_records = 0,
-		    total_tokens = 0,
-		    updated_at = NOW()
-		WHERE bot_id = $1 AND telegram_id = $2
-	`, botID, telegramID); err != nil {
-		return err
-	}
-
 	return tx.Commit()
 }

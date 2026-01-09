@@ -165,6 +165,7 @@ func main() {
 		subscriptionService,
 		tariffService,
 		minutePackageService,
+		trialRepo,
 		aiService,
 		speechService,
 		textRuleService,

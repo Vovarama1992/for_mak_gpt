@@ -30,7 +30,7 @@ func (app *BotApp) handleCallback(
 	// 1) Покупка минут
 	// ---------------------------
 	if data == "buy_voice" {
-		menu := app.BuildMinutePackagesMenu(ctx, botID)
+		menu := app.BuildMinutePackagesMenu(ctx, botID, tgID)
 
 		edit := tgbotapi.NewEditMessageText(
 			chatID,
@@ -85,10 +85,12 @@ func (app *BotApp) handleCallback(
 			return
 		}
 
-		bot.Send(tgbotapi.NewMessage(
+		msg := tgbotapi.NewMessage(
 			chatID,
 			fmt.Sprintf("🔄 Для оплаты перейди по ссылке:\n%s", payURL),
-		))
+		)
+		msg.ReplyMarkup = app.BuildMainKeyboard(botID, status)
+		bot.Send(msg)
 		return
 	}
 
@@ -115,12 +117,50 @@ func (app *BotApp) handleCallback(
 				return
 			}
 
-			bot.Send(tgbotapi.NewMessage(
+			msg := tgbotapi.NewMessage(
 				chatID,
 				fmt.Sprintf("✅ Ссылка на оплату\n%s", paymentURL),
+			)
+			msg.ReplyMarkup = app.BuildMainKeyboard(botID, status)
+			bot.Send(msg)
+			return
+		}
+	}
+
+	// ---------------------------
+	// 5) Активация TRIAL
+	// ---------------------------
+	if data == "activate_trial" {
+
+		trial, err := app.TariffService.GetTrial(ctx, botID)
+		if err != nil || trial == nil {
+			bot.Send(tgbotapi.NewMessage(
+				chatID,
+				"❗ Пробный тариф недоступен.",
 			))
 			return
 		}
+
+		// просто активируем — UI уже проверил, что trial не был
+		if err := app.SubscriptionService.ActivateTrial(
+			ctx,
+			botID,
+			tgID,
+			trial.Code,
+		); err != nil {
+			app.ErrorNotify.Notify(ctx, botID, err, "Ошибка активации trial")
+			bot.Send(tgbotapi.NewMessage(
+				chatID,
+				"⚠️ Не удалось активировать пробный тариф.",
+			))
+			return
+		}
+
+		bot.Send(tgbotapi.NewMessage(
+			chatID,
+			"✅ Пробный тариф активирован!",
+		))
+		return
 	}
 
 	// ---------------------------

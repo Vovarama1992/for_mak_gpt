@@ -8,12 +8,24 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// BuildMinutePackagesMenu — показывает кнопки с пакетами минут
+// BuildMinutePackagesMenu — показывает кнопки с пакетами минут + остаток
 func (app *BotApp) BuildMinutePackagesMenu(
 	ctx context.Context,
 	botID string,
+	tgID int64,
 ) tgbotapi.InlineKeyboardMarkup {
 
+	var rows [][]tgbotapi.InlineKeyboardButton
+
+	// --- ОСТАТОК МИНУТ ---
+	sub, err := app.SubscriptionService.Get(ctx, botID, tgID)
+	if err == nil && sub != nil {
+		label := "🎧 Остаток минут: " + strconv.FormatFloat(sub.VoiceMinutes, 'f', -1, 64)
+		btn := tgbotapi.NewInlineKeyboardButtonData(label, "none")
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(btn))
+	}
+
+	// --- ПАКЕТЫ ---
 	pkgs, err := app.MinutePackageService.ListAll(ctx)
 	if err != nil {
 		log.Printf("[minute_packages] load fail: %v", err)
@@ -23,14 +35,8 @@ func (app *BotApp) BuildMinutePackagesMenu(
 		)
 	}
 
-	var rows [][]tgbotapi.InlineKeyboardButton
-
 	for _, p := range pkgs {
-		if p.BotID != botID {
-			continue
-		}
-
-		if !p.Active {
+		if p.BotID != botID || !p.Active {
 			continue
 		}
 
