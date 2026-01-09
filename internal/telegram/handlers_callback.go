@@ -61,10 +61,7 @@ func (app *BotApp) handleCallback(
 		)
 		bot.Request(edit)
 
-		menu := app.BuildSubscriptionMenu(ctx, botID)
-
 		msg := tgbotapi.NewMessage(chatID, "Выбери тариф:")
-		msg.ReplyMarkup = menu
 		bot.Send(msg)
 		return
 	}

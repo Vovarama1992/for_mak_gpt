@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 
@@ -196,12 +197,14 @@ func (app *BotApp) handleMessage(
 	// --- 4.2 TRIAL НЕ БЫЛ → ОНБОРДИНГ + ВЫБОР КЛАССА
 	cfg, _ := app.BotsService.Get(ctx, botID)
 
+	// приветственное видео
 	if cfg != nil && cfg.WelcomeVideo != nil && *cfg.WelcomeVideo != "" {
 		video := tgbotapi.NewVideo(chatID, tgbotapi.FileURL(*cfg.WelcomeVideo))
 		video.ReplyMarkup = app.BuildMainKeyboard(botID, status)
 		bot.Send(video)
 	}
 
+	// приветственный текст
 	welcome := "Привет! Я — твой AI-репетитор 🤖"
 	if cfg != nil && cfg.WelcomeText != nil {
 		welcome = strings.TrimSpace(*cfg.WelcomeText)
@@ -211,9 +214,41 @@ func (app *BotApp) handleMessage(
 	msgOut.ReplyMarkup = app.BuildMainKeyboard(botID, status)
 	bot.Send(msgOut)
 
-	// ВАЖНО: здесь ТОЛЬКО выбор класса
+	// активируем trial
+	trial, err := app.TariffService.GetTrial(ctx, botID)
+	if err != nil || trial == nil {
+		bot.Send(tgbotapi.NewMessage(chatID, "❗ Пробный тариф недоступен."))
+		return
+	}
+
+	if err := app.SubscriptionService.ActivateTrial(
+		ctx,
+		botID,
+		tgID,
+		trial.Code,
+	); err != nil {
+		app.ErrorNotify.Notify(ctx, botID, err, "Ошибка активации trial")
+		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось активировать пробный тариф."))
+		return
+	}
+
+	// сообщение о trial
+	trialMsg := tgbotapi.NewMessage(
+
+		chatID,
+		fmt.Sprintf(
+			"✅ Пробный доступ активирован\n⏳ %d дн\n🎧 %.0f мин голосовых",
+			trial.DurationMinutes/(60*24),
+			trial.VoiceMinutes,
+		),
+	)
+	trialMsg.ReplyMarkup = app.BuildMainKeyboard(botID, "active")
+	bot.Send(trialMsg)
+
+	// выбор класса
 	bot.Send(tgbotapi.NewMessage(chatID, "Выбери класс:"))
 	app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
+
 }
 
 func extractTelegramID(u tgbotapi.Update) int64 {
