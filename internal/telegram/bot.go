@@ -2,7 +2,6 @@ package telegram
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"strings"
 
@@ -231,19 +230,6 @@ func (app *BotApp) handleMessage(
 		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось активировать пробный тариф."))
 		return
 	}
-
-	// сообщение о trial
-	trialMsg := tgbotapi.NewMessage(
-
-		chatID,
-		fmt.Sprintf(
-			"✅ Пробный доступ активирован\n⏳ %d дн\n🎧 %.0f мин голосовых",
-			trial.DurationMinutes/(60*24),
-			trial.VoiceMinutes,
-		),
-	)
-	trialMsg.ReplyMarkup = app.BuildMainKeyboard(botID, "active")
-	bot.Send(trialMsg)
 
 	// выбор класса
 	bot.Send(tgbotapi.NewMessage(chatID, "Выбери класс:"))
