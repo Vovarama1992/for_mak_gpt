@@ -154,15 +154,15 @@ func (h *SubscriptionHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type dto struct {
-		ID         int64   `json:"id"`
-		BotID      string  `json:"bot_id"`
-		TelegramID int64   `json:"telegram_id"`
-		PlanName   string  `json:"plan_name"`
-		Status     string  `json:"status"`
-		StartedAt  *string `json:"started_at"`
-		ExpiresAt  *string `json:"expires_at"`
+		ID           int64    `json:"id"`
+		BotID        string   `json:"bot_id"`
+		TelegramID   int64    `json:"telegram_id"`
+		PlanName     string   `json:"plan_name"`
+		Status       string   `json:"status"`
+		StartedAt    *string  `json:"started_at"`
+		ExpiresAt    *string  `json:"expires_at"`
+		VoiceMinutes *float64 `json:"voice_minutes"`
 	}
-
 	out := make([]dto, 0, len(subs))
 
 	for _, s := range subs {
@@ -177,14 +177,20 @@ func (h *SubscriptionHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 			expires = &str
 		}
 
+		var vm *float64
+		if s.VoiceMinutes > 0 {
+			vm = &s.VoiceMinutes
+		}
+
 		out = append(out, dto{
-			ID:         s.ID,
-			BotID:      s.BotID,
-			TelegramID: s.TelegramID,
-			PlanName:   s.PlanName,
-			Status:     s.Status,
-			StartedAt:  started,
-			ExpiresAt:  expires,
+			ID:           s.ID,
+			BotID:        s.BotID,
+			TelegramID:   s.TelegramID,
+			PlanName:     s.PlanName,
+			Status:       s.Status,
+			StartedAt:    started,
+			ExpiresAt:    expires,
+			VoiceMinutes: vm,
 		})
 	}
 
