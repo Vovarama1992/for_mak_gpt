@@ -60,9 +60,6 @@ func (app *BotApp) handleCallback(
 			tgbotapi.InlineKeyboardMarkup{},
 		)
 		bot.Request(edit)
-
-		msg := tgbotapi.NewMessage(chatID, "Выбери тариф:")
-		bot.Send(msg)
 		return
 	}
 
