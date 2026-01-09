@@ -88,13 +88,11 @@ func (app *BotApp) handleMessage(
 	log.Printf("[handleMessage] tg=%d status=%s text=%q", tgID, status, text)
 
 	// =====================================================
-	// 0) ЯКОРЬ — КЛАВИАТУРА ВСЕГДА
+	// 0) КЛАВИАТУРА ВСЕГДА
 	// =====================================================
-	if status == "none" {
-		anchor := tgbotapi.NewMessage(chatID, " ")
-		anchor.ReplyMarkup = app.BuildMainKeyboard(botID, "none")
-		bot.Send(anchor)
-	}
+	anchor := tgbotapi.NewMessage(chatID, " ")
+	anchor.ReplyMarkup = app.BuildMainKeyboard(botID, status)
+	bot.Send(anchor)
 
 	// =====================================================
 	// 1) СБРОС НАСТРОЕК
@@ -104,8 +102,7 @@ func (app *BotApp) handleMessage(
 			bot.Send(tgbotapi.NewMessage(chatID, "Ошибка сброса настроек."))
 			return
 		}
-
-		m := tgbotapi.NewMessage(chatID, "Настройки сброшены. Начнём заново.")
+		m := tgbotapi.NewMessage(chatID, "Настройки сброшены.")
 		m.ReplyMarkup = app.BuildMainKeyboard(botID, "none")
 		bot.Send(m)
 		return
@@ -116,7 +113,7 @@ func (app *BotApp) handleMessage(
 	// =====================================================
 	if strings.Contains(textLower, "ариф") {
 		menu := app.BuildSubscriptionMenu(ctx, botID)
-		out := tgbotapi.NewMessage(chatID, "💳 Выбери тариф ниже:")
+		out := tgbotapi.NewMessage(chatID, "💳 Выбери тариф:")
 		out.ReplyMarkup = menu
 		bot.Send(out)
 		return
@@ -124,7 +121,7 @@ func (app *BotApp) handleMessage(
 
 	if strings.Contains(textLower, "минут") {
 		menu := app.BuildMinutePackagesMenu(ctx, botID, tgID)
-		out := tgbotapi.NewMessage(chatID, "Выбери пакет минут:")
+		out := tgbotapi.NewMessage(chatID, "🎧 Пакеты минут:")
 		out.ReplyMarkup = menu
 		bot.Send(out)
 		return
@@ -132,15 +129,14 @@ func (app *BotApp) handleMessage(
 
 	if strings.Contains(textLower, "помощ") {
 		if app.adminBotUsername == "" {
-			bot.Send(tgbotapi.NewMessage(chatID, "Поддержка временно недоступна."))
+			bot.Send(tgbotapi.NewMessage(chatID, "Поддержка недоступна."))
 			return
 		}
-
 		url := "https://t.me/" + app.adminBotUsername + "?start=support"
-		m := tgbotapi.NewMessage(chatID, "🆘 Написать в поддержку:")
+		m := tgbotapi.NewMessage(chatID, "🆘 Поддержка:")
 		m.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonURL("✉️ Поддержка", url),
+				tgbotapi.NewInlineKeyboardButtonURL("✉️ Написать", url),
 			),
 		)
 		bot.Send(m)
@@ -148,135 +144,77 @@ func (app *BotApp) handleMessage(
 	}
 
 	// =====================================================
-	// 3) TRIAL — ЯВНОЕ ПРЕДЛОЖЕНИЕ
+	// 3) ЕСЛИ ПОДПИСКА ЕСТЬ — ПРОСТО ОБЩАЕМСЯ
 	// =====================================================
-	isStart := textLower == "/start" || strings.Contains(textLower, "начать")
-
-	if (status == "none" || status == "expired") && isStart {
-		trial, err := app.TariffService.GetTrial(ctx, botID)
-		if err != nil || trial == nil {
-			// trial не настроен — сразу тарифы
-			menu := app.BuildSubscriptionMenu(ctx, botID)
-			out := tgbotapi.NewMessage(chatID, "Выбери тариф:")
-			out.ReplyMarkup = menu
-			bot.Send(out)
-			return
+	if status == "active" {
+		mainKB := app.BuildMainKeyboard(botID, "active")
+		switch {
+		case msg.Voice != nil:
+			app.handleVoice(ctx, botID, bot, msg, tgID, mainKB)
+		case msg.Document != nil:
+			if isPDF(msg.Document) {
+				app.handlePDF(ctx, botID, bot, msg, tgID, mainKB)
+			} else if isWord(msg.Document) {
+				app.handleDoc(ctx, botID, bot, msg, tgID, mainKB)
+			} else {
+				app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
+			}
+		case len(msg.Photo) > 0:
+			app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
+		case text != "":
+			app.handleText(ctx, botID, bot, msg, tgID, mainKB)
+		default:
+			m := tgbotapi.NewMessage(chatID, "Отправь текст, голос или файл.")
+			m.ReplyMarkup = mainKB
+			bot.Send(m)
 		}
+		return
+	}
 
-		used, err := app.TrialRepo.Exists(ctx, botID, tgID)
-		if err != nil {
-			app.ErrorNotify.Notify(ctx, botID, err, "Ошибка проверки trial usage")
-			return
-		}
+	// =====================================================
+	// 4) ПОДПИСКИ НЕТ
+	// =====================================================
+	trialUsed, err := app.TrialRepo.Exists(ctx, botID, tgID)
+	if err != nil {
+		app.ErrorNotify.Notify(ctx, botID, err, "Ошибка проверки trial")
+		return
+	}
 
-		if !used {
-			text := "🎁 Пробный тариф\n\n" + trial.Description
-
-			kb := tgbotapi.NewInlineKeyboardMarkup(
-				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData(
-						"🚀 Активировать trial",
-						"activate_trial",
-					),
-				),
-			)
-
-			msg := tgbotapi.NewMessage(chatID, text)
-			msg.ReplyMarkup = kb
-			bot.Send(msg)
-			return
-		}
-
-		// trial уже был — обычные тарифы
+	// --- 4.1 TRIAL УЖЕ БЫЛ → ТОЛЬКО ПЛАТНЫЕ ТАРИФЫ
+	if trialUsed {
 		menu := app.BuildSubscriptionMenu(ctx, botID)
-		out := tgbotapi.NewMessage(
-			chatID,
-			"⛔ Пробный тариф уже использован. Выбери тариф:",
-		)
+		out := tgbotapi.NewMessage(chatID, "⛔ Пробный тариф уже использован.\nВыбери тариф:")
 		out.ReplyMarkup = menu
 		bot.Send(out)
 		return
 	}
 
-	// =====================================================
-	// 4) ONBOARDING: VIDEO + TEXT + NEXT STEP — ВСЕМ
-	// =====================================================
-	if isStart {
-		cfg, _ := app.BotsService.Get(ctx, botID)
+	// --- 4.2 TRIAL НЕ БЫЛ → ОНБОРДИНГ
+	cfg, _ := app.BotsService.Get(ctx, botID)
 
-		if cfg != nil && cfg.WelcomeVideo != nil && *cfg.WelcomeVideo != "" {
-			video := tgbotapi.NewVideo(chatID, tgbotapi.FileURL(*cfg.WelcomeVideo))
-			video.ReplyMarkup = app.BuildMainKeyboard(botID, status)
-			bot.Send(video)
-		}
-
-		welcome := "Привет! Я — твой AI-репетитор 🤖"
-		if cfg != nil && cfg.WelcomeText != nil {
-			welcome = strings.TrimSpace(*cfg.WelcomeText)
-		}
-
-		msgOut := tgbotapi.NewMessage(chatID, welcome)
-		msgOut.ReplyMarkup = app.BuildMainKeyboard(botID, status)
-		bot.Send(msgOut)
-
-		// ---- единый следующий шаг, разный текст ----
-		nextText := "Выбери класс"
-		if botID == "assistant" {
-			nextText = "Как со мной общаться?"
-		}
-
-		next := tgbotapi.NewMessage(chatID, nextText)
-		next.ReplyMarkup = app.BuildMainKeyboard(botID, status)
-		bot.Send(next)
-
-		// показываем picker всем
-		app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
-
-		return
+	if cfg != nil && cfg.WelcomeVideo != nil && *cfg.WelcomeVideo != "" {
+		video := tgbotapi.NewVideo(chatID, tgbotapi.FileURL(*cfg.WelcomeVideo))
+		video.ReplyMarkup = app.BuildMainKeyboard(botID, status)
+		bot.Send(video)
 	}
 
-	// =====================================================
-	// X) ОЧИСТКА ИСТОРИИ
-	// =====================================================
-	if strings.Contains(textLower, "очист") {
-		if err := app.RecordService.DeleteUserHistory(ctx, botID, tgID); err != nil {
-			m := tgbotapi.NewMessage(chatID, "⚠️ Не удалось очистить историю.")
-			m.ReplyMarkup = app.BuildMainKeyboard(botID, status)
-			bot.Send(m)
-			return
-		}
-
-		m := tgbotapi.NewMessage(chatID, "🗑 История диалога очищена.")
-		m.ReplyMarkup = app.BuildMainKeyboard(botID, status)
-		bot.Send(m)
-		return
+	welcome := "Привет! Я — твой AI-репетитор 🤖"
+	if cfg != nil && cfg.WelcomeText != nil {
+		welcome = strings.TrimSpace(*cfg.WelcomeText)
 	}
 
-	// =====================================================
-	// 5) ACTIVE — КОНТЕНТ (КАК БЫЛО)
-	// =====================================================
-	mainKB := app.BuildMainKeyboard(botID, "active")
+	msgOut := tgbotapi.NewMessage(chatID, welcome)
+	msgOut.ReplyMarkup = app.BuildMainKeyboard(botID, status)
+	bot.Send(msgOut)
 
-	switch {
-	case msg.Voice != nil:
-		app.handleVoice(ctx, botID, bot, msg, tgID, mainKB)
-	case msg.Document != nil:
-		if isPDF(msg.Document) {
-			app.handlePDF(ctx, botID, bot, msg, tgID, mainKB)
-		} else if isWord(msg.Document) {
-			app.handleDoc(ctx, botID, bot, msg, tgID, mainKB)
-		} else {
-			app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
-		}
-	case len(msg.Photo) > 0:
-		app.handlePhoto(ctx, botID, bot, msg, tgID, mainKB)
-	case text != "":
-		app.handleText(ctx, botID, bot, msg, tgID, mainKB)
-	default:
-		m := tgbotapi.NewMessage(chatID, "📎 Отправь текст, голос, фото или документ.")
-		m.ReplyMarkup = mainKB
-		bot.Send(m)
-	}
+	bot.Send(tgbotapi.NewMessage(chatID, "Выбери класс:"))
+	app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
+
+	// после выбора класса — тарифы (trial + платные)
+	menu := app.BuildSubscriptionMenu(ctx, botID)
+	out := tgbotapi.NewMessage(chatID, "Доступные тарифы:")
+	out.ReplyMarkup = menu
+	bot.Send(out)
 }
 
 func extractTelegramID(u tgbotapi.Update) int64 {

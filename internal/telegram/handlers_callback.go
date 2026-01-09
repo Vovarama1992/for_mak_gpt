@@ -156,10 +156,16 @@ func (app *BotApp) handleCallback(
 			return
 		}
 
-		bot.Send(tgbotapi.NewMessage(
+		msg := tgbotapi.NewMessage(
 			chatID,
-			"✅ Пробный тариф активирован!",
-		))
+			fmt.Sprintf(
+				"✅ Пробный тариф активирован\n⏳ Дней: %d\n🎧 Голосовых минут: %.0f",
+				trial.DurationMinutes/(60*24),
+				trial.VoiceMinutes,
+			),
+		)
+		msg.ReplyMarkup = app.BuildMainKeyboard(botID, "active")
+		bot.Send(msg)
 		return
 	}
 
