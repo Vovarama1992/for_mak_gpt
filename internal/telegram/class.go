@@ -72,7 +72,12 @@ func (app *BotApp) ShowClassPicker(
 		))
 	}
 
-	msg := tgbotapi.NewMessage(chatID, "📚 Выбор класса")
+	title := "📚 Выбор класса"
+	if botID == "assistant" {
+		title = "🎭 Выбор стиля"
+	}
+
+	msg := tgbotapi.NewMessage(chatID, title)
 	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
 	bot.Send(msg)
 }
