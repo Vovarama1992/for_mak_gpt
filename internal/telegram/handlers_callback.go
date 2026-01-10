@@ -47,26 +47,41 @@ func (app *BotApp) handleCallback(
 	// ---------------------------
 	if strings.HasPrefix(data, "set_class_") {
 		idStr := strings.TrimPrefix(data, "set_class_")
-		classID, _ := strconv.Atoi(idStr)
+		classID, err := strconv.Atoi(idStr)
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID, "Некорректный класс"))
+			return
+		}
 
+		// сохранить класс
 		if err := app.ClassService.SetUserClass(ctx, botID, tgID, classID); err != nil {
 			bot.Send(tgbotapi.NewMessage(chatID, "Не удалось установить класс"))
 			return
 		}
 
-		edit := tgbotapi.NewEditMessageReplyMarkup(
+		// ДОСТАЁМ класс
+		class, err := app.ClassService.GetClassByID(ctx, botID, classID)
+		if err != nil || class == nil {
+			bot.Send(tgbotapi.NewMessage(chatID, "Класс выбран"))
+			return
+		}
+
+		// убираем inline
+		bot.Request(tgbotapi.NewEditMessageReplyMarkup(
 			chatID,
 			cb.Message.MessageID,
 			tgbotapi.InlineKeyboardMarkup{},
+		))
+
+		// точная отбивка
+		m := tgbotapi.NewMessage(
+			chatID,
+			fmt.Sprintf("Выбран %s. Можем начинать 👍", class.Grade),
 		)
-		bot.Request(edit)
-		// МИНИМАЛЬНЫЙ UX-ФИДБЕК
-		m := tgbotapi.NewMessage(chatID, "Класс выбран. Можем начинать 👍")
 		m.ReplyMarkup = app.BuildMainKeyboard(botID, "active")
 		bot.Send(m)
 		return
 	}
-
 	// ---------------------------
 	// 3) Пакеты минут
 	// ---------------------------
