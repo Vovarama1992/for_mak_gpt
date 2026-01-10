@@ -103,7 +103,7 @@ func (app *BotApp) handleMessage(
 			return
 		}
 
-		bot.Send(tgbotapi.NewMessage(chatID, "Настройки сброшены. Выбери класс."))
+		bot.Send(tgbotapi.NewMessage(chatID, "Настройки сброшены."))
 
 		app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
 		return
