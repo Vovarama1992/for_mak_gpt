@@ -60,6 +60,10 @@ func (app *BotApp) handleCallback(
 			tgbotapi.InlineKeyboardMarkup{},
 		)
 		bot.Request(edit)
+		// МИНИМАЛЬНЫЙ UX-ФИДБЕК
+		m := tgbotapi.NewMessage(chatID, "Класс выбран. Можем начинать 👍")
+		m.ReplyMarkup = app.BuildMainKeyboard(botID, "active")
+		bot.Send(m)
 		return
 	}
 
