@@ -51,3 +51,18 @@ func (r *Repo) Create(
 
 	return err
 }
+
+// Delete — удаляем факт использования trial
+func (r *Repo) Delete(
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+) error {
+
+	_, err := r.db.ExecContext(ctx, `
+		DELETE FROM trial_usages
+		WHERE bot_id = $1 AND telegram_id = $2
+	`, botID, telegramID)
+
+	return err
+}

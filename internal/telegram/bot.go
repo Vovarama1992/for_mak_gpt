@@ -97,14 +97,15 @@ func (app *BotApp) handleMessage(
 	// =====================================================
 	// 1) СБРОС НАСТРОЕК
 	// =====================================================
-	if strings.Contains(textLower, "сброс") {
+	if strings.Contains(textLower, "заново") {
 		if err := app.UserService.ResetUserSettings(ctx, botID, tgID); err != nil {
 			bot.Send(tgbotapi.NewMessage(chatID, "Ошибка сброса настроек."))
 			return
 		}
-		m := tgbotapi.NewMessage(chatID, "Настройки сброшены.")
-		m.ReplyMarkup = app.BuildMainKeyboard(botID, "none")
-		bot.Send(m)
+
+		bot.Send(tgbotapi.NewMessage(chatID, "Настройки сброшены. Выбери класс."))
+
+		app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
 		return
 	}
 
@@ -139,6 +140,21 @@ func (app *BotApp) handleMessage(
 				tgbotapi.NewInlineKeyboardButtonURL("✉️ Написать", url),
 			),
 		)
+		bot.Send(m)
+		return
+	}
+
+	// =====================================================
+	// X) ОЧИСТКА ДИАЛОГА
+	// =====================================================
+	if strings.Contains(textLower, "очист") {
+		if err := app.RecordService.DeleteUserHistory(ctx, botID, tgID); err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID, "Ошибка очистки диалога."))
+			return
+		}
+
+		m := tgbotapi.NewMessage(chatID, "🗑 Диалог очищен.")
+		m.ReplyMarkup = app.BuildMainKeyboard(botID, "none")
 		bot.Send(m)
 		return
 	}
@@ -232,7 +248,6 @@ func (app *BotApp) handleMessage(
 	}
 
 	// выбор класса
-	bot.Send(tgbotapi.NewMessage(chatID, "Выбери класс:"))
 	app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
 
 }

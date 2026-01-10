@@ -31,8 +31,8 @@ func (app *BotApp) BuildMainKeyboard(botID, status string) tgbotapi.ReplyKeyboar
 	)
 
 	row4 := tgbotapi.NewKeyboardButtonRow(
-		tgbotapi.NewKeyboardButton("🗑 Очистить историю"),
-		tgbotapi.NewKeyboardButton("🧹 Сбросить настройки"),
+		tgbotapi.NewKeyboardButton("🗑 Очистить диалог"),
+		tgbotapi.NewKeyboardButton("🧹 Начать заново"),
 	)
 
 	kb := tgbotapi.NewReplyKeyboard(row1, row2, row3, row4)

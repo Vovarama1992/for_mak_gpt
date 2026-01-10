@@ -386,14 +386,24 @@ func (s *SubscriptionService) Delete(
 	telegramID int64,
 ) error {
 
-	err := s.repo.Delete(ctx, botID, telegramID)
+	// если был trial — чистим факт использования
+	used, err := s.trialRepo.Exists(ctx, botID, telegramID)
 	if err != nil {
-		s.notifier.Notify(
-			ctx,
-			botID,
-			err,
-			fmt.Sprintf("Ошибка удаления подписки (tg=%d)", telegramID),
-		)
+		return err
+	}
+
+	if used {
+		if err := s.trialRepo.Delete(ctx, botID, telegramID); err != nil {
+			s.notifier.Notify(ctx, botID, err,
+				fmt.Sprintf("Ошибка очистки trial_usage (tg=%d)", telegramID))
+			return err
+		}
+	}
+
+	// удаляем подписку
+	if err := s.repo.Delete(ctx, botID, telegramID); err != nil {
+		s.notifier.Notify(ctx, botID, err,
+			fmt.Sprintf("Ошибка удаления подписки (tg=%d)", telegramID))
 		return err
 	}
 
