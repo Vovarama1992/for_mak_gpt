@@ -30,14 +30,25 @@ func (app *BotApp) handleCallback(
 	// 1) Покупка минут
 	// ---------------------------
 	if data == "buy_voice" {
+		sub, _ := app.SubscriptionService.Get(ctx, botID, tgID)
+
+		text := "Пакеты минут:"
+		if sub != nil {
+			text = fmt.Sprintf(
+				"🎧 Остаток минут: %.2f\n\nПакеты минут:",
+				sub.VoiceMinutes,
+			)
+		}
+
 		menu := app.BuildMinutePackagesMenu(ctx, botID, tgID)
 
 		edit := tgbotapi.NewEditMessageText(
 			chatID,
 			cb.Message.MessageID,
-			"Выбери пакет минут:",
+			text,
 		)
 		edit.ReplyMarkup = &menu
+
 		bot.Request(edit)
 		return
 	}
