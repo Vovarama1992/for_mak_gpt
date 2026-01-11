@@ -339,6 +339,24 @@ func (s *SubscriptionService) GetStatus(ctx context.Context, botID string, teleg
 	return sub.Status, nil
 }
 
+func (s *SubscriptionService) ExpireAndNotifyTrials(ctx context.Context) error {
+	subs, err := s.repo.ExpireDue(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, sub := range subs {
+		// если это trial и ещё не уведомляли
+		if sub.PlanID != nil {
+			trial, _ := s.tariffRepo.GetTrial(ctx, sub.BotID)
+			if trial != nil && int64(trial.ID) == *sub.PlanID {
+				// отправка уведомления + MarkTrialNotified
+			}
+		}
+	}
+	return nil
+}
+
 // ==================================================
 func (s *SubscriptionService) ListAll(ctx context.Context) ([]*ports.Subscription, error) {
 	list, err := s.repo.ListAll(ctx)

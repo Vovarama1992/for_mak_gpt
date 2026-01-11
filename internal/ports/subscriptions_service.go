@@ -20,6 +20,8 @@ type SubscriptionService interface {
 	// получение подписки целиком
 	Get(ctx context.Context, botID string, telegramID int64) (*Subscription, error)
 
+	ExpireAndNotifyTrials(ctx context.Context) error
+
 	// начисление минут по пакету
 	AddMinutesFromPackage(
 		ctx context.Context,

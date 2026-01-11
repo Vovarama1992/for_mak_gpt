@@ -30,6 +30,7 @@ type SubscriptionRepo interface {
 	AddVoiceMinutes(ctx context.Context, botID string, tgID int64, minutes float64) error
 
 	Delete(ctx context.Context, botID string, telegramID int64) error
+	ExpireDue(ctx context.Context) ([]*Subscription, error)
 	GetExpiredTrialsForNotify(ctx context.Context) ([]*Subscription, error)
 	MarkTrialNotified(ctx context.Context, id int64) error
 

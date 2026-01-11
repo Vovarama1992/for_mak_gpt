@@ -386,3 +386,38 @@ func (r *subscriptionRepo) UpdateLimits(
 
 	return err
 }
+
+// пометить все истёкшие как expired, вернуть их
+func (r *subscriptionRepo) ExpireDue(ctx context.Context) ([]*ports.Subscription, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		UPDATE subscriptions
+		SET status = 'expired', updated_at = NOW()
+		WHERE status = 'active'
+		  AND expires_at IS NOT NULL
+		  AND expires_at <= NOW()
+		RETURNING
+		  id, bot_id, telegram_id, plan_id, status,
+		  started_at, expires_at, updated_at, yookassa_payment_id, voice_minutes
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*ports.Subscription
+	for rows.Next() {
+		var s ports.Subscription
+		var yid sql.NullString
+		if err := rows.Scan(
+			&s.ID, &s.BotID, &s.TelegramID, &s.PlanID, &s.Status,
+			&s.StartedAt, &s.ExpiresAt, &s.UpdatedAt, &yid, &s.VoiceMinutes,
+		); err != nil {
+			return nil, err
+		}
+		if yid.Valid {
+			s.YookassaPaymentID = &yid.String
+		}
+		out = append(out, &s)
+	}
+	return out, nil
+}

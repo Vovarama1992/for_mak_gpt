@@ -243,23 +243,46 @@ func main() {
 		for range ticker.C {
 			ctx := context.Background()
 
+			// 1) чистим pending
 			if err := subscriptionService.CleanupPending(ctx, 5*time.Minute); err != nil {
 				log.Printf("[cleanup-pending] error: %v", err)
 			}
 
-			subs, err := subscriptionRepo.GetExpiredTrialsForNotify(ctx)
+			// 2) переводим все истёкшие active → expired
+			expired, err := subscriptionRepo.ExpireDue(ctx)
 			if err != nil {
-				log.Printf("[trial-check] error: %v", err)
+				log.Printf("[expire] error: %v", err)
 				continue
 			}
 
-			for _, sub := range subs {
+			// 3) уведомляем ТОЛЬКО триалы соответствующего бота
+			for _, sub := range expired {
+				if sub.PlanID == nil {
+					continue
+				}
+
+				// получаем trial для КОНКРЕТНОГО бота
+				trial, err := tariffRepo.GetTrial(ctx, sub.BotID)
+				if err != nil || trial == nil {
+					continue
+				}
+
+				// если это не trial — пропускаем
+				if *sub.PlanID != int64(trial.ID) {
+					continue
+				}
+
+				// если уже уведомляли — пропускаем
+				if sub.TrialNotifiedAt != nil {
+					continue
+				}
+
 				bot, ok := botApp.GetBots()[sub.BotID]
 				if !ok || bot == nil {
 					continue
 				}
 
-				text := botApp.BuildSubscriptionText(ctx, sub.BotID)
+				text := "⏳ Триал закончился.\n\n" + botApp.BuildSubscriptionText(ctx, sub.BotID)
 				kb := botApp.BuildSubscriptionMenu(ctx, sub.BotID)
 
 				msg := tgbotapi.NewMessage(sub.TelegramID, text)
