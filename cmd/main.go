@@ -282,7 +282,7 @@ func main() {
 					continue
 				}
 
-				text := "⏳ Триал закончился.\n\n" + botApp.BuildSubscriptionText(ctx, sub.BotID)
+				text := botApp.BuildSubscriptionText(ctx, sub.BotID)
 				kb := botApp.BuildSubscriptionMenu(ctx, sub.BotID)
 
 				msg := tgbotapi.NewMessage(sub.TelegramID, text)
