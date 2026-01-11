@@ -18,29 +18,30 @@ func (app *BotApp) BuildMinutePackagesMenu(
 
 	var rows [][]tgbotapi.InlineKeyboardButton
 
-	// -------- ОСТАТОК МИНУТ (ИНФО, НЕ ПАКЕТ) --------
+	// -------- ОСТАТОК МИНУТ (ИНФО) --------
 	sub, err := app.SubscriptionService.Get(ctx, botID, tgID)
 	if err == nil && sub != nil {
-		label := "🎧 Остаток минут: " +
-			strconv.FormatFloat(sub.VoiceMinutes, 'f', -1, 64)
-
-		// noop — чтобы было некликабельно логически
-		btn := tgbotapi.NewInlineKeyboardButtonData(label, "noop")
-		rows = append(rows, tgbotapi.NewInlineKeyboardRow(btn))
-
-		// визуальный разделитель
-		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("────────────", "noop"),
-		))
+		rows = append(rows,
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(
+					"🎧 Остаток минут: "+strconv.FormatFloat(sub.VoiceMinutes, 'f', 2, 64),
+					"noop",
+				),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("Пакеты минут:", "noop"),
+			),
+		)
 	}
 
-	// -------- ПАКЕТЫ МИНУТ --------
+	// -------- ПАКЕТЫ МИНУТ (КЛИКАБЕЛЬНЫЕ) --------
 	pkgs, err := app.MinutePackageService.ListAll(ctx)
 	if err != nil {
 		log.Printf("[minute_packages] load fail: %v", err)
-		btn := tgbotapi.NewInlineKeyboardButtonData("Ошибка загрузки пакетов", "noop")
 		return tgbotapi.NewInlineKeyboardMarkup(
-			tgbotapi.NewInlineKeyboardRow(btn),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("Ошибка загрузки пакетов", "noop"),
+			),
 		)
 	}
 
@@ -52,16 +53,19 @@ func (app *BotApp) BuildMinutePackagesMenu(
 		label := p.Name + " — " +
 			strconv.Itoa(p.Minutes) + " мин / " + formatRUB(p.Price)
 
-		data := "pkg_" + strconv.FormatInt(p.ID, 10)
-		btn := tgbotapi.NewInlineKeyboardButtonData(label, data)
+		btn := tgbotapi.NewInlineKeyboardButtonData(
+			label,
+			"pkg_"+strconv.FormatInt(p.ID, 10),
+		)
 
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(btn))
 	}
 
 	if len(rows) == 0 {
-		btn := tgbotapi.NewInlineKeyboardButtonData("Нет доступных пакетов", "noop")
 		return tgbotapi.NewInlineKeyboardMarkup(
-			tgbotapi.NewInlineKeyboardRow(btn),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("Нет доступных пакетов", "noop"),
+			),
 		)
 	}
 
