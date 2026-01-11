@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -27,8 +28,12 @@ func (app *BotApp) BuildMinutePackagesMenu(
 			continue
 		}
 
-		label := p.Name + " — " +
-			strconv.Itoa(p.Minutes) + " мин / " + formatRUB(p.Price)
+		label := fmt.Sprintf(
+			"%s — %d мин / %s",
+			p.Name,
+			p.Minutes,
+			formatRUB(p.Price),
+		)
 
 		rows = append(rows,
 			tgbotapi.NewInlineKeyboardRow(

@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 
@@ -119,10 +120,20 @@ func (app *BotApp) handleMessage(
 		bot.Send(out)
 		return
 	}
+	if textLower == "📦 остаток минут" {
+		sub, _ := app.SubscriptionService.Get(ctx, botID, tgID)
 
-	if strings.Contains(textLower, "минут") {
+		text := "🎧 Осталось минут: 0.00"
+		if sub != nil {
+			text = fmt.Sprintf(
+				"🎧 Осталось минут: %.2f\n\nПакеты минут:",
+				sub.VoiceMinutes,
+			)
+		}
+
 		menu := app.BuildMinutePackagesMenu(ctx, botID, tgID)
-		out := tgbotapi.NewMessage(chatID, "🎧 Пакеты минут:")
+
+		out := tgbotapi.NewMessage(chatID, text)
 		out.ReplyMarkup = menu
 		bot.Send(out)
 		return

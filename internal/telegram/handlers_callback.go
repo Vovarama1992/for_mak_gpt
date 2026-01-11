@@ -27,33 +27,6 @@ func (app *BotApp) handleCallback(
 	log.Printf("[callback] botID=%s tgID=%d data=%s", botID, tgID, data)
 
 	// ---------------------------
-	// 1) Покупка минут
-	// ---------------------------
-	if data == "buy_voice" {
-		sub, _ := app.SubscriptionService.Get(ctx, botID, tgID)
-
-		text := "Пакеты минут:"
-		if sub != nil {
-			text = fmt.Sprintf(
-				"🎧 Остаток минут: %.2f\n\nПакеты минут:",
-				sub.VoiceMinutes,
-			)
-		}
-
-		menu := app.BuildMinutePackagesMenu(ctx, botID, tgID)
-
-		edit := tgbotapi.NewEditMessageText(
-			chatID,
-			cb.Message.MessageID,
-			text,
-		)
-		edit.ReplyMarkup = &menu
-
-		bot.Request(edit)
-		return
-	}
-
-	// ---------------------------
 	// 2) Выбор класса
 	// ---------------------------
 	if strings.HasPrefix(data, "set_class_") {
