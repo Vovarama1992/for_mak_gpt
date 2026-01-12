@@ -59,6 +59,8 @@ func (app *BotApp) handlePDF(
 	log.Printf("[pdf] pages generated: %d", len(pages))
 
 	// 3. SAVE EACH PAGE
+	var firstImageURL *string
+
 	for i, p := range pages {
 		url, err := app.S3Service.SaveImage(
 			ctx, botID, tgID,
@@ -71,7 +73,10 @@ func (app *BotApp) handlePDF(
 			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка хранения страницы."))
 			return
 		}
-		log.Printf("[pdf] saved page=%d url=%s", i+1, url)
+
+		if firstImageURL == nil {
+			firstImageURL = &url
+		}
 
 		app.RecordService.AddImage(ctx, botID, tgID, "user", url)
 	}
@@ -85,7 +90,7 @@ func (app *BotApp) handlePDF(
 		ctx, botID, tgID,
 		"image",
 		"Разбери документ или документы.",
-		nil,
+		firstImageURL,
 	)
 	if err != nil {
 		log.Printf("[pdf] GPT ERROR: %v", err)
