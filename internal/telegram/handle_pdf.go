@@ -51,7 +51,9 @@ func (app *BotApp) handlePDF(
 	pages, err := app.PDFService.Convert(ctx, resp.Body)
 	if err != nil {
 		log.Printf("[pdf] CONVERT ERROR: %v", err)
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки PDF."))
+		m := tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки PDF.")
+		m.ReplyMarkup = mainKB
+		bot.Send(m)
 		return
 	}
 	log.Printf("[pdf] pages generated: %d", len(pages))
@@ -88,7 +90,9 @@ func (app *BotApp) handlePDF(
 	if err != nil {
 		log.Printf("[pdf] GPT ERROR: %v", err)
 		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
-		bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки PDF."))
+		m := tgbotapi.NewMessage(chatID, "⚠️ Ошибка обработки PDF.")
+		m.ReplyMarkup = mainKB
+		bot.Send(m)
 		return
 	}
 
