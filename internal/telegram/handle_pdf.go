@@ -101,7 +101,9 @@ func (app *BotApp) handlePDF(
 		return
 	}
 
-	bot.Send(tgbotapi.NewMessage(chatID, reply))
+	out := tgbotapi.NewMessage(chatID, reply)
+	out.ReplyMarkup = mainKB
+	bot.Send(out)
 	bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 
 	log.Printf("[pdf] DONE bot=%s tg=%d", botID, tgID)
