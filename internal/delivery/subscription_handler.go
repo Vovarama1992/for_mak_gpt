@@ -230,30 +230,31 @@ func (h *SubscriptionHandler) UpdateLimits(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var req struct {
-		Status       string     `json:"status"`
-		ExpiresAt    *time.Time `json:"expires_at"`
-		VoiceMinutes float64    `json:"voice_minutes"`
+	var raw struct {
+		Status       string  `json:"status"`
+		ExpiresAt    string  `json:"expires_at"`
+		VoiceMinutes float64 `json:"voice_minutes"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
 
-	if req.ExpiresAt == nil {
-		http.Error(w, "expires_at is required", http.StatusBadRequest)
+	t, err := time.Parse("2006-01-02", raw.ExpiresAt)
+	if err != nil {
+		http.Error(w, "invalid expires_at format", http.StatusBadRequest)
 		return
 	}
 
 	if err := h.service.UpdateLimits(
 		r.Context(),
 		subID,
-		req.Status,
-		req.ExpiresAt,
-		req.VoiceMinutes,
+		raw.Status,
+		&t,
+		raw.VoiceMinutes,
 	); err != nil {
-		http.Error(w, "failed to update subscription: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to update subscription: "+err.Error(), 500)
 		return
 	}
 
