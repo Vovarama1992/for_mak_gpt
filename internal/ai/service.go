@@ -217,7 +217,7 @@ func (s *AiService) GetReply(
 
 	// 9) GPT
 
-	ctxGPT, cancel := context.WithTimeout(ctx, 77*time.Second)
+	ctxGPT, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 
 	reply, err := s.openaiClient.GetCompletion(ctxGPT, messages, cfg.Model)
@@ -292,7 +292,7 @@ func (s *AiService) GetReplyWithDirectImage(
 		},
 	})
 
-	ctxGPT, cancel := context.WithTimeout(ctx, 77*time.Second)
+	ctxGPT, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 
 	reply, err := s.openaiClient.GetCompletion(ctxGPT, messages, cfg.Model)
@@ -385,7 +385,7 @@ func (s *AiService) GetReplyPDFOptimized(
 		Content: userText,
 	})
 
-	ctxGPT, cancel := context.WithTimeout(ctx, 77*time.Second)
+	ctxGPT, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 
 	reply, err := s.openaiClient.GetCompletion(ctxGPT, messages, cfg.Model)
