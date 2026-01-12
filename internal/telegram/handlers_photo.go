@@ -107,11 +107,13 @@ func (app *BotApp) handlePhoto(
 
 	gptInput := "📄 Пользователь прислал файл: " + publicURL
 
-	reply, err := app.AiService.GetReply(
-		ctx, botID, tgID,
-		"image", // ← документ идёт как текстовая ветка
-		gptInput,
-		nil, // ← НИКОГДА не передавать PDF как image_url
+	reply, err := app.AiService.GetReplyWithDirectImage(
+		ctx,
+		botID,
+		tgID,
+		"image",
+		gptInput,  // текст
+		publicURL, // ← ПРЯМАЯ КАРТИНКА
 	)
 
 	if err != nil {

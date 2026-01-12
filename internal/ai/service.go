@@ -230,3 +230,117 @@ func (s *AiService) GetReply(
 
 	return reply, nil
 }
+
+func (s *AiService) GetReplyWithDirectImage(
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+	branch string,
+	userText string,
+	directImageURL string, // ← ОБЯЗАТЕЛЬНО
+) (string, error) {
+
+	if branch == "" {
+		branch = "image"
+	}
+
+	start := time.Now()
+	log.Printf("[ai] >>> START DIRECT_IMAGE bot=%s tg=%d", botID, telegramID)
+
+	// 1) конфиг
+	cfg, err := s.botsRepo.Get(ctx, botID)
+	if err != nil {
+		s.notifyConfigError(ctx, botID, err)
+		return "", err
+	}
+
+	// 2) стиль
+	stylePrompt := strings.TrimSpace(cfg.PhotoStylePrompt)
+	if stylePrompt == "" {
+		stylePrompt = "Ты аккуратно анализируешь изображение."
+	}
+
+	// 3) классовый промпт
+	finalClassPrompt := ""
+	uc, err := s.classService.GetUserClass(ctx, botID, telegramID)
+	if err == nil && uc != nil {
+		p, err := s.classService.GetPromptByClassID(ctx, botID, uc.ClassID)
+		if err == nil && p != nil {
+			finalClassPrompt = strings.TrimSpace(p.Prompt)
+		}
+	}
+
+	fullStyle := stylePrompt
+	if finalClassPrompt != "" {
+		fullStyle += "\n\n" + finalClassPrompt
+	}
+
+	fullStyle += `
+Ограничение: ответ до 3000 символов.
+Если изображение содержит документ — дай краткий разбор и summary.`
+
+	superPrompt := `Это координационный промпт.
+Текущий запрос содержит изображение.
+Последний user message — ЭТО изображение.
+История используется только как контекст.`
+
+	// 4) история
+	history, _ := s.recordService.GetFittingHistory(ctx, botID, telegramID)
+
+	messages := []openai.ChatCompletionMessage{
+		{Role: "system", Content: superPrompt},
+		{Role: "system", Content: "Стилевой промпт: " + fullStyle},
+	}
+
+	for _, r := range history {
+		role := "user"
+		if r.Role == "tutor" {
+			role = "assistant"
+		}
+
+		if r.Text != nil {
+			messages = append(messages, openai.ChatCompletionMessage{
+				Role:    role,
+				Content: strings.TrimSpace(*r.Text),
+			})
+		}
+
+		// ⚠️ ВАЖНО:
+		// image из истории — ТОЛЬКО КАК КОНТЕКСТ, не как последний ввод
+	}
+
+	// 5) ПОСЛЕДНЕЕ СООБЩЕНИЕ — ЖЁСТКО IMAGE
+	parts := []openai.ChatMessagePart{
+		{
+			Type: openai.ChatMessagePartTypeImageURL,
+			ImageURL: &openai.ChatMessageImageURL{
+				URL: directImageURL,
+			},
+		},
+	}
+
+	if strings.TrimSpace(userText) != "" {
+		parts = append([]openai.ChatMessagePart{
+			{Type: openai.ChatMessagePartTypeText, Text: userText},
+		}, parts...)
+	}
+
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:         "user",
+		MultiContent: parts,
+	})
+
+	// 6) GPT
+	ctxGPT, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+
+	reply, err := s.openaiClient.GetCompletion(ctxGPT, messages, cfg.Model)
+	log.Printf("[ai][%.1fs] DIRECT_IMAGE done err=%v", time.Since(start).Seconds(), err)
+
+	if err != nil {
+		s.notifyGptError(ctx, botID, cfg.Model, err)
+		return "", err
+	}
+
+	return reply, nil
+}
