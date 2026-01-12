@@ -86,11 +86,12 @@ func (app *BotApp) handlePDF(
 	thinking.ReplyMarkup = mainKB
 	sentThinking, _ := bot.Send(thinking)
 
-	reply, err := app.AiService.GetReply(
-		ctx, botID, tgID,
-		"image",
-		"",            // пустой текст
-		firstImageURL, // якорный файл
+	reply, err := app.AiService.GetReplyPDFOptimized(
+		ctx,
+		botID,
+		tgID,
+		"Разбери документ.", // или ""
+		1,                   // maxImages: 1–2
 	)
 	if err != nil {
 		log.Printf("[pdf] GPT ERROR: %v", err)

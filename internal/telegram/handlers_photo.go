@@ -111,9 +111,8 @@ func (app *BotApp) handlePhoto(
 		ctx,
 		botID,
 		tgID,
-		"image",
 		gptInput,  // текст
-		publicURL, // ← ПРЯМАЯ КАРТИНКА
+		publicURL, // прямая картинка
 	)
 
 	if err != nil {
