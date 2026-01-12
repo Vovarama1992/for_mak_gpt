@@ -82,7 +82,7 @@ func (app *BotApp) handlePDF(
 	reply, err := app.AiService.GetReply(
 		ctx, botID, tgID,
 		"image",
-		"Пользователь прислал PDF-файл.",
+		"Разбери документ или документы.",
 		nil,
 	)
 	if err != nil {
