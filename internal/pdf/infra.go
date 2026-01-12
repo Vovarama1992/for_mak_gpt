@@ -47,7 +47,15 @@ func (c *PopplerPDFConverter) ConvertToImages(
 	outBase := filepath.Join(tmpDir, "page")
 	log.Printf("[pdf.conv] running pdftoppm input=%s", input)
 
-	cmd := exec.CommandContext(ctx, "pdftoppm", input, outBase, "-jpeg")
+	cmd := exec.CommandContext(
+		ctx,
+		"pdftoppm",
+		"-r", "120",
+		"-jpeg",
+		"-jpegopt", "quality=60",
+		input,
+		outBase,
+	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("[pdf.conv] poppler ERROR: %v, output=%s", err, string(out))

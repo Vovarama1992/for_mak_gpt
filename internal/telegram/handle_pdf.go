@@ -89,8 +89,8 @@ func (app *BotApp) handlePDF(
 	reply, err := app.AiService.GetReply(
 		ctx, botID, tgID,
 		"image",
-		"Разбери документ или документы.",
-		firstImageURL,
+		"",            // пустой текст
+		firstImageURL, // якорный файл
 	)
 	if err != nil {
 		log.Printf("[pdf] GPT ERROR: %v", err)

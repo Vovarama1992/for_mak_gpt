@@ -186,16 +186,28 @@ func (s *AiService) GetReply(
 
 	// 8) последнее сообщение
 	if imageURL != nil {
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role: "user",
-			MultiContent: []openai.ChatMessagePart{
-				{Type: openai.ChatMessagePartTypeText, Text: userText},
-				{
-					Type:     openai.ChatMessagePartTypeImageURL,
-					ImageURL: &openai.ChatMessageImageURL{URL: *imageURL},
+		if strings.TrimSpace(userText) != "" {
+			messages = append(messages, openai.ChatCompletionMessage{
+				Role: "user",
+				MultiContent: []openai.ChatMessagePart{
+					{Type: openai.ChatMessagePartTypeText, Text: userText},
+					{
+						Type:     openai.ChatMessagePartTypeImageURL,
+						ImageURL: &openai.ChatMessageImageURL{URL: *imageURL},
+					},
 				},
-			},
-		})
+			})
+		} else {
+			messages = append(messages, openai.ChatCompletionMessage{
+				Role: "user",
+				MultiContent: []openai.ChatMessagePart{
+					{
+						Type:     openai.ChatMessagePartTypeImageURL,
+						ImageURL: &openai.ChatMessageImageURL{URL: *imageURL},
+					},
+				},
+			})
+		}
 	} else {
 		messages = append(messages, openai.ChatCompletionMessage{
 			Role:    "user",
