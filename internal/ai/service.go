@@ -235,56 +235,32 @@ func (s *AiService) GetReplyWithDirectImage(
 	ctx context.Context,
 	botID string,
 	telegramID int64,
-	branch string,
 	userText string,
-	directImageURL string, // ← ОБЯЗАТЕЛЬНО
+	imageURL string,
 ) (string, error) {
-
-	if branch == "" {
-		branch = "image"
-	}
 
 	start := time.Now()
 	log.Printf("[ai] >>> START DIRECT_IMAGE bot=%s tg=%d", botID, telegramID)
 
-	// 1) конфиг
 	cfg, err := s.botsRepo.Get(ctx, botID)
 	if err != nil {
 		s.notifyConfigError(ctx, botID, err)
 		return "", err
 	}
 
-	// 2) стиль
 	stylePrompt := strings.TrimSpace(cfg.PhotoStylePrompt)
 	if stylePrompt == "" {
-		stylePrompt = "Ты аккуратно анализируешь изображение."
+		stylePrompt = "Ты дружелюбный логичный ассистент."
 	}
 
-	// 3) классовый промпт
-	finalClassPrompt := ""
-	uc, err := s.classService.GetUserClass(ctx, botID, telegramID)
-	if err == nil && uc != nil {
-		p, err := s.classService.GetPromptByClassID(ctx, botID, uc.ClassID)
-		if err == nil && p != nil {
-			finalClassPrompt = strings.TrimSpace(p.Prompt)
-		}
-	}
-
-	fullStyle := stylePrompt
-	if finalClassPrompt != "" {
-		fullStyle += "\n\n" + finalClassPrompt
-	}
-
-	fullStyle += `
-Ограничение: ответ до 3000 символов.
-Если изображение содержит документ — дай краткий разбор и summary.`
+	fullStyle := stylePrompt + `
+Ограничение: ответ не должен превышать 3000 символов.
+Пиши кратко и по делу.`
 
 	superPrompt := `Это координационный промпт.
-Текущий запрос содержит изображение.
-Последний user message — ЭТО изображение.
-История используется только как контекст.`
+Последний пользовательский ввод — это сообщение с изображением.
+Отвечай, анализируя изображение.`
 
-	// 4) история
 	history, _ := s.recordService.GetFittingHistory(ctx, botID, telegramID)
 
 	messages := []openai.ChatCompletionMessage{
@@ -297,45 +273,123 @@ func (s *AiService) GetReplyWithDirectImage(
 		if r.Role == "tutor" {
 			role = "assistant"
 		}
-
-		if r.Text != nil {
+		if r.Text != nil && strings.TrimSpace(*r.Text) != "" {
 			messages = append(messages, openai.ChatCompletionMessage{
 				Role:    role,
-				Content: strings.TrimSpace(*r.Text),
+				Content: *r.Text,
 			})
 		}
-
-		// ⚠️ ВАЖНО:
-		// image из истории — ТОЛЬКО КАК КОНТЕКСТ, не как последний ввод
-	}
-
-	// 5) ПОСЛЕДНЕЕ СООБЩЕНИЕ — ЖЁСТКО IMAGE
-	parts := []openai.ChatMessagePart{
-		{
-			Type: openai.ChatMessagePartTypeImageURL,
-			ImageURL: &openai.ChatMessageImageURL{
-				URL: directImageURL,
-			},
-		},
-	}
-
-	if strings.TrimSpace(userText) != "" {
-		parts = append([]openai.ChatMessagePart{
-			{Type: openai.ChatMessagePartTypeText, Text: userText},
-		}, parts...)
 	}
 
 	messages = append(messages, openai.ChatCompletionMessage{
-		Role:         "user",
-		MultiContent: parts,
+		Role: "user",
+		MultiContent: []openai.ChatMessagePart{
+			{Type: openai.ChatMessagePartTypeText, Text: userText},
+			{
+				Type:     openai.ChatMessagePartTypeImageURL,
+				ImageURL: &openai.ChatMessageImageURL{URL: imageURL},
+			},
+		},
 	})
 
-	// 6) GPT
-	ctxGPT, cancel := context.WithTimeout(ctx, 45*time.Second)
+	ctxGPT, cancel := context.WithTimeout(ctx, 77*time.Second)
 	defer cancel()
 
 	reply, err := s.openaiClient.GetCompletion(ctxGPT, messages, cfg.Model)
 	log.Printf("[ai][%.1fs] DIRECT_IMAGE done err=%v", time.Since(start).Seconds(), err)
+
+	if err != nil {
+		s.notifyGptError(ctx, botID, cfg.Model, err)
+		return "", err
+	}
+
+	return reply, nil
+}
+
+func (s *AiService) GetReplyPDFOptimized(
+	ctx context.Context,
+	botID string,
+	telegramID int64,
+	userText string,
+	maxImages int, // например 1 или 2
+) (string, error) {
+
+	start := time.Now()
+	log.Printf("[ai] >>> START PDF_OPT bot=%s tg=%d", botID, telegramID)
+
+	cfg, err := s.botsRepo.Get(ctx, botID)
+	if err != nil {
+		s.notifyConfigError(ctx, botID, err)
+		return "", err
+	}
+
+	stylePrompt := strings.TrimSpace(cfg.PhotoStylePrompt)
+	if stylePrompt == "" {
+		stylePrompt = "Ты дружелюбный логичный ассистент."
+	}
+
+	fullStyle := stylePrompt + `
+Ограничение: ответ не должен превышать 3000 символов.
+Если документ большой — дай summary.`
+
+	superPrompt := `Это координационный промпт.
+Документ представлен изображениями в истории.
+Используй только последние релевантные страницы.`
+
+	history, _ := s.recordService.GetFittingHistory(ctx, botID, telegramID)
+
+	// --- собираем последние N image_url ---
+	imageURLs := make([]string, 0, maxImages)
+	for i := len(history) - 1; i >= 0 && len(imageURLs) < maxImages; i-- {
+		if history[i].ImageURL != nil {
+			imageURLs = append(imageURLs, *history[i].ImageURL)
+		}
+	}
+
+	messages := []openai.ChatCompletionMessage{
+		{Role: "system", Content: superPrompt},
+		{Role: "system", Content: "Стилевой промпт: " + fullStyle},
+	}
+
+	// текстовую историю добавляем всю
+	for _, r := range history {
+		role := "user"
+		if r.Role == "tutor" {
+			role = "assistant"
+		}
+		if r.Text != nil && strings.TrimSpace(*r.Text) != "" {
+			messages = append(messages, openai.ChatCompletionMessage{
+				Role:    role,
+				Content: *r.Text,
+			})
+		}
+	}
+
+	// добавляем ТОЛЬКО последние N картинок
+	for _, url := range imageURLs {
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role: "user",
+			MultiContent: []openai.ChatMessagePart{
+				{Type: openai.ChatMessagePartTypeText, Text: "(страница документа)"},
+				{
+					Type:     openai.ChatMessagePartTypeImageURL,
+					ImageURL: &openai.ChatMessageImageURL{URL: url},
+				},
+			},
+		})
+	}
+
+	// финальный текстовый запрос
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    "user",
+		Content: userText,
+	})
+
+	ctxGPT, cancel := context.WithTimeout(ctx, 77*time.Second)
+	defer cancel()
+
+	reply, err := s.openaiClient.GetCompletion(ctxGPT, messages, cfg.Model)
+	log.Printf("[ai][%.1fs] PDF_OPT done err=%v", time.Since(start).Seconds(), err)
 
 	if err != nil {
 		s.notifyGptError(ctx, botID, cfg.Model, err)

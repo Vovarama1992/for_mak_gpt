@@ -14,4 +14,11 @@ type Service interface {
 		userText string,
 		directImageURL string, // ← ОБЯЗАТЕЛЬНО
 	) (string, error)
+	GetReplyPDFOptimized(
+		ctx context.Context,
+		botID string,
+		telegramID int64,
+		userText string,
+		maxImages int, // например 1 или 2
+	) (string, error)
 }
