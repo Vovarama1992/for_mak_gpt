@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strings"
 )
 
 type PopplerPDFConverter struct{}
@@ -52,25 +54,39 @@ func (c *PopplerPDFConverter) ConvertToImages(
 		return nil, fmt.Errorf("pdftoppm: %w", err)
 	}
 
-	// 4. собираем page-1.jpg, page-2.jpg, ...
-	var pages []PDFPage
-	for i := 1; ; i++ {
-		fn := fmt.Sprintf("%s-%d.jpg", outBase, i)
+	// === FIX: читаем фактические файлы ===
 
-		b, err := os.ReadFile(fn)
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var files []string
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasPrefix(name, "page-") && strings.HasSuffix(name, ".jpg") {
+			files = append(files, name)
+		}
+	}
+
+	sort.Strings(files)
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no pages generated")
+	}
+
+	pages := make([]PDFPage, 0, len(files))
+	for i, name := range files {
+		b, err := os.ReadFile(filepath.Join(tmpDir, name))
 		if err != nil {
-			break // страниц больше нет
+			return nil, err
 		}
 
 		pages = append(pages, PDFPage{
 			Bytes:    b,
-			FileName: fmt.Sprintf("page-%d.jpg", i),
+			FileName: fmt.Sprintf("page-%d.jpg", i+1),
 			MimeType: "image/jpeg",
 		})
-	}
-
-	if len(pages) == 0 {
-		return nil, fmt.Errorf("no pages generated")
 	}
 
 	return pages, nil
