@@ -14,6 +14,56 @@ func NewRepo(db *sql.DB) Repo {
 	return &repo{db: db}
 }
 
+func (r *repo) Create(ctx context.Context, in *CreateInput) (*BotConfig, error) {
+	var b BotConfig
+
+	err := r.db.QueryRowContext(ctx, `
+		INSERT INTO bot_configs (
+			bot_id,
+			token,
+			model,
+			voice_id
+		) VALUES ($1, $2, $3, $4)
+		RETURNING
+			bot_id,
+			token,
+			model,
+			text_style_prompt,
+			voice_style_prompt,
+			photo_style_prompt,
+			voice_id,
+			welcome_text,
+			tariff_text,
+			after_continue_text,
+			no_voice_minutes_text,
+			welcome_video
+	`,
+		in.BotID,
+		in.Token,
+		in.Model,
+		in.VoiceID,
+	).Scan(
+		&b.BotID,
+		&b.Token,
+		&b.Model,
+		&b.TextStylePrompt,
+		&b.VoiceStylePrompt,
+		&b.PhotoStylePrompt,
+		&b.VoiceID,
+		&b.WelcomeText,
+		&b.TariffText,
+		&b.AfterContinueText,
+		&b.NoVoiceMinutesText,
+		&b.WelcomeVideo,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &b, nil
+}
+
 // --------------------------------------------------
 // ListAll
 // --------------------------------------------------

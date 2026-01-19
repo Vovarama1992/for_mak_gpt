@@ -9,11 +9,13 @@ type Repo interface {
 	ListAll(ctx context.Context) ([]*BotConfig, error)
 	Get(ctx context.Context, botID string) (*BotConfig, error)
 	Update(ctx context.Context, cfg *UpdateInput) (*BotConfig, error)
+	Create(ctx context.Context, in *CreateInput) (*BotConfig, error)
 }
 
 type Service interface {
 	ListAll(ctx context.Context) ([]*BotConfig, error)
 	Get(ctx context.Context, botID string) (*BotConfig, error)
+	Create(ctx context.Context, in *CreateInput) (*BotConfig, error)
 	Update(ctx context.Context, cfg *UpdateInput) (*BotConfig, error)
 
 	// загрузка приветственного видео → S3 → запись в bot_configs
@@ -50,4 +52,13 @@ type UpdateInput struct {
 
 	// INTERNAL USE ONLY
 	WelcomeVideo *string
+}
+
+type CreateInput struct {
+	BotID string
+	Token string
+
+	// обязательные по схеме
+	Model   string
+	VoiceID string
 }

@@ -25,6 +25,41 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(items)
 }
 
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		BotID   string `json:"bot_id"`
+		Token   string `json:"token"`
+		Model   string `json:"model"`
+		VoiceID string `json:"voice_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid json", 400)
+		return
+	}
+
+	if body.BotID == "" || body.Token == "" || body.Model == "" || body.VoiceID == "" {
+		http.Error(w, "missing required fields", 400)
+		return
+	}
+
+	in := &CreateInput{
+		BotID:   body.BotID,
+		Token:   body.Token,
+		Model:   body.Model,
+		VoiceID: body.VoiceID,
+	}
+
+	out, err := h.svc.Create(r.Context(), in)
+	if err != nil {
+		http.Error(w, "failed to create bot", 500)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(out)
+}
+
 // GET /bots/{bot_id}
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	botID := chi.URLParam(r, "bot_id")

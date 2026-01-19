@@ -19,6 +19,10 @@ func NewService(repo Repo, s3 ports.S3Service) Service {
 	}
 }
 
+func (s *service) Create(ctx context.Context, in *CreateInput) (*BotConfig, error) {
+	return s.repo.Create(ctx, in)
+}
+
 func (s *service) ListAll(ctx context.Context) ([]*BotConfig, error) {
 	return s.repo.ListAll(ctx)
 }

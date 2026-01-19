@@ -77,6 +77,9 @@ func RegisterRoutes(
 		Patch("/bots/{bot_id}", hBots.Update)
 
 	r.With(httputil.RecoverMiddleware).
+		Post("/bots", hBots.Create)
+
+	r.With(httputil.RecoverMiddleware).
 		Post("/bots/{bot_id}/welcome-video", hBots.UploadWelcomeVideo)
 
 	// --- пакеты минут ---
