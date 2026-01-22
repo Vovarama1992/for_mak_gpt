@@ -75,6 +75,8 @@ func RegisterRoutes(
 
 	r.With(httputil.RecoverMiddleware).
 		Patch("/bots/{bot_id}", hBots.Update)
+	r.With(httputil.RecoverMiddleware).
+		Delete("/bots/{bot_id}", hBots.Delete)
 
 	r.With(httputil.RecoverMiddleware).
 		Post("/bots", hBots.Create)

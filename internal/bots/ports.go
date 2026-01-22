@@ -10,6 +10,7 @@ type Repo interface {
 	Get(ctx context.Context, botID string) (*BotConfig, error)
 	Update(ctx context.Context, cfg *UpdateInput) (*BotConfig, error)
 	Create(ctx context.Context, in *CreateInput) (*BotConfig, error)
+	Delete(ctx context.Context, botID string) error
 }
 
 type Service interface {
@@ -17,6 +18,7 @@ type Service interface {
 	Get(ctx context.Context, botID string) (*BotConfig, error)
 	Create(ctx context.Context, in *CreateInput) (*BotConfig, error)
 	Update(ctx context.Context, cfg *UpdateInput) (*BotConfig, error)
+	Delete(ctx context.Context, botID string) error
 
 	// загрузка приветственного видео → S3 → запись в bot_configs
 	UploadWelcomeVideo(ctx context.Context, botID string, file io.Reader, filename string) (string, error)
@@ -40,6 +42,8 @@ type BotConfig struct {
 
 type UpdateInput struct {
 	BotID              string
+	NewBotID           *string
+	Token              *string
 	Model              *string
 	TextStylePrompt    *string
 	VoiceStylePrompt   *string

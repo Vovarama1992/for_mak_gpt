@@ -86,6 +86,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
+		NewBotID           *string `json:"new_bot_id"`
+		Token              *string `json:"token"`
 		Model              *string `json:"model"`
 		TextStylePrompt    *string `json:"text_style_prompt"`
 		VoiceStylePrompt   *string `json:"voice_style_prompt"`
@@ -104,6 +106,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	in := &UpdateInput{
 		BotID:              botID,
+		NewBotID:           body.NewBotID,
+		Token:              body.Token,
 		Model:              body.Model,
 		TextStylePrompt:    body.TextStylePrompt,
 		VoiceStylePrompt:   body.VoiceStylePrompt,
@@ -122,6 +126,22 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = json.NewEncoder(w).Encode(out)
+}
+
+// DELETE /bots/{bot_id}
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	botID := chi.URLParam(r, "bot_id")
+	if botID == "" {
+		http.Error(w, "missing bot_id", 400)
+		return
+	}
+
+	if err := h.svc.Delete(r.Context(), botID); err != nil {
+		http.Error(w, "failed to delete bot", 500)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // POST /bots/{bot_id}/welcome-video

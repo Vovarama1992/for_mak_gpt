@@ -173,6 +173,11 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 		}
 	}
 
+	// rename bot_id только если передан new_bot_id
+	appendField("bot_id", in.NewBotID)
+
+	// обычные поля
+	appendField("token", in.Token)
 	appendField("model", in.Model)
 	appendField("text_style_prompt", in.TextStylePrompt)
 	appendField("voice_style_prompt", in.VoiceStylePrompt)
@@ -230,6 +235,15 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 	}
 
 	return &b, nil
+}
+
+func (r *repo) Delete(ctx context.Context, botID string) error {
+	_, err := r.db.ExecContext(
+		ctx,
+		`DELETE FROM bot_configs WHERE bot_id = $1`,
+		botID,
+	)
+	return err
 }
 
 // --------------------------------------------------

@@ -35,6 +35,10 @@ func (s *service) Update(ctx context.Context, in *UpdateInput) (*BotConfig, erro
 	return s.repo.Update(ctx, in)
 }
 
+func (s *service) Delete(ctx context.Context, botID string) error {
+	return s.repo.Delete(ctx, botID)
+}
+
 // =========================================================
 // UploadWelcomeVideo — загрузка файла в S3 +
 // обновление bot_configs.welcome_video_url
