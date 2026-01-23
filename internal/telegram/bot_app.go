@@ -5,6 +5,8 @@ import (
 	"log"
 	"time"
 
+	"os"
+
 	"github.com/Vovarama1992/make_ziper/internal/ai"
 	"github.com/Vovarama1992/make_ziper/internal/bots"
 	"github.com/Vovarama1992/make_ziper/internal/classes"
@@ -136,6 +138,22 @@ func (app *BotApp) InitBots(ctx context.Context) error {
 		log.Printf("[bot_app] ready: @%s (%s)", bot.Self.UserName, cfg.BotID)
 
 		go app.runBotLoop(cfg.BotID, bot)
+
+	}
+
+	// --- Perplexity bot (hardcoded) ---
+	perplexityToken := os.Getenv("PERPLEXITY_BOT_TOKEN")
+	if perplexityToken != "" {
+		bot, err := tgbotapi.NewBotAPI(perplexityToken)
+		if err != nil {
+			log.Printf("[bot_app] init fail for perplexity: %v", err)
+		} else {
+			botID := "perplexity"
+			app.bots[botID] = bot
+			log.Printf("[bot_app] ready: @%s (%s)", bot.Self.UserName, botID)
+
+			go app.runBotLoop(botID, bot)
+		}
 	}
 
 	app.startTrialCleanupTicker(ctx, 1*time.Minute)
