@@ -113,6 +113,7 @@ func main() {
 
 	openAIClient := ai.NewOpenAIClient()
 	ttsClient := speech.NewElevenLabsClient()
+	perplexityClient := ai.NewPerplexityClient()
 
 	// =========================================================================
 	// DOMAIN SERVICES
@@ -141,6 +142,7 @@ func main() {
 
 	aiService := ai.NewAiService(
 		openAIClient,
+		perplexityClient,
 		recordService,
 		botRepo,
 		classService,

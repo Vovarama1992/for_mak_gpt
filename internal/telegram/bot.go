@@ -3,7 +3,10 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"os"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -68,7 +71,12 @@ func (app *BotApp) dispatchUpdate(
 ) {
 	switch {
 	case update.Message != nil:
+		if botID == "perplexity" {
+			app.handlePerplexity(ctx, bot, update.Message)
+			return
+		}
 		app.handleMessage(ctx, botID, bot, update.Message, tgID, status)
+
 	case update.CallbackQuery != nil:
 		app.handleCallback(ctx, botID, bot, update.CallbackQuery, status)
 	}
@@ -261,6 +269,71 @@ func (app *BotApp) handleMessage(
 	// выбор класса
 	app.ShowClassPicker(ctx, botID, bot, tgID, chatID)
 
+}
+
+func (app *BotApp) handlePerplexity(
+	ctx context.Context,
+	bot *tgbotapi.BotAPI,
+	msg *tgbotapi.Message,
+) {
+	chatID := msg.Chat.ID
+
+	// ================= VOICE =================
+	if msg.Voice != nil {
+		fileID := msg.Voice.FileID
+
+		file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось получить голосовое."))
+			return
+		}
+
+		resp, err := http.Get(file.Link(bot.Token))
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка загрузки голосового."))
+			return
+		}
+		defer resp.Body.Close()
+
+		path := fmt.Sprintf("/tmp/%s.ogg", fileID)
+		out, _ := os.Create(path)
+		io.Copy(out, resp.Body)
+		out.Close()
+		defer os.Remove(path)
+
+		text, err := app.SpeechService.Transcribe(ctx, "perplexity", path)
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось распознать голос."))
+			return
+		}
+
+		reply, err := app.AiService.GetPerplexityReply(ctx, text)
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка Perplexity."))
+			return
+		}
+
+		outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
+		if err := app.SpeechService.Synthesize(ctx, "perplexity", reply, outVoice); err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID, reply))
+			return
+		}
+		defer os.Remove(outVoice)
+
+		bot.Send(tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice)))
+		return
+	}
+
+	// ================= TEXT =================
+	if strings.TrimSpace(msg.Text) != "" {
+		reply, err := app.AiService.GetPerplexityReply(ctx, msg.Text)
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка Perplexity."))
+			return
+		}
+
+		bot.Send(tgbotapi.NewMessage(chatID, reply))
+	}
 }
 
 func extractTelegramID(u tgbotapi.Update) int64 {

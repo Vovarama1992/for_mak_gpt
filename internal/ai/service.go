@@ -15,7 +15,9 @@ import (
 )
 
 type AiService struct {
-	openaiClient  *OpenAIClient
+	openaiClient     *OpenAIClient
+	perplexityClient *PerplexityClient
+
 	recordService ports.RecordService
 	botsRepo      bots.Repo
 	classService  classes.ClassService
@@ -23,18 +25,20 @@ type AiService struct {
 }
 
 func NewAiService(
-	client *OpenAIClient,
+	openaiClient *OpenAIClient,
+	perplexityClient *PerplexityClient,
 	recordSvc ports.RecordService,
 	botsRepo bots.Repo,
 	classSvc classes.ClassService,
 	notifier notificator.Notificator,
 ) *AiService {
 	return &AiService{
-		openaiClient:  client,
-		recordService: recordSvc,
-		botsRepo:      botsRepo,
-		classService:  classSvc,
-		Notifier:      notifier,
+		openaiClient:     openaiClient,
+		perplexityClient: perplexityClient,
+		recordService:    recordSvc,
+		botsRepo:         botsRepo,
+		classService:     classSvc,
+		Notifier:         notifier,
 	}
 }
 
@@ -415,4 +419,14 @@ func (s *AiService) GetReplyPDFOptimized(
 	}
 
 	return reply, nil
+}
+
+func (s *AiService) GetPerplexityReply(
+	ctx context.Context,
+	userText string,
+) (string, error) {
+	ctxPX, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	return s.perplexityClient.Ask(ctxPX, userText)
 }
