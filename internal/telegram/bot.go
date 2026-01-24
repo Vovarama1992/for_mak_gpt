@@ -278,6 +278,9 @@ func (app *BotApp) handlePerplexity(
 ) {
 	chatID := msg.Chat.ID
 
+	thinking := tgbotapi.NewMessage(chatID, "🤖 AI думает…")
+	sentThinking, _ := bot.Send(thinking)
+
 	// ================= VOICE =================
 	if msg.Voice != nil {
 		fileID := msg.Voice.FileID
@@ -303,23 +306,27 @@ func (app *BotApp) handlePerplexity(
 
 		text, err := app.SpeechService.Transcribe(ctx, "perplexity", path)
 		if err != nil {
+			bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Не удалось распознать голос."))
 			return
 		}
 
 		reply, err := app.AiService.GetPerplexityReply(ctx, text)
 		if err != nil {
+			bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка Perplexity."))
 			return
 		}
 
 		outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
 		if err := app.SpeechService.Synthesize(ctx, "perplexity", reply, outVoice); err != nil {
+			bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 			bot.Send(tgbotapi.NewMessage(chatID, reply))
 			return
 		}
 		defer os.Remove(outVoice)
 
+		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 		bot.Send(tgbotapi.NewVoice(chatID, tgbotapi.FilePath(outVoice)))
 		return
 	}
@@ -328,10 +335,12 @@ func (app *BotApp) handlePerplexity(
 	if strings.TrimSpace(msg.Text) != "" {
 		reply, err := app.AiService.GetPerplexityReply(ctx, msg.Text)
 		if err != nil {
+			bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка Perplexity."))
 			return
 		}
 
+		bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 		bot.Send(tgbotapi.NewMessage(chatID, reply))
 	}
 }
