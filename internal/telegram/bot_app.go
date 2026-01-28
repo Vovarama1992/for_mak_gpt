@@ -35,30 +35,27 @@ type BotApp struct {
 	SubscriptionService  ports.SubscriptionService
 	TariffService        ports.TariffService
 	MinutePackageService mpkg.MinutePackageService
-
-	TrialRepo trial.RepoInf // ← ВОТ ОНО
+	TrialRepo            trial.RepoInf
 
 	AiService       *ai.AiService
 	SpeechService   *speech.Service
+	PerplexityTTS   *speech.PerplexityTTS // ← ВОТ ОНО
 	TextRuleService textrules.Service
 	RecordService   ports.RecordService
 	S3Service       ports.S3Service
 	PDFService      pdf.PDFService
 	DocService      doc.Service
 
-	BotsService bots.Service
-	UserService user.Service
-
-	ErrorNotify notificator.Notificator
+	BotsService  bots.Service
+	UserService  user.Service
+	ErrorNotify  notificator.Notificator
+	ClassService classes.ClassService
 
 	bots          map[string]*tgbotapi.BotAPI
 	shownKeyboard map[string]map[int64]bool
 
-	ClassService classes.ClassService
-
 	adminBot         *AdminBot
 	adminBotUsername string
-	PerplexitySpeech *speech.Service
 }
 
 // ==================================================
@@ -72,7 +69,7 @@ func NewBotApp(
 	trialRepo trial.RepoInf,
 	aiSvc *ai.AiService,
 	speechSvc *speech.Service,
-	perplexitySpeech *speech.Service, // <-- ADD
+	perplexityTTS *speech.PerplexityTTS, // ← принимаем
 	textRules textrules.Service,
 	record ports.RecordService,
 	s3 ports.S3Service,
@@ -83,15 +80,6 @@ func NewBotApp(
 	pdfSvc pdf.PDFService,
 	docSvc doc.Service,
 ) *BotApp {
-	if minutePkg == nil {
-		panic("MinutePackageService is nil")
-	}
-	if trialRepo == nil {
-		panic("TrialRepo is nil")
-	}
-	if perplexitySpeech == nil { // <-- ADD
-		panic("PerplexitySpeech is nil")
-	}
 
 	return &BotApp{
 		SubscriptionService:  subs,
@@ -99,19 +87,22 @@ func NewBotApp(
 		MinutePackageService: minutePkg,
 		TrialRepo:            trialRepo,
 
-		AiService:        aiSvc,
-		SpeechService:    speechSvc,
-		PerplexitySpeech: perplexitySpeech, // <-- ADD
-		TextRuleService:  textRules,
-		RecordService:    record,
-		S3Service:        s3,
-		PDFService:       pdfSvc,
-		DocService:       docSvc,
+		AiService:       aiSvc,
+		SpeechService:   speechSvc,
+		PerplexityTTS:   perplexityTTS, // ← прокинули
+		TextRuleService: textRules,
+		RecordService:   record,
+		S3Service:       s3,
+		PDFService:      pdfSvc,
+		DocService:      docSvc,
 
 		BotsService:  botsSvc,
 		UserService:  userSvc,
 		ErrorNotify:  errNotify,
 		ClassService: classSvc,
+
+		bots:          make(map[string]*tgbotapi.BotAPI),
+		shownKeyboard: make(map[string]map[int64]bool),
 	}
 }
 

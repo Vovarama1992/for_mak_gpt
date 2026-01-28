@@ -319,7 +319,7 @@ func (app *BotApp) handlePerplexity(
 		}
 
 		outVoice := fmt.Sprintf("/tmp/reply_%s.mp3", fileID)
-		if err := app.SpeechService.Synthesize(ctx, "perplexity", reply, outVoice); err != nil {
+		if err := app.PerplexityTTS.Synthesize(ctx, reply, outVoice); err != nil {
 			bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 			bot.Send(tgbotapi.NewMessage(chatID, reply))
 			return

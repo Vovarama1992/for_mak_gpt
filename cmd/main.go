@@ -112,7 +112,7 @@ func main() {
 	// =========================================================================
 
 	openAIClient := ai.NewOpenAIClient()
-	perplexitySTT := ai.NewDeepgramClient()
+	perplexityTTS := speech.NewPerplexityTTS()
 	ttsClient := speech.NewElevenLabsClient()
 	perplexityClient := ai.NewPerplexityClient()
 
@@ -141,13 +141,6 @@ func main() {
 		errService,
 	)
 
-	perplexitySpeechService := speech.NewService(
-		perplexitySTT, // <-- ДРУГОЙ Transcribe
-		ttsClient,     // тот же TTS
-		botService,
-		errService,
-	)
-
 	aiService := ai.NewAiService(
 		openAIClient,
 		perplexityClient,
@@ -172,22 +165,24 @@ func main() {
 	// =========================================================================
 
 	botApp := telegram.NewBotApp(
-		subscriptionService,
-		tariffService,
-		minutePackageService,
-		trialRepo,
-		aiService,
-		speechService,
-		perplexitySpeechService,
-		textRuleService,
-		recordService,
-		s3Service,
-		botService,
-		userService,
-		errService,
-		classService,
-		*pdfService,
-		*docService,
+		subscriptionService,  // ports.SubscriptionService
+		tariffService,        // ports.TariffService
+		minutePackageService, // minutes_packages.MinutePackageService
+		trialRepo,            // trial.RepoInf
+
+		aiService,     // *ai.AiService
+		speechService, // *speech.Service
+		perplexityTTS, // *speech.PerplexityTTS
+
+		textRuleService, // textrules.Service
+		recordService,   // ports.RecordService
+		s3Service,       // ports.S3Service
+		botService,      // bots.Service
+		userService,     // user.Service
+		errService,      // notificator.Notificator
+		classService,    // classes.ClassService
+		*pdfService,     // pdf.PDFService
+		*docService,     // doc.Service
 	)
 
 	botApp.SetAdminBotUsername(os.Getenv("ADMIN_BOT_USERNAME"))
