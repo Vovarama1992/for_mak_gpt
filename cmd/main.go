@@ -112,6 +112,7 @@ func main() {
 	// =========================================================================
 
 	openAIClient := ai.NewOpenAIClient()
+	perplexitySTT := ai.NewDeepgramClient()
 	ttsClient := speech.NewElevenLabsClient()
 	perplexityClient := ai.NewPerplexityClient()
 
@@ -136,6 +137,13 @@ func main() {
 	speechService := speech.NewService(
 		openAIClient,
 		ttsClient,
+		botService,
+		errService,
+	)
+
+	perplexitySpeechService := speech.NewService(
+		perplexitySTT, // <-- ДРУГОЙ Transcribe
+		ttsClient,     // тот же TTS
 		botService,
 		errService,
 	)
@@ -170,6 +178,7 @@ func main() {
 		trialRepo,
 		aiService,
 		speechService,
+		perplexitySpeechService,
 		textRuleService,
 		recordService,
 		s3Service,

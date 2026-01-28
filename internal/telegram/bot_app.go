@@ -58,6 +58,7 @@ type BotApp struct {
 
 	adminBot         *AdminBot
 	adminBotUsername string
+	PerplexitySpeech *speech.Service
 }
 
 // ==================================================
@@ -68,24 +69,28 @@ func NewBotApp(
 	subs ports.SubscriptionService,
 	tariffs ports.TariffService,
 	minutePkg mpkg.MinutePackageService,
-	trialRepo trial.RepoInf, // ← ДОБАВИЛИ
-	ai *ai.AiService,
-	speech *speech.Service,
+	trialRepo trial.RepoInf,
+	aiSvc *ai.AiService,
+	speechSvc *speech.Service,
+	perplexitySpeech *speech.Service, // <-- ADD
 	textRules textrules.Service,
 	record ports.RecordService,
 	s3 ports.S3Service,
-	bots bots.Service,
+	botsSvc bots.Service,
 	userSvc user.Service,
 	errNotify notificator.Notificator,
-	classes classes.ClassService,
-	pdf pdf.PDFService,
-	doc doc.Service,
+	classSvc classes.ClassService,
+	pdfSvc pdf.PDFService,
+	docSvc doc.Service,
 ) *BotApp {
 	if minutePkg == nil {
 		panic("MinutePackageService is nil")
 	}
 	if trialRepo == nil {
 		panic("TrialRepo is nil")
+	}
+	if perplexitySpeech == nil { // <-- ADD
+		panic("PerplexitySpeech is nil")
 	}
 
 	return &BotApp{
@@ -94,19 +99,19 @@ func NewBotApp(
 		MinutePackageService: minutePkg,
 		TrialRepo:            trialRepo,
 
-		AiService:       ai,
-		SpeechService:   speech,
-		TextRuleService: textRules,
-		RecordService:   record,
-		S3Service:       s3,
-		PDFService:      pdf,
-		DocService:      doc,
+		AiService:        aiSvc,
+		SpeechService:    speechSvc,
+		PerplexitySpeech: perplexitySpeech, // <-- ADD
+		TextRuleService:  textRules,
+		RecordService:    record,
+		S3Service:        s3,
+		PDFService:       pdfSvc,
+		DocService:       docSvc,
 
-		BotsService: bots,
-		UserService: userSvc,
-
+		BotsService:  botsSvc,
+		UserService:  userSvc,
 		ErrorNotify:  errNotify,
-		ClassService: classes,
+		ClassService: classSvc,
 	}
 }
 
