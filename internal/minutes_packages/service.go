@@ -1,26 +1,24 @@
 package minutes_packages
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"strings"
-	"time"
+
+	"github.com/Vovarama1992/make_ziper/internal/ports"
 )
 
 type service struct {
-	repo       MinutePackageRepo
-	httpClient *http.Client
+	repo            MinutePackageRepo
+	paymentProvider ports.PaymentProvider
 }
 
-func NewService(repo MinutePackageRepo) MinutePackageService {
+func NewService(
+	repo MinutePackageRepo,
+	paymentProvider ports.PaymentProvider,
+) MinutePackageService {
 	return &service{
-		repo:       repo,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		repo:            repo,
+		paymentProvider: paymentProvider,
 	}
 }
 
@@ -57,7 +55,6 @@ func (s *service) CreatePayment(
 	packageID int64,
 ) (string, error) {
 
-	// 1. Пакет минут
 	pkg, err := s.repo.GetByID(ctx, botID, packageID)
 	if err != nil {
 		return "", fmt.Errorf("load minute package: %w", err)
@@ -66,96 +63,18 @@ func (s *service) CreatePayment(
 		return "", fmt.Errorf("minute package not found or inactive: %d", packageID)
 	}
 
-	// 2. ENVs
-	apiURL := os.Getenv("YOOKASSA_API_URL")
-	shopID := os.Getenv("YOOKASSA_SHOP_ID")
-	secret := os.Getenv("YOOKASSA_SECRET_KEY")
-
-	if apiURL == "" || shopID == "" || secret == "" {
-		return "", fmt.Errorf("missing yookassa ENV variables")
-	}
-	if !strings.Contains(apiURL, "/v3/payments") {
-		apiURL = strings.TrimRight(apiURL, "/") + "/v3/payments"
-	}
-
-	// 3. Request body
-	body := map[string]any{
-		"amount": map[string]any{
-			"value":    fmt.Sprintf("%.2f", pkg.Price),
-			"currency": "RUB",
-		},
-		"capture": true,
-		"description": fmt.Sprintf(
-			"Minute package '%s' (%d min)", pkg.Name, pkg.Minutes,
-		),
-		"confirmation": map[string]any{
-			"type":       "redirect",
-			"return_url": "https://aifulls.com/success.html",
-		},
-		"receipt": map[string]any{
-			"customer": map[string]any{
-				"phone": "+79384095762",
-			},
-			"items": []map[string]any{
-				{
-					"description": pkg.Name,
-					"quantity":    "1",
-					"amount": map[string]any{
-						"value":    fmt.Sprintf("%.2f", pkg.Price),
-						"currency": "RUB",
-					},
-					"vat_code":        1,
-					"payment_subject": "service",
-					"payment_mode":    "full_payment",
-				},
-			},
-		},
-		"metadata": map[string]any{
-			"bot_id":       botID,
-			"telegram_id":  fmt.Sprintf("%d", telegramID),
-			"package_id":   fmt.Sprintf("%d", packageID),
-			"payment_type": "minute_package",
-		},
-	}
-
-	reqBody, _ := json.Marshal(body)
-
-	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
+	payURL, _, err := s.paymentProvider.CreateMinutePackagePayment(
+		ctx,
+		botID,
+		telegramID,
+		packageID,
+		pkg.Price,
+		pkg.Name,
+		pkg.Minutes,
+	)
 	if err != nil {
-		return "", fmt.Errorf("build request: %w", err)
+		return "", err
 	}
 
-	req.SetBasicAuth(shopID, secret)
-	req.Header.Set("Idempotence-Key", fmt.Sprintf("%d", time.Now().UnixNano()))
-	req.Header.Set("Content-Type", "application/json")
-
-	// 4. execute
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("request to yookassa: %w", err)
-	}
-	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("yookassa returned %d: %s", resp.StatusCode, string(raw))
-	}
-
-	// 5. decode
-	var yresp struct {
-		ID           string `json:"id"`
-		Confirmation struct {
-			URL string `json:"confirmation_url"`
-		} `json:"confirmation"`
-	}
-
-	if err := json.Unmarshal(raw, &yresp); err != nil {
-		return "", fmt.Errorf("decode yookassa: %w", err)
-	}
-
-	if yresp.ID == "" || yresp.Confirmation.URL == "" {
-		return "", fmt.Errorf("invalid yookassa response: %s", string(raw))
-	}
-
-	return yresp.Confirmation.URL, nil
+	return payURL, nil
 }

@@ -1,14 +1,8 @@
 package domain
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/Vovarama1992/make_ziper/internal/minutes_packages"
@@ -18,13 +12,12 @@ import (
 )
 
 type SubscriptionService struct {
-	repo       ports.SubscriptionRepo
-	tariffRepo ports.TariffRepo
-	trialRepo  trial.RepoInf
-
-	httpClient *http.Client
-	notifier   notificator.Notificator
-	minuteSvc  minutes_packages.MinutePackageService
+	repo            ports.SubscriptionRepo
+	tariffRepo      ports.TariffRepo
+	trialRepo       trial.RepoInf
+	minuteSvc       minutes_packages.MinutePackageService
+	notifier        notificator.Notificator
+	paymentProvider ports.PaymentProvider
 }
 
 func NewSubscriptionService(
@@ -33,14 +26,15 @@ func NewSubscriptionService(
 	trialRepo trial.RepoInf,
 	minuteSvc minutes_packages.MinutePackageService,
 	notifier notificator.Notificator,
+	paymentProvider ports.PaymentProvider,
 ) ports.SubscriptionService {
 	return &SubscriptionService{
-		repo:       repo,
-		tariffRepo: tariffRepo,
-		trialRepo:  trialRepo,
-		minuteSvc:  minuteSvc,
-		notifier:   notifier,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		repo:            repo,
+		tariffRepo:      tariffRepo,
+		trialRepo:       trialRepo,
+		minuteSvc:       minuteSvc,
+		notifier:        notifier,
+		paymentProvider: paymentProvider,
 	}
 }
 
@@ -75,118 +69,31 @@ func (s *SubscriptionService) Create(
 		return "", err
 	}
 
-	// 2. ENVs
-	apiURL := os.Getenv("YOOKASSA_API_URL")
-	shopID := os.Getenv("YOOKASSA_SHOP_ID")
-	secret := os.Getenv("YOOKASSA_SECRET_KEY")
-	customerPhone := os.Getenv("YOOKASSA_CUSTOMER_PHONE")
-
-	if apiURL == "" || shopID == "" || secret == "" {
-		err := fmt.Errorf("missing yookassa ENV variables")
-		s.notifier.Notify(ctx, botID, err,
-			"Переменные окружения YooKassa отсутствуют")
-		return "", err
-	}
-	if !strings.Contains(apiURL, "/v3/payments") {
-		apiURL = strings.TrimRight(apiURL, "/") + "/v3/payments"
-	}
-
-	if customerPhone == "" {
-		customerPhone = "79000000000"
-	}
-
-	// 3. Формируем тело запроса — ИСПРАВЛЕНО payment_mode
-	body := map[string]any{
-		"amount": map[string]any{
-			"value":    fmt.Sprintf("%.2f", plan.Price),
-			"currency": "RUB",
-		},
-		"capture":     true,
-		"description": fmt.Sprintf("Subscription '%s' (user %d)", plan.Code, telegramID),
-		"confirmation": map[string]any{
-			"type":       "redirect",
-			"return_url": "https://aifulls.com/success.html",
-		},
-		"receipt": map[string]any{
-			"customer": map[string]any{
-				"phone": customerPhone,
-			},
-			"items": []map[string]any{
-				{
-					"description":     fmt.Sprintf("Subscription %s", plan.Code),
-					"quantity":        "1.00",
-					"amount":          map[string]any{"value": fmt.Sprintf("%.2f", plan.Price), "currency": "RUB"},
-					"payment_subject": "service",
-					"payment_mode":    "full_prepayment", // ← FIX
-					"vat_code":        1,
-				},
-			},
-		},
-		"metadata": map[string]any{
-			"bot_id":       botID,
-			"telegram_id":  fmt.Sprintf("%d", telegramID),
-			"payment_type": "subscription",
-			"plan_code":    plan.Code,
-		},
-	}
-
-	reqBody, _ := json.Marshal(body)
-	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
+	// 2. Создаём оплату через провайдер
+	payURL, providerPaymentID, err := s.paymentProvider.CreateSubscriptionPayment(
+		ctx,
+		botID,
+		telegramID,
+		plan.Code,
+		plan.Price,
+	)
 	if err != nil {
-		s.notifier.Notify(ctx, botID, err, "Ошибка формирования HTTP-запроса в YooKassa")
-		return "", fmt.Errorf("build request: %w", err)
-	}
-
-	req.SetBasicAuth(shopID, secret)
-	req.Header.Set("Idempotence-Key", fmt.Sprintf("%d", time.Now().UnixNano()))
-	req.Header.Set("Content-Type", "application/json")
-
-	// 4. Выполняем запрос
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		s.notifier.Notify(ctx, botID, err, "Ошибка сети при обращении к YooKassa")
-		return "", fmt.Errorf("yookassa request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err := fmt.Errorf("yookassa returned %d: %s", resp.StatusCode, string(raw))
-		s.notifier.Notify(ctx, botID, err,
-			fmt.Sprintf("YooKassa отклонила подписку (код %d)", resp.StatusCode))
+		s.notifier.Notify(ctx, botID, err, "Ошибка создания оплаты подписки")
 		return "", err
 	}
 
-	// 5. Парсим JSON
-	var yresp struct {
-		ID           string `json:"id"`
-		Confirmation struct {
-			URL string `json:"confirmation_url"`
-		} `json:"confirmation"`
-	}
-	if err := json.Unmarshal(raw, &yresp); err != nil {
-		s.notifier.Notify(ctx, botID, err, "Невалидный JSON от YooKassa")
-		return "", fmt.Errorf("decode yookassa: %w", err)
-	}
-
-	if yresp.ID == "" || yresp.Confirmation.URL == "" {
-		err := fmt.Errorf("invalid yookassa response: %s", string(raw))
-		s.notifier.Notify(ctx, botID, err, "Пустой ответ от YooKassa")
-		return "", err
-	}
-
-	// 6. Сохраняем
+	// 3. Сохраняем подписку
 	now := time.Now()
 	planID := int64(plan.ID)
 
 	sub := &ports.Subscription{
 		BotID:             botID,
 		TelegramID:        telegramID,
-		PlanID:            &planID, // ← FIX
+		PlanID:            &planID,
 		Status:            "pending",
 		StartedAt:         &now,
 		ExpiresAt:         nil,
-		YookassaPaymentID: &yresp.ID,
+		YookassaPaymentID: &providerPaymentID, // переименуем позже
 	}
 
 	if err := s.repo.Create(ctx, sub); err != nil {
@@ -194,7 +101,7 @@ func (s *SubscriptionService) Create(
 		return "", fmt.Errorf("create subscription: %w", err)
 	}
 
-	return yresp.Confirmation.URL, nil
+	return payURL, nil
 }
 
 func (s *SubscriptionService) Get(ctx context.Context, botID string, telegramID int64) (*ports.Subscription, error) {

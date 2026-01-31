@@ -115,6 +115,7 @@ func main() {
 	perplexityTTS := speech.NewPerplexityTTS()
 	ttsClient := speech.NewElevenLabsClient()
 	perplexityClient := ai.NewPerplexityClient()
+	paymentProvider := infra.NewYooKassaProvider()
 
 	// =========================================================================
 	// DOMAIN SERVICES
@@ -128,7 +129,10 @@ func main() {
 	authService := domain.NewAuthService(authRepo, os.Getenv("AUTH_SECRET"))
 
 	tariffService := domain.NewTariffService(tariffRepo)
-	minutePackageService := minutes_packages.NewService(minutePackageRepo)
+	minutePackageService := minutes_packages.NewService(
+		minutePackageRepo,
+		paymentProvider,
+	)
 	classService := classes.NewClassService(classRepo)
 	userService := user.NewService(userRepo)
 
@@ -156,6 +160,7 @@ func main() {
 		trialRepo,
 		minutePackageService,
 		errService,
+		paymentProvider,
 	)
 
 	textRuleService := textrules.NewService(textRuleRepo)
