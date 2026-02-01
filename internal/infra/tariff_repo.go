@@ -137,6 +137,7 @@ func (r *tariffRepo) Create(ctx context.Context, plan *ports.TariffPlan) (*ports
 	row := r.db.QueryRowContext(ctx, `
 		INSERT INTO tariff_plans (
 			bot_id,
+			bot_ref,
 			code,
 			name,
 			price,
@@ -145,7 +146,11 @@ func (r *tariffRepo) Create(ctx context.Context, plan *ports.TariffPlan) (*ports
 			is_trial,
 			description
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		VALUES (
+			$1,
+			(SELECT id FROM bot_configs WHERE bot_id = $1),
+			$2,$3,$4,$5,$6,$7,$8
+		)
 		RETURNING
 			id,
 			bot_id,

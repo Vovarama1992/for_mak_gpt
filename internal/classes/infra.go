@@ -19,8 +19,12 @@ func NewClassRepo(db *sql.DB) ClassRepo {
 
 func (r *repo) CreateClass(ctx context.Context, botID string, grade string) (*Class, error) {
 	row := r.db.QueryRowContext(ctx,
-		`INSERT INTO classes (bot_id, grade)
-		 VALUES ($1, $2)
+		`INSERT INTO classes (bot_id, bot_ref, grade)
+		 VALUES (
+			$1,
+			(SELECT id FROM bot_configs WHERE bot_id = $1),
+			$2
+		 )
 		 RETURNING id, bot_id, grade`,
 		botID, grade,
 	)
@@ -32,11 +36,7 @@ func (r *repo) CreateClass(ctx context.Context, botID string, grade string) (*Cl
 	return &c, nil
 }
 
-func (r *repo) ListClasses(
-	ctx context.Context,
-	botID string,
-) ([]*Class, error) {
-
+func (r *repo) ListClasses(ctx context.Context, botID string) ([]*Class, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT 
 			c.id,
@@ -47,7 +47,7 @@ func (r *repo) ListClasses(
 		FROM classes c
 		LEFT JOIN class_prompts p 
 			ON p.class_id = c.id 
-			AND p.bot_id = c.bot_id
+			AND p.bot_ref = c.bot_ref
 		WHERE c.bot_id = $1
 		ORDER BY c.grade ASC
 	`, botID)
@@ -153,8 +153,13 @@ func (r *repo) DeleteClassByID(ctx context.Context, id int) error {
 
 func (r *repo) CreatePrompt(ctx context.Context, botID string, classID int, prompt string) (*ClassPrompt, error) {
 	row := r.db.QueryRowContext(ctx,
-		`INSERT INTO class_prompts (bot_id, class_id, prompt)
-		 VALUES ($1, $2, $3)
+		`INSERT INTO class_prompts (bot_id, bot_ref, class_id, prompt)
+		 VALUES (
+			$1,
+			(SELECT id FROM bot_configs WHERE bot_id = $1),
+			$2,
+			$3
+		 )
 		 RETURNING id, bot_id, class_id, prompt`,
 		botID, classID, prompt,
 	)
@@ -210,8 +215,13 @@ func (r *repo) GetPromptByClassID(ctx context.Context, botID string, classID int
 
 func (r *repo) SetUserClass(ctx context.Context, botID string, telegramID int64, classID int) error {
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO user_classes (bot_id, telegram_id, class_id)
-		 VALUES ($1, $2, $3)
+		`INSERT INTO user_classes (bot_id, bot_ref, telegram_id, class_id)
+		 VALUES (
+			$1,
+			(SELECT id FROM bot_configs WHERE bot_id = $1),
+			$2,
+			$3
+		 )
 		 ON CONFLICT (bot_id, telegram_id)
 		 DO UPDATE SET class_id = EXCLUDED.class_id`,
 		botID, telegramID, classID,

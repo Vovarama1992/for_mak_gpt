@@ -15,8 +15,12 @@ func NewMinutePackageRepo(db *sql.DB) MinutePackageRepo {
 
 func (r *repo) Create(ctx context.Context, pkg *MinutePackage) error {
 	query := `
-		INSERT INTO minute_packages (bot_id, name, minutes, price, active)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO minute_packages (bot_id, bot_ref, name, minutes, price, active)
+		VALUES (
+			$1,
+			(SELECT id FROM bot_configs WHERE bot_id = $1),
+			$2, $3, $4, $5
+		)
 		RETURNING id
 	`
 
