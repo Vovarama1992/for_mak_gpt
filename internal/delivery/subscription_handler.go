@@ -50,67 +50,39 @@ func (h *SubscriptionHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *SubscriptionHandler) Activate(w http.ResponseWriter, r *http.Request) {
 	var body map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		http.Error(w, "invalid json", 400)
 		return
 	}
 
-	// Юкасса всегда отдаёт объект в body["object"]
-	obj, ok := body["object"].(map[string]any)
+	data, ok := body["Data"].(map[string]any)
 	if !ok {
-		http.Error(w, "missing object", http.StatusBadRequest)
+		http.Error(w, "missing Data", 400)
 		return
 	}
 
-	// payment id
-	paymentID, _ := obj["id"].(string)
-	if paymentID == "" {
-		http.Error(w, "missing payment_id", http.StatusBadRequest)
-		return
-	}
+	paymentType, _ := data["payment_type"].(string)
+	botID, _ := data["bot_id"].(string)
 
-	// metadata
-	meta, _ := obj["metadata"].(map[string]any)
-	if meta == nil {
-		http.Error(w, "missing metadata", http.StatusBadRequest)
-		return
-	}
+	telegramID := int64(data["telegram_id"].(float64))
+	packageID := int64(data["package_id"].(float64))
 
-	paymentType, _ := meta["payment_type"].(string)
-	botID, _ := meta["bot_id"].(string)
-	telegramStr, _ := meta["telegram_id"].(string)
-	packageStr, _ := meta["package_id"].(string)
-
-	// разбор telegram_id
-	var telegramID int64
-	if telegramStr != "" {
-		telegramID, _ = strconv.ParseInt(telegramStr, 10, 64)
-	}
-
-	// разбор package_id
-	var packageID int64
-	if packageStr != "" {
-		packageID, _ = strconv.ParseInt(packageStr, 10, 64)
-	}
-
-	// --- роутинг по типу платежа ---
 	switch paymentType {
 
-	case "subscription":
-		// активируем обычную подписку
-		if err := h.service.Activate(r.Context(), paymentID); err != nil {
-			http.Error(w, "failed to activate subscription: "+err.Error(), 500)
-			return
-		}
-
 	case "minute_package":
-		// покупка минут в активную подписку
 		if err := h.service.AddMinutesFromPackage(
 			r.Context(),
 			botID,
 			telegramID,
 			packageID,
 		); err != nil {
-			http.Error(w, "failed to add minutes: "+err.Error(), 500)
+			http.Error(w, err.Error(), 500)
+			return
+		}
+
+	case "subscription":
+		invoiceID, _ := body["InvoiceId"].(string)
+		if err := h.service.Activate(r.Context(), invoiceID); err != nil {
+			http.Error(w, err.Error(), 500)
 			return
 		}
 
@@ -119,7 +91,7 @@ func (h *SubscriptionHandler) Activate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+	w.Write([]byte("OK"))
 }
 
 // GET /subscribe/status/{telegram_id}?bot_id=...
