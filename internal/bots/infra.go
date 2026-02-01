@@ -231,7 +231,7 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 		&b.WelcomeVideo,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("update bot_configs failed: %w | SQL=%s ARGS=%v", err, q, args)
 	}
 
 	return &b, nil

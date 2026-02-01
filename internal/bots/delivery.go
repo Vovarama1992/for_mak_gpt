@@ -100,7 +100,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid json", 400)
+		http.Error(w, err.Error(), 400)
 		return
 	}
 
@@ -121,7 +121,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	out, err := h.svc.Update(r.Context(), in)
 	if err != nil {
-		http.Error(w, "failed to update bot config", 500)
+		w.WriteHeader(500)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": err.Error(),
+		})
 		return
 	}
 
