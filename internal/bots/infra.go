@@ -161,70 +161,6 @@ func (r *repo) Get(ctx context.Context, botID string) (*BotConfig, error) {
 // --------------------------------------------------
 
 func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) {
-	// --- Ветка переименования bot_id (это миграция, а не update)
-	if in.NewBotID != nil && *in.NewBotID != in.BotID {
-		tx, err := r.db.BeginTx(ctx, nil)
-		if err != nil {
-			return nil, err
-		}
-		defer tx.Rollback()
-
-		oldID := in.BotID
-		newID := *in.NewBotID
-
-		// снять FK
-		fkDrops := []string{
-			`ALTER TABLE classes DROP CONSTRAINT fk_classes_bot`,
-			`ALTER TABLE user_classes DROP CONSTRAINT fk_user_classes_bot`,
-			`ALTER TABLE class_prompts DROP CONSTRAINT fk_class_prompts_bot`,
-			`ALTER TABLE tariff_plans DROP CONSTRAINT fk_tariff_plans_bot`,
-			`ALTER TABLE minute_packages DROP CONSTRAINT fk_minute_packages_bot`,
-		}
-		for _, q := range fkDrops {
-			if _, err := tx.ExecContext(ctx, q); err != nil {
-				return nil, err
-			}
-		}
-
-		// обновить во всех таблицах
-		updateQs := []string{
-			`UPDATE bot_configs SET bot_id=$1 WHERE bot_id=$2`,
-			`UPDATE classes SET bot_id=$1 WHERE bot_id=$2`,
-			`UPDATE user_classes SET bot_id=$1 WHERE bot_id=$2`,
-			`UPDATE class_prompts SET bot_id=$1 WHERE bot_id=$2`,
-			`UPDATE tariff_plans SET bot_id=$1 WHERE bot_id=$2`,
-			`UPDATE minute_packages SET bot_id=$1 WHERE bot_id=$2`,
-		}
-		for _, q := range updateQs {
-			if _, err := tx.ExecContext(ctx, q, newID, oldID); err != nil {
-				return nil, err
-			}
-		}
-
-		// вернуть FK
-		fkAdds := []string{
-			`ALTER TABLE classes ADD CONSTRAINT fk_classes_bot FOREIGN KEY (bot_id) REFERENCES bot_configs(bot_id)`,
-			`ALTER TABLE user_classes ADD CONSTRAINT fk_user_classes_bot FOREIGN KEY (bot_id) REFERENCES bot_configs(bot_id)`,
-			`ALTER TABLE class_prompts ADD CONSTRAINT fk_class_prompts_bot FOREIGN KEY (bot_id) REFERENCES bot_configs(bot_id)`,
-			`ALTER TABLE tariff_plans ADD CONSTRAINT fk_tariff_plans_bot FOREIGN KEY (bot_id) REFERENCES bot_configs(bot_id)`,
-			`ALTER TABLE minute_packages ADD CONSTRAINT fk_minute_packages_bot FOREIGN KEY (bot_id) REFERENCES bot_configs(bot_id)`,
-		}
-		for _, q := range fkAdds {
-			if _, err := tx.ExecContext(ctx, q); err != nil {
-				return nil, err
-			}
-		}
-
-		if err := tx.Commit(); err != nil {
-			return nil, err
-		}
-
-		// после переименования продолжаем обычный update уже по новому bot_id
-		in.BotID = newID
-		in.NewBotID = nil
-	}
-
-	// --- Обычный update полей (твоя логика без bot_id)
 	q := "UPDATE bot_configs SET "
 	args := []any{}
 	idx := 1
@@ -236,6 +172,9 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 			idx++
 		}
 	}
+
+	// теперь bot_id — обычное поле
+	appendField("bot_id", in.NewBotID)
 
 	appendField("token", in.Token)
 	appendField("model", in.Model)
