@@ -3,6 +3,7 @@ package minutes_packages
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
 )
@@ -45,9 +46,6 @@ func (s *service) ListAll(ctx context.Context) ([]*MinutePackage, error) {
 	return s.repo.ListAll(ctx)
 }
 
-// ---------------------------
-// CREATE PAYMENT
-// ---------------------------
 func (s *service) CreatePayment(
 	ctx context.Context,
 	botID string,
@@ -63,7 +61,10 @@ func (s *service) CreatePayment(
 		return "", fmt.Errorf("minute package not found or inactive: %d", packageID)
 	}
 
-	payURL, _, err := s.paymentProvider.CreateMinutePackagePayment(
+	log.Printf("[PAY] start bot=%s tg=%d pkg=%d price=%.2f",
+		botID, telegramID, packageID, pkg.Price)
+
+	payURL, payID, err := s.paymentProvider.CreateMinutePackagePayment(
 		ctx,
 		botID,
 		telegramID,
@@ -73,8 +74,11 @@ func (s *service) CreatePayment(
 		pkg.Minutes,
 	)
 	if err != nil {
+		log.Printf("[PAY] provider error: %v", err)
 		return "", err
 	}
+
+	log.Printf("[PAY] created url=%s id=%s", payURL, payID)
 
 	return payURL, nil
 }

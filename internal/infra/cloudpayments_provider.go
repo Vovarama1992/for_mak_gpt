@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -22,19 +23,6 @@ func NewCloudPaymentsProvider() ports.PaymentProvider {
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
-
-type cpResponse struct {
-	Success bool   `json:"Success"`
-	Message string `json:"Message"`
-	Model   struct {
-		URL string `json:"Url"`
-		Id  string `json:"Id"`
-	} `json:"Model"`
-}
-
-// ----------------------------------------------------
-// Minute packages
-// ----------------------------------------------------
 
 func (p *CloudPaymentsProvider) CreateMinutePackagePayment(
 	ctx context.Context,
@@ -63,10 +51,6 @@ func (p *CloudPaymentsProvider) CreateMinutePackagePayment(
 	return p.createOrder(ctx, body)
 }
 
-// ----------------------------------------------------
-// Subscriptions
-// ----------------------------------------------------
-
 func (p *CloudPaymentsProvider) CreateSubscriptionPayment(
 	ctx context.Context,
 	botID string,
@@ -92,19 +76,18 @@ func (p *CloudPaymentsProvider) CreateSubscriptionPayment(
 	return p.createOrder(ctx, body)
 }
 
-// ----------------------------------------------------
-
 func (p *CloudPaymentsProvider) createOrder(
 	ctx context.Context,
 	payload map[string]any,
 ) (string, string, error) {
 
-	apiURL := "https://api.cloudpayments.ru/payments/links"
-
+	apiURL := "https://api.cloudpayments.ru/orders/create"
 	publicID := os.Getenv("CLOUDPAYMENTS_PUBLIC_ID")
 	secret := os.Getenv("CLOUDPAYMENTS_API_SECRET")
 
 	reqBody, _ := json.Marshal(payload)
+
+	log.Printf("[CP] POST %s body=%s", apiURL, string(reqBody))
 
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
@@ -122,8 +105,11 @@ func (p *CloudPaymentsProvider) createOrder(
 
 	raw, _ := io.ReadAll(resp.Body)
 
+	log.Printf("[CP] status=%d resp=%s", resp.StatusCode, string(raw))
+
 	var cp struct {
-		Success bool `json:"Success"`
+		Success bool   `json:"Success"`
+		Message string `json:"Message"`
 		Model   struct {
 			Url string `json:"Url"`
 			Id  string `json:"Id"`
@@ -134,8 +120,11 @@ func (p *CloudPaymentsProvider) createOrder(
 		return "", "", err
 	}
 
+	log.Printf("[CP] success=%v url=%s id=%s",
+		cp.Success, cp.Model.Url, cp.Model.Id)
+
 	if !cp.Success {
-		return "", "", fmt.Errorf("cloudpayments error: %s", string(raw))
+		return "", "", fmt.Errorf("cloudpayments error: %s", cp.Message)
 	}
 
 	return cp.Model.Url, cp.Model.Id, nil
