@@ -99,16 +99,20 @@ func (p *CloudPaymentsProvider) createOrder(
 	payload map[string]any,
 ) (string, string, error) {
 
-	apiURL := "https://api.cloudpayments.ru/orders/create"
+	apiURL := "https://api.cloudpayments.ru/payments/links"
+
 	publicID := os.Getenv("CLOUDPAYMENTS_PUBLIC_ID")
 	secret := os.Getenv("CLOUDPAYMENTS_API_SECRET")
 
 	reqBody, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return "", "", err
+	}
+
 	req.SetBasicAuth(publicID, secret)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Request-ID", fmt.Sprintf("%d", time.Now().UnixNano()))
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
@@ -118,14 +122,21 @@ func (p *CloudPaymentsProvider) createOrder(
 
 	raw, _ := io.ReadAll(resp.Body)
 
-	var cp cpResponse
+	var cp struct {
+		Success bool `json:"Success"`
+		Model   struct {
+			Url string `json:"Url"`
+			Id  string `json:"Id"`
+		} `json:"Model"`
+	}
+
 	if err := json.Unmarshal(raw, &cp); err != nil {
 		return "", "", err
 	}
 
 	if !cp.Success {
-		return "", "", fmt.Errorf("cloudpayments error: %s", cp.Message)
+		return "", "", fmt.Errorf("cloudpayments error: %s", string(raw))
 	}
 
-	return cp.Model.URL, cp.Model.Id, nil
+	return cp.Model.Url, cp.Model.Id, nil
 }
