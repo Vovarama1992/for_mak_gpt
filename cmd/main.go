@@ -115,7 +115,7 @@ func main() {
 	perplexityTTS := speech.NewPerplexityTTS()
 	ttsClient := speech.NewElevenLabsClient()
 	perplexityClient := ai.NewPerplexityClient()
-	paymentProvider := infra.NewYooKassaProvider()
+	paymentProvider := infra.NewCloudPaymentsProvider()
 
 	// =========================================================================
 	// DOMAIN SERVICES
