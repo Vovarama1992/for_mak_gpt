@@ -1,9 +1,13 @@
 package delivery
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
@@ -47,51 +51,81 @@ func (h *SubscriptionHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /subscribe/activate
+// POST /subscribe/activate
 func (h *SubscriptionHandler) Activate(w http.ResponseWriter, r *http.Request) {
+	raw, _ := io.ReadAll(r.Body)
+	log.Printf("[CP] webhook hit body=%s", string(raw))
+	r.Body = io.NopCloser(bytes.NewBuffer(raw))
+
 	var body map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid json", 400)
+		log.Printf("[CP] decode error: %v", err)
+		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
 
-	data, ok := body["Data"].(map[string]any)
-	if !ok {
-		http.Error(w, "missing Data", 400)
+	// CloudPayments Pay уведомление приходит ПЛОСКИМ JSON, не как у YooKassa
+	invoiceId, _ := body["InvoiceId"].(string)
+	accountId, _ := body["AccountId"].(string)
+	status, _ := body["Status"].(string)
+
+	log.Printf("[CP] parsed invoice=%s account=%s status=%s", invoiceId, accountId, status)
+
+	if status != "Completed" && status != "Authorized" {
+		log.Printf("[CP] skip status=%s", status)
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	paymentType, _ := data["payment_type"].(string)
-	botID, _ := data["bot_id"].(string)
+	// invoice: pkg_<tg>_<ts>
+	parts := strings.Split(invoiceId, "_")
+	if len(parts) < 2 {
+		log.Printf("[CP] bad invoice format: %s", invoiceId)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
-	telegramID := int64(data["telegram_id"].(float64))
-	packageID := int64(data["package_id"].(float64))
+	tgID, _ := strconv.ParseInt(parts[1], 10, 64)
+
+	jsonData, _ := body["JsonData"].(map[string]any)
+	if jsonData == nil {
+		log.Printf("[CP] missing JsonData")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	paymentType, _ := jsonData["payment_type"].(string)
+	botID, _ := jsonData["bot_id"].(string)
+	packageIDFloat, _ := jsonData["package_id"].(float64)
+	packageID := int64(packageIDFloat)
+
+	log.Printf("[CP] meta type=%s bot=%s tg=%d pkg=%d",
+		paymentType, botID, tgID, packageID,
+	)
 
 	switch paymentType {
 
 	case "minute_package":
-		if err := h.service.AddMinutesFromPackage(
+		err := h.service.AddMinutesFromPackage(
 			r.Context(),
 			botID,
-			telegramID,
+			tgID,
 			packageID,
-		); err != nil {
+		)
+		if err != nil {
+			log.Printf("[CP] AddMinutes error: %v", err)
 			http.Error(w, err.Error(), 500)
 			return
 		}
 
-	case "subscription":
-		invoiceID, _ := body["InvoiceId"].(string)
-		if err := h.service.Activate(r.Context(), invoiceID); err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
+		log.Printf("[CP] minutes added OK")
 
 	default:
-		http.Error(w, "unknown payment_type", 400)
-		return
+		log.Printf("[CP] unknown payment_type=%s", paymentType)
 	}
 
-	w.Write([]byte("OK"))
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
 }
 
 // GET /subscribe/status/{telegram_id}?bot_id=...
