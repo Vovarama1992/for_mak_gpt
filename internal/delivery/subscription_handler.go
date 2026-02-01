@@ -1,13 +1,10 @@
 package delivery
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
@@ -50,81 +47,74 @@ func (h *SubscriptionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /subscribe/activate
-// POST /subscribe/activate
+// POST /subscribe/activate  (CloudPayments Pay)
 func (h *SubscriptionHandler) Activate(w http.ResponseWriter, r *http.Request) {
-	raw, _ := io.ReadAll(r.Body)
-	log.Printf("[CP] webhook hit body=%s", string(raw))
-	r.Body = io.NopCloser(bytes.NewBuffer(raw))
+	log.Println("[CP] webhook hit")
 
-	var body map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		log.Printf("[CP] decode error: %v", err)
-		http.Error(w, "invalid json", http.StatusBadRequest)
+	if err := r.ParseForm(); err != nil {
+		log.Println("[CP] parse error:", err)
+		http.Error(w, "bad form", 400)
 		return
 	}
 
-	// CloudPayments Pay уведомление приходит ПЛОСКИМ JSON, не как у YooKassa
-	invoiceId, _ := body["InvoiceId"].(string)
-	accountId, _ := body["AccountId"].(string)
-	status, _ := body["Status"].(string)
+	log.Println("[CP] raw form:", r.Form.Encode())
 
-	log.Printf("[CP] parsed invoice=%s account=%s status=%s", invoiceId, accountId, status)
-
-	if status != "Completed" && status != "Authorized" {
-		log.Printf("[CP] skip status=%s", status)
-		w.WriteHeader(http.StatusOK)
+	status := r.Form.Get("Status")
+	if status != "Completed" {
+		log.Println("[CP] ignore status:", status)
+		w.WriteHeader(200)
 		return
 	}
 
-	// invoice: pkg_<tg>_<ts>
-	parts := strings.Split(invoiceId, "_")
-	if len(parts) < 2 {
-		log.Printf("[CP] bad invoice format: %s", invoiceId)
-		w.WriteHeader(http.StatusOK)
+	invoiceID := r.Form.Get("InvoiceId")
+	accountID := r.Form.Get("AccountId")
+	data := r.Form.Get("Data")
+
+	log.Printf("[CP] invoice=%s account=%s data=%s\n", invoiceID, accountID, data)
+
+	var meta struct {
+		BotID      string `json:"bot_id"`
+		TelegramID int64  `json:"telegram_id"`
+		PackageID  int64  `json:"package_id"`
+		Type       string `json:"payment_type"`
+	}
+
+	if err := json.Unmarshal([]byte(data), &meta); err != nil {
+		log.Println("[CP] json decode error:", err)
+		http.Error(w, "bad data json", 400)
 		return
 	}
 
-	tgID, _ := strconv.ParseInt(parts[1], 10, 64)
+	log.Printf("[CP] parsed meta: %+v\n", meta)
 
-	jsonData, _ := body["JsonData"].(map[string]any)
-	if jsonData == nil {
-		log.Printf("[CP] missing JsonData")
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	paymentType, _ := jsonData["payment_type"].(string)
-	botID, _ := jsonData["bot_id"].(string)
-	packageIDFloat, _ := jsonData["package_id"].(float64)
-	packageID := int64(packageIDFloat)
-
-	log.Printf("[CP] meta type=%s bot=%s tg=%d pkg=%d",
-		paymentType, botID, tgID, packageID,
-	)
-
-	switch paymentType {
+	switch meta.Type {
 
 	case "minute_package":
-		err := h.service.AddMinutesFromPackage(
+		if err := h.service.AddMinutesFromPackage(
 			r.Context(),
-			botID,
-			tgID,
-			packageID,
-		)
-		if err != nil {
-			log.Printf("[CP] AddMinutes error: %v", err)
+			meta.BotID,
+			meta.TelegramID,
+			meta.PackageID,
+		); err != nil {
+			log.Println("[CP] add minutes error:", err)
 			http.Error(w, err.Error(), 500)
 			return
 		}
+		log.Println("[CP] minutes added OK")
 
-		log.Printf("[CP] minutes added OK")
+	case "subscription":
+		if err := h.service.Activate(r.Context(), invoiceID); err != nil {
+			log.Println("[CP] activate sub error:", err)
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		log.Println("[CP] subscription activated")
 
 	default:
-		log.Printf("[CP] unknown payment_type=%s", paymentType)
+		log.Println("[CP] unknown type:", meta.Type)
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(200)
 	w.Write([]byte("ok"))
 }
 
