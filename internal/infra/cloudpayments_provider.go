@@ -57,13 +57,14 @@ func (p *CloudPaymentsProvider) CreateSubscriptionPayment(
 	telegramID int64,
 	planCode string,
 	price float64,
+	invoiceID string, // <-- добавили
 ) (string, string, error) {
 
 	body := map[string]any{
 		"Amount":      price,
 		"Currency":    "RUB",
 		"Description": fmt.Sprintf("Subscription '%s'", planCode),
-		"InvoiceId":   fmt.Sprintf("sub_%d_%d", telegramID, time.Now().Unix()),
+		"InvoiceId":   invoiceID, // <-- используем переданный
 		"AccountId":   fmt.Sprintf("%d", telegramID),
 		"JsonData": map[string]any{
 			"payment_type": "subscription",

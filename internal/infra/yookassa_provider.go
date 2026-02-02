@@ -104,6 +104,7 @@ func (p *YooKassaProvider) CreateSubscriptionPayment(
 	telegramID int64,
 	planCode string,
 	price float64,
+	invoiceID string,
 ) (string, string, error) {
 
 	apiURL := os.Getenv("YOOKASSA_API_URL")

@@ -48,11 +48,9 @@ func (s *SubscriptionService) Create(
 	planCode string,
 ) (string, error) {
 
-	// 1. Ищем тариф
 	tariffs, err := s.tariffRepo.ListAll(ctx)
 	if err != nil {
-		s.notifier.Notify(ctx, botID, err, "Ошибка чтения тарифов (подписка)")
-		return "", fmt.Errorf("list tariffs: %w", err)
+		return "", err
 	}
 
 	var plan *ports.TariffPlan
@@ -63,26 +61,24 @@ func (s *SubscriptionService) Create(
 		}
 	}
 	if plan == nil {
-		err := fmt.Errorf("unknown plan code: %s", planCode)
-		s.notifier.Notify(ctx, botID, err,
-			fmt.Sprintf("Пользователь выбрал несуществующий тариф (%s)", planCode))
-		return "", err
+		return "", fmt.Errorf("unknown plan code: %s", planCode)
 	}
 
-	// 2. Создаём оплату через провайдер
-	payURL, providerPaymentID, err := s.paymentProvider.CreateSubscriptionPayment(
+	// ВАЖНО: генерим InvoiceId сами
+	invoiceID := fmt.Sprintf("sub_%d_%d", telegramID, time.Now().Unix())
+
+	payURL, _, err := s.paymentProvider.CreateSubscriptionPayment(
 		ctx,
 		botID,
 		telegramID,
 		plan.Code,
 		plan.Price,
+		invoiceID, // передаём внутрь
 	)
 	if err != nil {
-		s.notifier.Notify(ctx, botID, err, "Ошибка создания оплаты подписки")
 		return "", err
 	}
 
-	// 3. Сохраняем подписку
 	now := time.Now()
 	planID := int64(plan.ID)
 
@@ -92,13 +88,11 @@ func (s *SubscriptionService) Create(
 		PlanID:            &planID,
 		Status:            "pending",
 		StartedAt:         &now,
-		ExpiresAt:         nil,
-		YookassaPaymentID: &providerPaymentID, // переименуем позже
+		YookassaPaymentID: &invoiceID, // <-- ВМЕСТО Model.Id
 	}
 
 	if err := s.repo.Create(ctx, sub); err != nil {
-		s.notifier.Notify(ctx, botID, err, "Ошибка сохранения подписки в БД")
-		return "", fmt.Errorf("create subscription: %w", err)
+		return "", err
 	}
 
 	return payURL, nil
