@@ -147,18 +147,21 @@ func (app *BotApp) handleMessage(
 		return
 	}
 
-	if strings.Contains(textLower, "помощ") {
+	if text == "❓ Помощь" {
 		if app.adminBotUsername == "" {
 			bot.Send(tgbotapi.NewMessage(chatID, "Поддержка недоступна."))
 			return
 		}
+
 		url := "https://t.me/" + app.adminBotUsername + "?start=support"
+
 		m := tgbotapi.NewMessage(chatID, "🆘 Поддержка:")
 		m.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonURL("✉️ Написать", url),
 			),
 		)
+
 		bot.Send(m)
 		return
 	}

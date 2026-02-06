@@ -222,7 +222,7 @@ func main() {
 	tariffHandler := delivery.NewTariffHandler(tariffService)
 	botHandler := bots.NewHandler(botService)
 	minPkgHandler := delivery.NewMinutePackageHandler(minutePackageService)
-	classHandler := delivery.NewClassHandler(classService)
+	classHandler := delivery.NewClassHandler(classService, botService)
 	authHandler := delivery.NewAuthHandler(authService)
 	textRuleHandler := delivery.NewTextRuleHandler(textRuleRepo)
 

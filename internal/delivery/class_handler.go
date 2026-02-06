@@ -5,16 +5,24 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Vovarama1992/make_ziper/internal/bots"
 	cl "github.com/Vovarama1992/make_ziper/internal/classes"
 	"github.com/go-chi/chi/v5"
 )
 
 type ClassHandler struct {
-	svc cl.ClassService
+	svc    cl.ClassService
+	botSvc bots.Service
 }
 
-func NewClassHandler(svc cl.ClassService) *ClassHandler {
-	return &ClassHandler{svc: svc}
+func NewClassHandler(
+	svc cl.ClassService,
+	botSvc bots.Service,
+) *ClassHandler {
+	return &ClassHandler{
+		svc:    svc,
+		botSvc: botSvc,
+	}
 }
 
 func getBotID(r *http.Request) string {
@@ -30,17 +38,20 @@ func getBotID(r *http.Request) string {
 func (h *ClassHandler) ListClasses(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	botIDs := []string{
-		"assistant",
-		"repetitor",
+	// 1. получаем всех ботов из bot_configs
+	bots, err := h.botSvc.ListAll(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	var out []*cl.Class
 
-	for _, botID := range botIDs {
-		list, err := h.svc.ListClasses(ctx, botID)
+	// 2. по каждому боту грузим классы
+	for _, b := range bots {
+		list, err := h.svc.ListClasses(ctx, b.BotID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), 500)
 			return
 		}
 		out = append(out, list...)
