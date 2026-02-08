@@ -398,19 +398,18 @@ func (s *SubscriptionService) NotifyExpiredTrials(ctx context.Context) error {
 func (s *SubscriptionService) UpdateLimits(
 	ctx context.Context,
 	subscriptionID int64,
-	status string,
+	_ string,
 	expiresAt *time.Time,
 	voiceMinutes float64,
 ) error {
 
-	// если статус не передали — не ломаемся
-	if status == "" {
-		status = "active"
-	}
-
-	// expiresAt обязателен на уровне repo → тут защищаемся
 	if expiresAt == nil {
 		return fmt.Errorf("expiresAt is required")
+	}
+
+	status := "active"
+	if time.Now().After(*expiresAt) {
+		status = "expired"
 	}
 
 	if err := s.repo.UpdateLimits(
