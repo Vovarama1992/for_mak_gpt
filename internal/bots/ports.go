@@ -33,6 +33,8 @@ type BotConfig struct {
 	PhotoStylePrompt string `json:"photo_style_prompt"`
 	VoiceID          string `json:"voice_id"`
 
+	ClassLabel string `json:"class_label"`
+
 	WelcomeText        *string `json:"welcome_text"`
 	TariffText         *string `json:"tariff_text"`
 	AfterContinueText  *string `json:"after_continue_text"`
@@ -49,6 +51,7 @@ type UpdateInput struct {
 	VoiceStylePrompt   *string
 	PhotoStylePrompt   *string
 	VoiceID            *string
+	ClassLabel         *string
 	WelcomeText        *string
 	TariffText         *string
 	AfterContinueText  *string
@@ -63,6 +66,7 @@ type CreateInput struct {
 	Token string
 
 	// обязательные по схеме
-	Model   string
-	VoiceID string
+	Model      string
+	VoiceID    string
+	ClassLabel string
 }

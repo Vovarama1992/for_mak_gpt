@@ -27,10 +27,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		BotID   string `json:"bot_id"`
-		Token   string `json:"token"`
-		Model   string `json:"model"`
-		VoiceID string `json:"voice_id"`
+		BotID      string `json:"bot_id"`
+		Token      string `json:"token"`
+		Model      string `json:"model"`
+		VoiceID    string `json:"voice_id"`
+		ClassLabel string `json:"class_label"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -38,16 +39,17 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if body.BotID == "" || body.Token == "" || body.Model == "" || body.VoiceID == "" {
+	if body.BotID == "" || body.Token == "" || body.Model == "" || body.VoiceID == "" || body.ClassLabel == "" {
 		http.Error(w, "missing required fields", 400)
 		return
 	}
 
 	in := &CreateInput{
-		BotID:   body.BotID,
-		Token:   body.Token,
-		Model:   body.Model,
-		VoiceID: body.VoiceID,
+		BotID:      body.BotID,
+		Token:      body.Token,
+		Model:      body.Model,
+		VoiceID:    body.VoiceID,
+		ClassLabel: body.ClassLabel,
 	}
 
 	out, err := h.svc.Create(r.Context(), in)
@@ -93,6 +95,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		VoiceStylePrompt   *string `json:"voice_style_prompt"`
 		PhotoStylePrompt   *string `json:"photo_style_prompt"`
 		VoiceID            *string `json:"voice_id"`
+		ClassLabel         *string `json:"class_label"`
 		WelcomeText        *string `json:"welcome_text"`
 		TariffText         *string `json:"tariff_text"`
 		AfterContinueText  *string `json:"after_continue_text"`
@@ -113,6 +116,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		VoiceStylePrompt:   body.VoiceStylePrompt,
 		PhotoStylePrompt:   body.PhotoStylePrompt,
 		VoiceID:            body.VoiceID,
+		ClassLabel:         body.ClassLabel,
 		WelcomeText:        body.WelcomeText,
 		TariffText:         body.TariffText,
 		AfterContinueText:  body.AfterContinueText,

@@ -22,8 +22,9 @@ func (r *repo) Create(ctx context.Context, in *CreateInput) (*BotConfig, error) 
 			bot_id,
 			token,
 			model,
-			voice_id
-		) VALUES ($1, $2, $3, $4)
+			voice_id,
+			class_label
+		) VALUES ($1, $2, $3, $4, $5)
 		RETURNING
 			bot_id,
 			token,
@@ -32,6 +33,7 @@ func (r *repo) Create(ctx context.Context, in *CreateInput) (*BotConfig, error) 
 			voice_style_prompt,
 			photo_style_prompt,
 			voice_id,
+			class_label,
 			welcome_text,
 			tariff_text,
 			after_continue_text,
@@ -42,6 +44,7 @@ func (r *repo) Create(ctx context.Context, in *CreateInput) (*BotConfig, error) 
 		in.Token,
 		in.Model,
 		in.VoiceID,
+		in.ClassLabel,
 	).Scan(
 		&b.BotID,
 		&b.Token,
@@ -50,6 +53,7 @@ func (r *repo) Create(ctx context.Context, in *CreateInput) (*BotConfig, error) 
 		&b.VoiceStylePrompt,
 		&b.PhotoStylePrompt,
 		&b.VoiceID,
+		&b.ClassLabel,
 		&b.WelcomeText,
 		&b.TariffText,
 		&b.AfterContinueText,
@@ -75,6 +79,7 @@ func (r *repo) ListAll(ctx context.Context) ([]*BotConfig, error) {
 		       voice_style_prompt,
 		       photo_style_prompt,
 		       voice_id,
+		       class_label,
 		       welcome_text,
 		       tariff_text,
 		       after_continue_text,
@@ -100,6 +105,7 @@ func (r *repo) ListAll(ctx context.Context) ([]*BotConfig, error) {
 			&b.VoiceStylePrompt,
 			&b.PhotoStylePrompt,
 			&b.VoiceID,
+			&b.ClassLabel,
 			&b.WelcomeText,
 			&b.TariffText,
 			&b.AfterContinueText,
@@ -127,6 +133,7 @@ func (r *repo) Get(ctx context.Context, botID string) (*BotConfig, error) {
 		       voice_style_prompt,
 		       photo_style_prompt,
 		       voice_id,
+		       class_label,
 		       welcome_text,
 		       tariff_text,
 		       after_continue_text,
@@ -142,6 +149,7 @@ func (r *repo) Get(ctx context.Context, botID string) (*BotConfig, error) {
 		&b.VoiceStylePrompt,
 		&b.PhotoStylePrompt,
 		&b.VoiceID,
+		&b.ClassLabel,
 		&b.WelcomeText,
 		&b.TariffText,
 		&b.AfterContinueText,
@@ -173,15 +181,14 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 		}
 	}
 
-	// теперь bot_id — обычное поле
 	appendField("bot_id", in.NewBotID)
-
 	appendField("token", in.Token)
 	appendField("model", in.Model)
 	appendField("text_style_prompt", in.TextStylePrompt)
 	appendField("voice_style_prompt", in.VoiceStylePrompt)
 	appendField("photo_style_prompt", in.PhotoStylePrompt)
 	appendField("voice_id", in.VoiceID)
+	appendField("class_label", in.ClassLabel)
 	appendField("welcome_text", in.WelcomeText)
 	appendField("tariff_text", in.TariffText)
 	appendField("after_continue_text", in.AfterContinueText)
@@ -204,6 +211,7 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 			voice_style_prompt,
 			photo_style_prompt,
 			voice_id,
+			class_label,
 			welcome_text,
 			tariff_text,
 			after_continue_text,
@@ -222,6 +230,7 @@ func (r *repo) Update(ctx context.Context, in *UpdateInput) (*BotConfig, error) 
 		&b.VoiceStylePrompt,
 		&b.PhotoStylePrompt,
 		&b.VoiceID,
+		&b.ClassLabel,
 		&b.WelcomeText,
 		&b.TariffText,
 		&b.AfterContinueText,

@@ -27,9 +27,17 @@ func (app *BotApp) ShowClassPicker(
 	tgID int64,
 	chatID int64,
 ) {
+	cfg, err := app.BotsService.Get(ctx, botID)
+	if err != nil {
+		bot.Send(tgbotapi.NewMessage(chatID, "Ошибка конфигурации бота"))
+		return
+	}
+
+	label := cfg.ClassLabel
+
 	list, err := app.ClassService.ListClasses(ctx, botID)
 	if err != nil {
-		bot.Send(tgbotapi.NewMessage(chatID, "Не удалось получить список классов"))
+		bot.Send(tgbotapi.NewMessage(chatID, "Не удалось получить список"))
 		return
 	}
 
@@ -41,7 +49,7 @@ func (app *BotApp) ShowClassPicker(
 	}
 
 	if len(filtered) == 0 {
-		bot.Send(tgbotapi.NewMessage(chatID, "Классы не найдены"))
+		bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("%s не найдены", label)))
 		return
 	}
 
@@ -72,12 +80,10 @@ func (app *BotApp) ShowClassPicker(
 		))
 	}
 
-	title := "📚 Выбор класса"
-	if botID == "assistant" {
-		title = "🎭 Выбор стиля"
-	}
-
-	msg := tgbotapi.NewMessage(chatID, title)
+	msg := tgbotapi.NewMessage(
+		chatID,
+		fmt.Sprintf("📚 Выбор: %s", label),
+	)
 	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
 	bot.Send(msg)
 }
