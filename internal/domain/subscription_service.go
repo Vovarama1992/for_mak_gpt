@@ -233,11 +233,19 @@ func (s *SubscriptionService) GetStatus(ctx context.Context, botID string, teleg
 	if sub == nil {
 		return "none", nil
 	}
-	if sub.ExpiresAt != nil && time.Now().After(*sub.ExpiresAt) {
+
+	if sub.ExpiresAt == nil {
+		return "none", nil
+	}
+
+	// если дата в прошлом — expired
+	if time.Now().After(*sub.ExpiresAt) {
 		_ = s.repo.UpdateStatus(ctx, sub.ID, "expired")
 		return "expired", nil
 	}
-	return sub.Status, nil
+
+	// если дата в будущем — ВСЕГДА active
+	return "active", nil
 }
 
 func (s *SubscriptionService) ExpireAndNotifyTrials(ctx context.Context) error {
