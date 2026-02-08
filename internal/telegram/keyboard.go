@@ -3,10 +3,10 @@ package telegram
 import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 func (app *BotApp) BuildMainKeyboard(botID, status string) tgbotapi.ReplyKeyboardMarkup {
-	first := "🟢 Начать урок"
+	first := "🟢 Начать"
 
 	if botID == "assistant" {
-		first = "🟢 Начать диалог"
+		first = "🟢 Начать"
 	}
 
 	if status == "active" {

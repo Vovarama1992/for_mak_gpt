@@ -82,7 +82,7 @@ func (app *BotApp) ShowClassPicker(
 
 	msg := tgbotapi.NewMessage(
 		chatID,
-		fmt.Sprintf("📚 Выбор: %s", label),
+		fmt.Sprintf("Выбери %s", label),
 	)
 	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
 	bot.Send(msg)
