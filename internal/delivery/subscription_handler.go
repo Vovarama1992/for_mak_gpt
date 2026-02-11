@@ -44,6 +44,18 @@ func (h *SubscriptionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"status":      "created",
 		"payment_url": paymentURL,
+		"keyboard": []map[string]any{
+			{
+				"type": "button",
+				"text": "📄 Документы",
+				"data": "docs",
+			},
+			{
+				"type": "url",
+				"text": "Оплатить",
+				"url":  paymentURL,
+			},
+		},
 	})
 }
 
