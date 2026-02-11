@@ -129,13 +129,18 @@ func (app *BotApp) handleCallback(
 
 			msg := tgbotapi.NewMessage(
 				chatID,
-				fmt.Sprintf(
-					"%s\n\n✅ Ссылка на оплату\n%s",
-					PaymentInfoText,
-					paymentURL,
+				"Перед оплатой ознакомьтесь с документами:",
+			)
+
+			msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData("📄 Документы", "docs"),
+				),
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonURL("✅ Перейти к оплате", paymentURL),
 				),
 			)
-			msg.ReplyMarkup = app.BuildMainKeyboard(botID, status)
+
 			bot.Send(msg)
 			return
 		}
