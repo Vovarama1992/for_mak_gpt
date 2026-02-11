@@ -27,6 +27,7 @@ func (app *BotApp) BuildMainKeyboard(botID, status string) tgbotapi.ReplyKeyboar
 	)
 
 	row3 := tgbotapi.NewKeyboardButtonRow(
+		tgbotapi.NewKeyboardButton("📄 Документы"),
 		tgbotapi.NewKeyboardButton("❓ Помощь"),
 	)
 
