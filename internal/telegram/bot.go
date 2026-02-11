@@ -129,12 +129,7 @@ func (app *BotApp) handleMessage(
 		return
 	}
 	if text == "📄 Документы" {
-		msg := tgbotapi.NewMessage(chatID,
-			"📄 Документы:\n\n"+
-				"1) Реквизиты\nhttps://...\n\n"+
-				"2) Оферта\nhttps://...\n\n"+
-				"3) Политика конфиденциальности\nhttps://...",
-		)
+		msg := tgbotapi.NewMessage(chatID, PaymentInfoText)
 		msg.ReplyMarkup = app.BuildMainKeyboard(botID, status)
 		bot.Send(msg)
 		return
