@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/Vovarama1992/make_ziper/internal/minutes_packages"
@@ -291,16 +292,32 @@ func (s *SubscriptionService) AddMinutesFromPackage(
 	packageID int64,
 ) error {
 
+	log.Printf("[MINUTES] start bot=%s tg=%d pkg=%d", botID, telegramID, packageID)
+
 	pkg, err := s.minuteSvc.GetByID(ctx, botID, packageID)
 	if err != nil {
+		log.Printf("[MINUTES] pkg load error: %v", err)
 		return err
 	}
-	if pkg == nil || !pkg.Active {
-		return fmt.Errorf("invalid minute package: %d", packageID)
+	if pkg == nil {
+		log.Printf("[MINUTES] pkg not found id=%d", packageID)
+		return fmt.Errorf("minute package not found: %d", packageID)
+	}
+	if !pkg.Active {
+		log.Printf("[MINUTES] pkg inactive id=%d", packageID)
+		return fmt.Errorf("inactive minute package: %d", packageID)
 	}
 
-	// теперь используем repo только для изменения подписки:
-	return s.repo.AddVoiceMinutes(ctx, botID, telegramID, float64(pkg.Minutes))
+	log.Printf("[MINUTES] pkg loaded id=%d minutes=%.2f", pkg.ID, pkg.Minutes)
+
+	err = s.repo.AddVoiceMinutes(ctx, botID, telegramID, float64(pkg.Minutes))
+	if err != nil {
+		log.Printf("[MINUTES] add minutes error: %v", err)
+		return err
+	}
+
+	log.Printf("[MINUTES] success bot=%s tg=%d added=%.2f", botID, telegramID, pkg.Minutes)
+	return nil
 }
 
 func (s *SubscriptionService) CleanupPending(ctx context.Context, olderThan time.Duration) error {

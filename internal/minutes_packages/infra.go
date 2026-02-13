@@ -3,6 +3,7 @@ package minutes_packages
 import (
 	"context"
 	"database/sql"
+	"log"
 )
 
 type repo struct {
@@ -69,6 +70,9 @@ func (r *repo) Delete(ctx context.Context, botID string, id int64) error {
 }
 
 func (r *repo) GetByID(ctx context.Context, botID string, id int64) (*MinutePackage, error) {
+
+	log.Printf("[PKG] load id=%d bot=%s", id, botID)
+
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, bot_id, name, minutes, price, active
 		FROM minute_packages
@@ -84,12 +88,17 @@ func (r *repo) GetByID(ctx context.Context, botID string, id int64) (*MinutePack
 		&pkg.Price,
 		&pkg.Active,
 	)
+
 	if err != nil {
 		if err == sql.ErrNoRows {
+			log.Printf("[PKG] not found id=%d bot=%s", id, botID)
 			return nil, nil
 		}
+		log.Printf("[PKG] scan error: %v", err)
 		return nil, err
 	}
+
+	log.Printf("[PKG] loaded id=%d minutes=%.2f active=%v", pkg.ID, pkg.Minutes, pkg.Active)
 
 	return &pkg, nil
 }

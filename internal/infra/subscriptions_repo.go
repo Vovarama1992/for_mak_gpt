@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/Vovarama1992/make_ziper/internal/ports"
@@ -239,14 +241,34 @@ func (r *subscriptionRepo) AddVoiceMinutes(
 	tgID int64,
 	minutes float64,
 ) error {
-	_, err := r.db.ExecContext(ctx, `
+
+	log.Printf("[MINUTES][DB] update start bot=%s tg=%d add=%.2f", botID, tgID, minutes)
+
+	res, err := r.db.ExecContext(ctx, `
         UPDATE subscriptions
         SET voice_minutes = voice_minutes + $3,
             updated_at = NOW()
         WHERE bot_id = $1 AND telegram_id = $2
     `, botID, tgID, minutes)
 
-	return err
+	if err != nil {
+		log.Printf("[MINUTES][DB] exec error: %v", err)
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		log.Printf("[MINUTES][DB] rowsAffected error: %v", err)
+		return err
+	}
+
+	log.Printf("[MINUTES][DB] rows affected=%d", rows)
+
+	if rows == 0 {
+		return fmt.Errorf("subscription not found for bot=%s tg=%d", botID, tgID)
+	}
+
+	return nil
 }
 
 func (r *subscriptionRepo) CleanupPending(ctx context.Context, olderThan time.Duration) error {
