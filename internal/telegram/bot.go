@@ -128,10 +128,11 @@ func (app *BotApp) handleMessage(
 		bot.Send(out)
 		return
 	}
+
 	if text == "📄 Документы" {
-		msg := tgbotapi.NewMessage(chatID, PaymentInfoText)
-		msg.ReplyMarkup = app.BuildMainKeyboard(botID, status)
-		bot.Send(msg)
+		bot.Send(tgbotapi.NewMessage(chatID, RequisitesText))
+		bot.Send(tgbotapi.NewMessage(chatID, OfferText))
+		bot.Send(tgbotapi.NewMessage(chatID, PrivacyText))
 		return
 	}
 	if textLower == "📦 остаток минут" {

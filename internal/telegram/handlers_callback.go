@@ -189,7 +189,9 @@ func (app *BotApp) handleCallback(
 	}
 
 	if data == "docs" {
-		bot.Send(tgbotapi.NewMessage(chatID, PaymentInfoText))
+		bot.Send(tgbotapi.NewMessage(chatID, RequisitesText))
+		bot.Send(tgbotapi.NewMessage(chatID, OfferText))
+		bot.Send(tgbotapi.NewMessage(chatID, PrivacyText))
 		return
 	}
 
