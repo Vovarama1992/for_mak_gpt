@@ -55,22 +55,25 @@ func (p *CloudPaymentsProvider) CreateSubscriptionPayment(
 	ctx context.Context,
 	botID string,
 	telegramID int64,
-	planCode string,
+	planName string,
 	price float64,
-	invoiceID string, // <-- добавили
+	invoiceID string,
 ) (string, string, error) {
 
 	body := map[string]any{
-		"Amount":      price,
-		"Currency":    "RUB",
-		"Description": fmt.Sprintf("Subscription '%s'", planCode),
-		"InvoiceId":   invoiceID, // <-- используем переданный
-		"AccountId":   fmt.Sprintf("%d", telegramID),
+		"Amount":   price,
+		"Currency": "RUB",
+		"Description": fmt.Sprintf(
+			"Подписка %s",
+			planName,
+		),
+		"InvoiceId": invoiceID,
+		"AccountId": fmt.Sprintf("%d", telegramID),
 		"JsonData": map[string]any{
 			"payment_type": "subscription",
 			"bot_id":       botID,
 			"telegram_id":  telegramID,
-			"plan_code":    planCode,
+			"plan_name":    planName,
 		},
 	}
 
