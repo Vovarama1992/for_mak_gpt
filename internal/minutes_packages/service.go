@@ -53,16 +53,25 @@ func (s *service) CreatePayment(
 	packageID int64,
 ) (string, error) {
 
+	log.Printf("[PAY] create payment start bot=%s tg=%d pkg=%d",
+		botID, telegramID, packageID)
+
 	pkg, err := s.repo.GetByID(ctx, botID, packageID)
 	if err != nil {
+		log.Printf("[PAY] load package error: %v", err)
 		return "", fmt.Errorf("load minute package: %w", err)
 	}
-	if pkg == nil || !pkg.Active {
-		return "", fmt.Errorf("minute package not found or inactive: %d", packageID)
+	if pkg == nil {
+		log.Printf("[PAY] package not found pkg=%d", packageID)
+		return "", fmt.Errorf("minute package not found: %d", packageID)
+	}
+	if !pkg.Active {
+		log.Printf("[PAY] package inactive pkg=%d", packageID)
+		return "", fmt.Errorf("minute package inactive: %d", packageID)
 	}
 
-	log.Printf("[PAY] start bot=%s tg=%d pkg=%d price=%.2f",
-		botID, telegramID, packageID, pkg.Price)
+	log.Printf("[PAY] package loaded id=%d price=%.2f minutes=%d",
+		pkg.ID, pkg.Price, pkg.Minutes)
 
 	payURL, payID, err := s.paymentProvider.CreateMinutePackagePayment(
 		ctx,
@@ -79,6 +88,10 @@ func (s *service) CreatePayment(
 	}
 
 	log.Printf("[PAY] created url=%s id=%s", payURL, payID)
+
+	if payURL == "" {
+		log.Printf("[PAY] WARNING empty payURL id=%s", payID)
+	}
 
 	return payURL, nil
 }

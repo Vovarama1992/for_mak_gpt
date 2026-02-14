@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -42,6 +43,9 @@ func (p *YooKassaProvider) CreateMinutePackagePayment(
 	shopID := os.Getenv("YOOKASSA_SHOP_ID")
 	secret := os.Getenv("YOOKASSA_SECRET_KEY")
 
+	log.Printf("[YK] start create payment bot=%s tg=%d pkg=%d price=%.2f",
+		botID, telegramID, packageID, price)
+
 	if !strings.Contains(apiURL, "/v3/payments") {
 		apiURL = strings.TrimRight(apiURL, "/") + "/v3/payments"
 	}
@@ -69,18 +73,35 @@ func (p *YooKassaProvider) CreateMinutePackagePayment(
 
 	reqBody, _ := json.Marshal(body)
 
-	req, _ := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
+	log.Printf("[YK] request url=%s", apiURL)
+	log.Printf("[YK] request body=%s", string(reqBody))
+
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
+	if err != nil {
+		log.Printf("[YK] build request error: %v", err)
+		return "", "", err
+	}
+
 	req.SetBasicAuth(shopID, secret)
 	req.Header.Set("Idempotence-Key", fmt.Sprintf("%d", time.Now().UnixNano()))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
+		log.Printf("[YK] http error: %v", err)
 		return "", "", err
 	}
 	defer resp.Body.Close()
 
 	raw, _ := io.ReadAll(resp.Body)
+
+	log.Printf("[YK] response status=%d", resp.StatusCode)
+	log.Printf("[YK] response body=%s", string(raw))
+
+	if resp.StatusCode >= 300 {
+		return "", "", fmt.Errorf("yookassa error status=%d body=%s",
+			resp.StatusCode, string(raw))
+	}
 
 	var yresp struct {
 		ID           string `json:"id"`
@@ -89,7 +110,12 @@ func (p *YooKassaProvider) CreateMinutePackagePayment(
 		} `json:"confirmation"`
 	}
 
-	_ = json.Unmarshal(raw, &yresp)
+	if err := json.Unmarshal(raw, &yresp); err != nil {
+		log.Printf("[YK] json parse error: %v", err)
+		return "", "", err
+	}
+
+	log.Printf("[YK] parsed id=%s url=%s", yresp.ID, yresp.Confirmation.URL)
 
 	return yresp.Confirmation.URL, yresp.ID, nil
 }
@@ -110,6 +136,9 @@ func (p *YooKassaProvider) CreateSubscriptionPayment(
 	apiURL := os.Getenv("YOOKASSA_API_URL")
 	shopID := os.Getenv("YOOKASSA_SHOP_ID")
 	secret := os.Getenv("YOOKASSA_SECRET_KEY")
+
+	log.Printf("[YK] create subscription bot=%s tg=%d plan=%s price=%.2f invoice=%s",
+		botID, telegramID, planCode, price, invoiceID)
 
 	if !strings.Contains(apiURL, "/v3/payments") {
 		apiURL = strings.TrimRight(apiURL, "/") + "/v3/payments"
@@ -133,23 +162,41 @@ func (p *YooKassaProvider) CreateSubscriptionPayment(
 			"telegram_id":  fmt.Sprintf("%d", telegramID),
 			"payment_type": "subscription",
 			"plan_code":    planCode,
+			"invoice_id":   invoiceID,
 		},
 	}
 
 	reqBody, _ := json.Marshal(body)
 
-	req, _ := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
+	log.Printf("[YK] request url=%s", apiURL)
+	log.Printf("[YK] request body=%s", string(reqBody))
+
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
+	if err != nil {
+		log.Printf("[YK] build request error: %v", err)
+		return "", "", err
+	}
+
 	req.SetBasicAuth(shopID, secret)
 	req.Header.Set("Idempotence-Key", fmt.Sprintf("%d", time.Now().UnixNano()))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
+		log.Printf("[YK] http error: %v", err)
 		return "", "", err
 	}
 	defer resp.Body.Close()
 
 	raw, _ := io.ReadAll(resp.Body)
+
+	log.Printf("[YK] response status=%d", resp.StatusCode)
+	log.Printf("[YK] response body=%s", string(raw))
+
+	if resp.StatusCode >= 300 {
+		return "", "", fmt.Errorf("yookassa error status=%d body=%s",
+			resp.StatusCode, string(raw))
+	}
 
 	var yresp struct {
 		ID           string `json:"id"`
@@ -158,7 +205,12 @@ func (p *YooKassaProvider) CreateSubscriptionPayment(
 		} `json:"confirmation"`
 	}
 
-	_ = json.Unmarshal(raw, &yresp)
+	if err := json.Unmarshal(raw, &yresp); err != nil {
+		log.Printf("[YK] json parse error: %v", err)
+		return "", "", err
+	}
+
+	log.Printf("[YK] parsed id=%s url=%s", yresp.ID, yresp.Confirmation.URL)
 
 	return yresp.Confirmation.URL, yresp.ID, nil
 }
