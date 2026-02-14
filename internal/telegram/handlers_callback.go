@@ -86,7 +86,6 @@ func (app *BotApp) handleCallback(
 			return
 		}
 
-		// сообщение с кнопкой документов
 		msg := tgbotapi.NewMessage(
 			chatID,
 			"Перед оплатой ознакомьтесь с документами:",
@@ -101,9 +100,8 @@ func (app *BotApp) handleCallback(
 		bot.Send(msg)
 
 		// ссылка отдельным сообщением
-		bot.Send(tgbotapi.NewMessage(chatID, "💳 Ссылка для оплаты:\n"+payURL))
+		bot.Send(tgbotapi.NewMessage(chatID, "Ссылка для оплаты:\n"+payURL))
 
-		bot.Send(msg)
 		return
 	}
 
