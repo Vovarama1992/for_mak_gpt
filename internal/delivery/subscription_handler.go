@@ -86,6 +86,7 @@ func (h *SubscriptionHandler) Activate(w http.ResponseWriter, r *http.Request) {
 				PackageID  string `json:"package_id"`
 				Type       string `json:"payment_type"`
 				PlanCode   string `json:"plan_code"`
+				InvoiceID  string `json:"invoice_id"`
 			} `json:"metadata"`
 		} `json:"object"`
 	}
@@ -136,9 +137,18 @@ func (h *SubscriptionHandler) Activate(w http.ResponseWriter, r *http.Request) {
 	case "subscription":
 		log.Println("[PAY][YK] activate subscription start")
 
+		invoiceID := notif.Object.Metadata.InvoiceID
+		log.Println("[PAY][YK] invoice_id:", invoiceID)
+
+		if invoiceID == "" {
+			log.Println("[PAY][YK] missing invoice_id in metadata")
+			http.Error(w, "missing invoice_id", 400)
+			return
+		}
+
 		if err := h.service.Activate(
 			r.Context(),
-			notif.Object.ID,
+			invoiceID,
 		); err != nil {
 			log.Println("[PAY][YK] activate sub error:", err)
 			http.Error(w, err.Error(), 500)
