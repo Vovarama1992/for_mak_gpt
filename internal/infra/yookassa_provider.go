@@ -55,8 +55,10 @@ func (p *YooKassaProvider) CreateMinutePackagePayment(
 			"value":    fmt.Sprintf("%.2f", price),
 			"currency": "RUB",
 		},
-		"capture":     true,
-		"description": fmt.Sprintf("Minute package '%s' (%d min)", title, minutes),
+		"capture": true,
+		"description": fmt.Sprintf(
+			"Minute package '%s' (%d min)", title, minutes,
+		),
 		"confirmation": map[string]any{
 			"type":       "redirect",
 			"return_url": "https://aifulls.com/success.html",
@@ -79,7 +81,9 @@ func (p *YooKassaProvider) CreateMinutePackagePayment(
 						"value":    fmt.Sprintf("%.2f", price),
 						"currency": "RUB",
 					},
-					"vat_code": 1,
+					"vat_code":        1,
+					"payment_subject": "service",
+					"payment_mode":    "full_payment",
 				},
 			},
 		},
@@ -97,7 +101,7 @@ func (p *YooKassaProvider) CreateMinutePackagePayment(
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		log.Printf("[YK] http error: %v", err)
+		log.Printf("[YK] request error=%v", err)
 		return "", "", err
 	}
 	defer resp.Body.Close()
@@ -118,12 +122,9 @@ func (p *YooKassaProvider) CreateMinutePackagePayment(
 		} `json:"confirmation"`
 	}
 
-	if err := json.Unmarshal(raw, &yresp); err != nil {
-		log.Printf("[YK] json decode error: %v", err)
-		return "", "", err
-	}
+	_ = json.Unmarshal(raw, &yresp)
 
-	log.Printf("[YK] created payment id=%s url=%s", yresp.ID, yresp.Confirmation.URL)
+	log.Printf("[YK] created payment url=%s id=%s", yresp.Confirmation.URL, yresp.ID)
 
 	return yresp.Confirmation.URL, yresp.ID, nil
 }
@@ -157,8 +158,10 @@ func (p *YooKassaProvider) CreateSubscriptionPayment(
 			"value":    fmt.Sprintf("%.2f", price),
 			"currency": "RUB",
 		},
-		"capture":     true,
-		"description": fmt.Sprintf("Subscription '%s'", planCode),
+		"capture": true,
+		"description": fmt.Sprintf(
+			"Subscription '%s'", planCode,
+		),
 		"confirmation": map[string]any{
 			"type":       "redirect",
 			"return_url": "https://aifulls.com/success.html",
@@ -168,6 +171,7 @@ func (p *YooKassaProvider) CreateSubscriptionPayment(
 			"telegram_id":  fmt.Sprintf("%d", telegramID),
 			"payment_type": "subscription",
 			"plan_code":    planCode,
+			"invoice_id":   invoiceID,
 		},
 		"receipt": map[string]any{
 			"customer": map[string]any{
@@ -181,7 +185,9 @@ func (p *YooKassaProvider) CreateSubscriptionPayment(
 						"value":    fmt.Sprintf("%.2f", price),
 						"currency": "RUB",
 					},
-					"vat_code": 1,
+					"vat_code":        1,
+					"payment_subject": "service",
+					"payment_mode":    "full_payment",
 				},
 			},
 		},
@@ -199,7 +205,7 @@ func (p *YooKassaProvider) CreateSubscriptionPayment(
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		log.Printf("[YK] http error: %v", err)
+		log.Printf("[YK] request error=%v", err)
 		return "", "", err
 	}
 	defer resp.Body.Close()
@@ -220,12 +226,9 @@ func (p *YooKassaProvider) CreateSubscriptionPayment(
 		} `json:"confirmation"`
 	}
 
-	if err := json.Unmarshal(raw, &yresp); err != nil {
-		log.Printf("[YK] json decode error: %v", err)
-		return "", "", err
-	}
+	_ = json.Unmarshal(raw, &yresp)
 
-	log.Printf("[YK] created subscription id=%s url=%s", yresp.ID, yresp.Confirmation.URL)
+	log.Printf("[YK] created subscription url=%s id=%s", yresp.Confirmation.URL, yresp.ID)
 
 	return yresp.Confirmation.URL, yresp.ID, nil
 }
