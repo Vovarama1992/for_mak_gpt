@@ -86,6 +86,7 @@ func (app *BotApp) handleCallback(
 			return
 		}
 
+		// сообщение с кнопкой документов
 		msg := tgbotapi.NewMessage(
 			chatID,
 			"Перед оплатой ознакомьтесь с документами:",
@@ -95,10 +96,12 @@ func (app *BotApp) handleCallback(
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData("📄 Документы", "docs"),
 			),
-			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonURL("Оплатить", payURL),
-			),
 		)
+
+		bot.Send(msg)
+
+		// ссылка отдельным сообщением
+		bot.Send(tgbotapi.NewMessage(chatID, "💳 Ссылка для оплаты:\n"+payURL))
 
 		bot.Send(msg)
 		return
@@ -127,6 +130,7 @@ func (app *BotApp) handleCallback(
 				return
 			}
 
+			// сообщение с кнопкой документов
 			msg := tgbotapi.NewMessage(
 				chatID,
 				"Перед оплатой ознакомьтесь с документами:",
@@ -136,12 +140,13 @@ func (app *BotApp) handleCallback(
 				tgbotapi.NewInlineKeyboardRow(
 					tgbotapi.NewInlineKeyboardButtonData("📄 Документы", "docs"),
 				),
-				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonURL("✅ Перейти к оплате", paymentURL),
-				),
 			)
 
 			bot.Send(msg)
+
+			// ссылка отдельным сообщением
+			bot.Send(tgbotapi.NewMessage(chatID, "💳 Ссылка для оплаты:\n"+paymentURL))
+
 			return
 		}
 	}
