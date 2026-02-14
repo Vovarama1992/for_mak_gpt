@@ -226,26 +226,43 @@ func (s *SubscriptionService) ActivateTrial(
 // STATUS
 // ==================================================
 func (s *SubscriptionService) GetStatus(ctx context.Context, botID string, telegramID int64) (string, error) {
+	log.Printf("[SUB][GetStatus] start bot=%s tg=%d", botID, telegramID)
+
 	sub, err := s.repo.Get(ctx, botID, telegramID)
 	if err != nil {
+		log.Printf("[SUB][GetStatus] repo error: %v", err)
 		s.notifier.Notify(ctx, botID, err, "Ошибка получения статуса подписки из БД")
 		return "", err
 	}
+
 	if sub == nil {
+		log.Printf("[SUB][GetStatus] no subscription → status=none")
 		return "none", nil
 	}
 
 	if sub.ExpiresAt == nil {
+		log.Printf("[SUB][GetStatus] expires_at is NULL → status=none")
 		return "none", nil
 	}
 
+	now := time.Now()
+	exp := *sub.ExpiresAt
+
+	log.Printf(
+		"[SUB][GetStatus] now=%s expires_at=%s now.After(exp)=%v",
+		now.Format(time.RFC3339),
+		exp.Format(time.RFC3339),
+		now.After(exp),
+	)
+
 	// если дата в прошлом — expired
-	if time.Now().After(*sub.ExpiresAt) {
+	if now.After(exp) {
+		log.Printf("[SUB][GetStatus] subscription expired → updating status=expired id=%d", sub.ID)
 		_ = s.repo.UpdateStatus(ctx, sub.ID, "expired")
 		return "expired", nil
 	}
 
-	// если дата в будущем — ВСЕГДА active
+	log.Printf("[SUB][GetStatus] subscription active")
 	return "active", nil
 }
 
