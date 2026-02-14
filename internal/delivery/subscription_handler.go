@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -59,71 +60,94 @@ func (h *SubscriptionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /subscribe/activate  (CloudPayments Pay)
+// POST /subscribe/activate  (YooKassa webhook)
 func (h *SubscriptionHandler) Activate(w http.ResponseWriter, r *http.Request) {
-	log.Println("[CP] webhook hit")
+	log.Println("[YK] webhook hit")
 
-	if err := r.ParseForm(); err != nil {
-		log.Println("[CP] parse error:", err)
-		http.Error(w, "bad form", 400)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Println("[YK] read body error:", err)
+		http.Error(w, "bad body", 400)
 		return
 	}
 
-	log.Println("[CP] raw form:", r.Form.Encode())
+	log.Printf("[YK] raw body: %s\n", string(body))
 
-	status := r.Form.Get("Status")
-	if status != "Completed" {
-		log.Println("[CP] ignore status:", status)
+	var payload struct {
+		Type   string `json:"type"`
+		Event  string `json:"event"`
+		Object struct {
+			ID       string `json:"id"`
+			Status   string `json:"status"`
+			Metadata struct {
+				BotID      string `json:"bot_id"`
+				TelegramID string `json:"telegram_id"`
+				PackageID  string `json:"package_id"`
+				Type       string `json:"payment_type"`
+				PlanCode   string `json:"plan_code"`
+			} `json:"metadata"`
+		} `json:"object"`
+	}
+
+	if err := json.Unmarshal(body, &payload); err != nil {
+		log.Println("[YK] json decode error:", err)
+		http.Error(w, "bad json", 400)
+		return
+	}
+
+	log.Printf("[YK] event=%s paymentID=%s status=%s\n",
+		payload.Event,
+		payload.Object.ID,
+		payload.Object.Status,
+	)
+
+	// интересует только успешная оплата
+	if payload.Event != "payment.succeeded" {
+		log.Println("[YK] ignore event:", payload.Event)
 		w.WriteHeader(200)
 		return
 	}
 
-	invoiceID := r.Form.Get("InvoiceId")
-	accountID := r.Form.Get("AccountId")
-	data := r.Form.Get("Data")
+	meta := payload.Object.Metadata
 
-	log.Printf("[CP] invoice=%s account=%s data=%s\n", invoiceID, accountID, data)
-
-	var meta struct {
-		BotID      string `json:"bot_id"`
-		TelegramID int64  `json:"telegram_id"`
-		PackageID  int64  `json:"package_id"`
-		Type       string `json:"payment_type"`
-	}
-
-	if err := json.Unmarshal([]byte(data), &meta); err != nil {
-		log.Println("[CP] json decode error:", err)
-		http.Error(w, "bad data json", 400)
-		return
-	}
-
-	log.Printf("[CP] parsed meta: %+v\n", meta)
+	log.Printf("[YK] meta bot=%s tg=%s pkg=%s type=%s plan=%s\n",
+		meta.BotID,
+		meta.TelegramID,
+		meta.PackageID,
+		meta.Type,
+		meta.PlanCode,
+	)
 
 	switch meta.Type {
 
 	case "minute_package":
+		tgID, _ := strconv.ParseInt(meta.TelegramID, 10, 64)
+		pkgID, _ := strconv.ParseInt(meta.PackageID, 10, 64)
+
 		if err := h.service.AddMinutesFromPackage(
 			r.Context(),
 			meta.BotID,
-			meta.TelegramID,
-			meta.PackageID,
+			tgID,
+			pkgID,
 		); err != nil {
-			log.Println("[CP] add minutes error:", err)
+			log.Println("[YK] add minutes error:", err)
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		log.Println("[CP] minutes added OK")
+
+		log.Println("[YK] minutes added OK")
 
 	case "subscription":
-		if err := h.service.Activate(r.Context(), invoiceID); err != nil {
-			log.Println("[CP] activate sub error:", err)
+		if err := h.service.Activate(r.Context(), payload.Object.ID); err != nil {
+			log.Println("[YK] activate sub error:", err)
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		log.Println("[CP] subscription activated")
+
+		log.Println("[YK] subscription activated")
 
 	default:
-		log.Println("[CP] unknown type:", meta.Type)
+		log.Println("[YK] unknown payment type:", meta.Type)
 	}
 
 	w.WriteHeader(200)
