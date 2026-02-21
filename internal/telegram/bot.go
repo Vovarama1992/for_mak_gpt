@@ -323,6 +323,8 @@ func (app *BotApp) handlePerplexity(
 
 		reply, err := app.AiService.GetPerplexityReply(ctx, text)
 		if err != nil {
+			log.Printf("[perplexity voice] err=%v", err)
+
 			bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка Perplexity."))
 			return
@@ -342,9 +344,12 @@ func (app *BotApp) handlePerplexity(
 	}
 
 	// ================= TEXT =================
+	// ================= TEXT =================
 	if strings.TrimSpace(msg.Text) != "" {
 		reply, err := app.AiService.GetPerplexityReply(ctx, msg.Text)
 		if err != nil {
+			log.Printf("[perplexity text] err=%v", err)
+
 			bot.Request(tgbotapi.NewDeleteMessage(chatID, sentThinking.MessageID))
 			bot.Send(tgbotapi.NewMessage(chatID, "⚠️ Ошибка Perplexity."))
 			return
